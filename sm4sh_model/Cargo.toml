@@ -1,0 +1,13 @@
+[package]
+name = "sm4sh_model"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sm4sh_lib = { path = "../sm4sh_lib" }
+binrw.workspace = true
+bilge.workspace = true
+half.workspace = true
+
+[dev-dependencies]
+hexlit = "0.5.5"

@@ -1,0 +1,12 @@
+[package]
+name = "sm4sh_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sm4sh_lib = { path = "../sm4sh_lib" }
+sm4sh_model = { path = "../sm4sh_model" }
+globwalk = "0.9.1"
+rayon.workspace = true
+binrw.workspace = true
+clap.workspace = true
