@@ -85,13 +85,13 @@ fn check_nud(nud: Nud, path: &Path, original_bytes: &[u8]) {
     let model = NudModel::from_nud(&nud).unwrap();
     let new_nud = model.to_nud().unwrap();
 
-    if &new_nud.vertex_buffer0 != &nud.vertex_buffer0 {
+    if new_nud.vertex_buffer0 != nud.vertex_buffer0 {
         println!("Vertex buffer0 read/write not 1:1 for {path:?}");
     }
-    if &new_nud.vertex_buffer1 != &nud.vertex_buffer1 {
+    if new_nud.vertex_buffer1 != nud.vertex_buffer1 {
         println!("Vertex buffer1 read/write not 1:1 for {path:?}");
     }
-    if &new_nud.index_buffer != &nud.index_buffer {
+    if new_nud.index_buffer != nud.index_buffer {
         println!("Vertex indices read/write not 1:1 for {path:?}");
     }
 }

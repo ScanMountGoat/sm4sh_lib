@@ -1,7 +1,7 @@
 use std::io::{Cursor, Seek, Write};
 
 use binrw::BinResult;
-use sm4sh_lib::nud::{BoundingSphere, MeshGroup, Nud};
+use sm4sh_lib::nud::{BoundingSphere, Nud};
 use vertex::{read_vertex_indices, read_vertices, write_vertex_indices, write_vertices, Vertices};
 
 pub mod vertex;

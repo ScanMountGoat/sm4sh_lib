@@ -1,5 +1,5 @@
 [workspace]
-members = ["sm4sh_lib", "sm4sh_model", "sm4sh_test"]
+members = ["sm4sh_lib", "sm4sh_model", "sm4sh_test", "sm4sh_viewer", "sm4sh_wgpu"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -8,3 +8,7 @@ binrw = "0.14.1"
 half = "2.4.1"
 clap = {version = "4.5.28", features = ["derive"] }
 rayon = "1.10.0"
+wgpu = "24.0.1"
+glam = "0.29.2"
+log = "0.4.22"
+simple_logger = "5.0.0"

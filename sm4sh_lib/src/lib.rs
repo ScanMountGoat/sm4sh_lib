@@ -1,6 +1,6 @@
 use std::io::{Read, Seek, SeekFrom};
 
-use binrw::{file_ptr::FilePtrArgs, BinRead, BinResult, NullString};
+use binrw::{file_ptr::FilePtrArgs, BinRead, BinReaderExt, BinResult, Endian, NullString};
 
 pub mod nud;
 pub mod nut;
@@ -54,8 +54,6 @@ fn parse_string_ptr32<R: Read + Seek>(
     Ok(value.to_string())
 }
 
-// TODO: macro to implement from_file and save methods
-
 macro_rules! file_write_full_impl {
     ($endian:path, $($type_name:path),*) => {
         $(
@@ -103,3 +101,29 @@ macro_rules! xc3_write_binwrite_impl {
     };
 }
 pub(crate) use xc3_write_binwrite_impl;
+
+macro_rules! file_read_impl {
+    ($endian:path, $($type_name:path),*) => {
+        $(
+            impl $type_name {
+                pub fn read<R: Read + Seek>(reader: &mut R) -> binrw::BinResult<Self> {
+                    reader.read_type($endian).map_err(Into::into)
+                }
+
+                /// Read from `path` using a fully buffered reader for performance.
+                pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> binrw::BinResult<Self> {
+                    let path = path.as_ref();
+                    let mut reader = std::io::Cursor::new(std::fs::read(path)?);
+                    reader.read_type($endian).map_err(Into::into)
+                }
+
+                /// Read from `bytes` using a fully buffered reader for performance.
+                pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> binrw::BinResult<Self> {
+                    Self::read(&mut std::io::Cursor::new(bytes))
+                }
+            }
+        )*
+    };
+}
+
+file_read_impl!(Endian::Big, nud::Nud);

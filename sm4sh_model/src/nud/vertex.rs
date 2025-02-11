@@ -1,4 +1,4 @@
-use std::io::{Cursor, Seek};
+use std::io::Cursor;
 
 use bilge::prelude::*;
 use binrw::{BinRead, BinReaderExt, BinResult, BinWrite, BinWriterExt, VecArgs};
@@ -11,12 +11,12 @@ use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvColorFlags, UvType, Vert
 // TODO: Find a simpler representation after looking at more game data like pokken.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Vertices {
-    positions: Vec<[f32; 3]>,
-    normals: Normals,
-    bones: Bones,
-    colors: Colors,
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Normals,
+    pub bones: Bones,
+    pub colors: Colors,
     // TODO: Move the vec inside the enum to guarantee the same type?
-    uvs: Vec<Uvs>,
+    pub uvs: Vec<Uvs>,
 }
 
 impl Vertices {
@@ -339,11 +339,9 @@ pub fn write_vertices(
         write_colors(buffer0, &vertices.colors, offset0, stride0)?;
         offset0 += color_size(uv_color_flags);
 
-        let mut uvs = Vec::new();
         for uv in &vertices.uvs {
-            let uv = write_uvs(buffer0, uv, offset0, stride0)?;
+            write_uvs(buffer0, uv, offset0, stride0)?;
             offset0 += uvs_size(uv_color_flags);
-            uvs.push(uv);
         }
     }
 
@@ -539,7 +537,7 @@ fn vertex_size(flags: VertexFlags) -> u64 {
 
 fn normals_size(flags: VertexFlags) -> u64 {
     match flags.normals() {
-        NormalType::None => 1 * 4,
+        NormalType::None => 4,
         NormalType::NormalsFloat32 => 5 * 4,
         NormalType::Unk2 => 13 * 4,
         NormalType::NormalsTangentBitangentFloat32 => 13 * 4,

@@ -186,7 +186,7 @@ impl Texture {
             depth_or_array_layers: self.gtx_header.depth_or_array_layers,
             mipmap_count: self.gtx_header.mipmap_count,
             format: wiiu_swizzle::SurfaceFormat::from_repr(self.gtx_header.format as u32).unwrap(),
-            aa: wiiu_swizzle::AaMode::from_repr(self.gtx_header.aa as u32).unwrap(),
+            aa: wiiu_swizzle::AaMode::from_repr(self.gtx_header.aa).unwrap(),
             usage: self.gtx_header.usage,
             image_data: &self.data[..self.gtx_header.image_data_size as usize],
             mipmap_data: &self.data[self.gtx_header.mipmap_offsets[0] as usize

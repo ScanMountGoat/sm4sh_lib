@@ -1,0 +1,17 @@
+[package]
+name = "sm4sh_viewer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sm4sh_wgpu = { path = "../sm4sh_wgpu" }
+sm4sh_lib = { path = "../sm4sh_lib" }
+sm4sh_model = { path = "../sm4sh_model" }
+winit = { version = "0.29.4", features = ["rwh_05"] }
+clap.workspace = true
+wgpu.workspace = true
+glam.workspace = true
+futures = "0.3.27"
+log.workspace = true
+simple_logger.workspace = true
+anyhow = "1.0"

@@ -1,0 +1,14 @@
+[package]
+name = "sm4sh_wgpu"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytemuck = { version = "1.21.0", features = ["derive"] }
+encase = { version = "0.10.0", features = ["glam"] }
+sm4sh_model = { path = "../sm4sh_model" }
+wgpu.workspace = true
+glam = { workspace = true, features = ["bytemuck"] }
+
+[build-dependencies]
+wgsl_to_wgpu = "0.13.0"
