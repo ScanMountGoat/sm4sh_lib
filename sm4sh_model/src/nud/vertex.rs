@@ -1,7 +1,7 @@
 use std::io::{Cursor, Seek};
 
 use bilge::prelude::*;
-use binrw::{BinRead, BinReaderExt, BinResult, BinWrite, BinWriterExt};
+use binrw::{BinRead, BinReaderExt, BinResult, BinWrite, BinWriterExt, VecArgs};
 use half::f16;
 
 use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvColorFlags, UvType, VertexFlags};
@@ -195,6 +195,17 @@ pub struct ColorFloat16 {
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct ColorByte {
     rgba: [u8; 4],
+}
+
+pub fn read_vertex_indices(buffer: &[u8], count: u16) -> BinResult<Vec<u16>> {
+    Cursor::new(buffer).read_be_args(VecArgs {
+        count: count as usize,
+        inner: (),
+    })
+}
+
+pub fn write_vertex_indices(buffer: &mut Cursor<Vec<u8>>, indices: &[u16]) -> BinResult<()> {
+    buffer.write_be(&indices)
 }
 
 pub fn read_vertices(
@@ -579,7 +590,20 @@ mod tests {
     // TODO: Add one test for each unique flags combination?
 
     #[test]
-    fn read_vertices_mario_eye() {
+    fn read_write_vertex_indices_mario_face() {
+        // data/fighter/mario/model/body/c00/model.nud, Mario_FaceN_VIS_O_OBJ, 0
+        let buffer = hex!(00000001 00020000 00020003);
+
+        let indices = read_vertex_indices(&buffer, 6).unwrap();
+        assert_eq!(vec![0, 1, 2, 0, 2, 3], indices);
+
+        let mut new_buffer = Cursor::new(Vec::new());
+        write_vertex_indices(&mut new_buffer, &indices).unwrap();
+        assert_eq!(buffer, &new_buffer.into_inner()[..]);
+    }
+
+    #[test]
+    fn read_write_vertices_mario_eye() {
         // data/fighter/mario/model/body/c00/model.nud, Mario_Eye_VIS_O_OBJ, 0
         let buffer0 = hex!(
             // vertex 0

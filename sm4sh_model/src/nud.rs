@@ -1,5 +1,8 @@
-use sm4sh_lib::nud::{MeshGroup, Nud};
-use vertex::Vertices;
+use std::io::{Cursor, Seek, Write};
+
+use binrw::BinResult;
+use sm4sh_lib::nud::{BoundingSphere, MeshGroup, Nud};
+use vertex::{read_vertex_indices, read_vertices, write_vertex_indices, write_vertices, Vertices};
 
 pub mod vertex;
 
@@ -15,54 +18,103 @@ pub struct NudMeshGroup {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudMesh {
-    // TODO: Assume meshes have unique vertices and put data here?
+    // Assume meshes have unique vertex data.
     pub vertices: Vertices,
     pub vertex_indices: Vec<u16>,
     // TODO: material?
 }
 
 impl NudModel {
-    pub fn from_nud(nud: &Nud) -> Self {
-        Self {
-            groups: nud
-                .mesh_groups
-                .iter()
-                .map(|g| NudMeshGroup { meshes: todo!() })
-                .collect(),
+    pub fn from_nud(nud: &Nud) -> BinResult<Self> {
+        let mut groups = Vec::new();
+
+        let mut mesh_index = 0;
+        for g in &nud.mesh_groups {
+            let mut meshes = Vec::new();
+            for _ in 0..g.mesh_count {
+                let mesh = &nud.meshes[mesh_index];
+
+                // TODO: Avoid potential indexing panics.
+                let vertices = read_vertices(
+                    &nud.vertex_buffer0[mesh.vertex_buffer0_offset as usize..],
+                    &nud.vertex_buffer1[mesh.vertex_buffer1_offset as usize..],
+                    mesh.vertex_flags,
+                    mesh.uv_color_flags,
+                    mesh.vertex_count,
+                )?;
+
+                let vertex_indices = read_vertex_indices(
+                    &nud.index_buffer[mesh.vertex_indices_offset as usize..],
+                    mesh.vertex_index_count,
+                )?;
+
+                meshes.push(NudMesh {
+                    vertices,
+                    vertex_indices,
+                });
+
+                mesh_index += 1;
+            }
+
+            groups.push(NudMeshGroup { meshes });
         }
+
+        Ok(Self { groups })
     }
 
-    pub fn to_nud(&self) -> Nud {
-        Nud {
-            file_size: todo!(),
-            version: todo!(),
-            mesh_group_count: self.groups.len() as u16,
-            bone_start_index: todo!(),
-            bone_end_index: todo!(),
-            indices_offset: todo!(),
-            indices_size: todo!(),
-            vertex_buffer0_size: todo!(),
-            vertex_buffer1_size: todo!(),
-            bounding_sphere: todo!(),
-            mesh_groups: self
-                .groups
-                .iter()
-                .map(|g| MeshGroup {
-                    bounding_sphere: todo!(),
-                    center: todo!(),
-                    sort_bias: todo!(),
-                    name: todo!(),
-                    unk1: todo!(),
-                    bone_flag: todo!(),
-                    parent_bone_index: todo!(),
-                    mesh_count: todo!(),
-                    position: todo!(),
-                })
-                .collect(),
-            meshes: todo!(),
-            index_buffer: todo!(),
-            vertex_buffer0: todo!(),
-            vertex_buffer1: todo!(),
+    pub fn to_nud(&self) -> BinResult<Nud> {
+        let mut buffer0 = Cursor::new(Vec::new());
+        let mut buffer1 = Cursor::new(Vec::new());
+        let mut index_buffer = Cursor::new(Vec::new());
+
+        let mesh_groups = Vec::new();
+        let meshes = Vec::new();
+
+        for group in &self.groups {
+            for mesh in &group.meshes {
+                let (vertex_flags, uv_color_flags) =
+                    write_vertices(&mesh.vertices, &mut buffer0, &mut buffer1)?;
+
+                write_vertex_indices(&mut index_buffer, &mesh.vertex_indices)?;
+            }
         }
+
+        align(&mut buffer0, 16, 0u8)?;
+        align(&mut buffer1, 16, 0u8)?;
+        align(&mut index_buffer, 16, 0u8)?;
+
+        let vertex_buffer0 = buffer0.into_inner();
+        let vertex_buffer1 = buffer1.into_inner();
+        let index_buffer = index_buffer.into_inner();
+
+        // TODO: Fill in remaining fields.
+        Ok(Nud {
+            file_size: 0,
+            version: 0,
+            mesh_group_count: self.groups.len() as u16,
+            bone_start_index: 0,
+            bone_end_index: 0,
+            indices_offset: 0,
+            indices_size: index_buffer.len() as u32,
+            vertex_buffer0_size: vertex_buffer0.len() as u32,
+            vertex_buffer1_size: vertex_buffer1.len() as u32,
+            bounding_sphere: BoundingSphere {
+                center: [0.0; 3],
+                radius: 0.0,
+            },
+            mesh_groups,
+            meshes,
+            index_buffer,
+            vertex_buffer0,
+            vertex_buffer1,
+        })
     }
+}
+
+fn align<W: Write + Seek>(writer: &mut W, align: u64, pad: u8) -> Result<(), std::io::Error> {
+    let size = writer.stream_position()?;
+    let aligned_size = size.next_multiple_of(align);
+    let padding = aligned_size - size;
+    writer.write_all(&vec![pad; padding as usize])?;
+    Ok(())
 }
