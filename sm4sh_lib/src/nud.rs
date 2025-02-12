@@ -6,7 +6,10 @@ use std::{
 
 use bilge::prelude::*;
 use binrw::{binread, helpers::until, BinRead, BinWrite};
-use xc3_write::{Xc3Write, Xc3WriteOffsets};
+use xc3_write::{
+    strings::{StringSection, WriteOptions},
+    Xc3Write, Xc3WriteOffsets,
+};
 
 use crate::{parse_opt_ptr32, parse_string_ptr32, xc3_write_binwrite_impl};
 
@@ -404,9 +407,18 @@ impl Xc3WriteOffsets for NudOffsets<'_> {
         self.vertex_buffer1.data.xc3_write(writer, endian)?;
         *data_ptr = (*data_ptr).max(writer.stream_position()?);
 
-        string_section
-            .borrow()
-            .write(writer, data_ptr, 16, endian)?;
+        string_section.borrow().write(
+            writer,
+            *data_ptr,
+            data_ptr,
+            &WriteOptions {
+                start_alignment: 16,
+                start_padding_byte: 0,
+                string_alignment: 16,
+                string_padding_byte: 0,
+            },
+            endian,
+        )?;
 
         Ok(())
     }
@@ -423,7 +435,7 @@ impl Xc3WriteOffsets for MeshGroupOffsets<'_> {
         _endian: xc3_write::Endian,
         args: Self::Args,
     ) -> xc3_write::Xc3Result<()> {
-        args.borrow_mut().insert_offset(&self.name);
+        args.borrow_mut().insert_offset32(&self.name);
         Ok(())
     }
 }
@@ -479,61 +491,7 @@ impl Xc3WriteOffsets for MaterialPropertyOffsets<'_> {
         _endian: xc3_write::Endian,
         args: Self::Args,
     ) -> xc3_write::Xc3Result<()> {
-        args.borrow_mut().insert_offset(&self.name);
-        Ok(())
-    }
-}
-
-// TODO: Move this to xc3_write itself for unique and non unique strings?
-#[doc(hidden)]
-#[derive(Default)]
-pub struct StringSection {
-    name_to_offset: Vec<(String, u64)>,
-}
-
-impl StringSection {
-    fn insert_offset(&mut self, offset: &xc3_write::Offset<'_, u32, String>) {
-        self.name_to_offset
-            .push((offset.data.clone(), offset.position));
-    }
-
-    fn write<W: std::io::Write + std::io::Seek>(
-        &self,
-        writer: &mut W,
-        data_ptr: &mut u64,
-        alignment: u64,
-        endian: xc3_write::Endian,
-    ) -> xc3_write::Xc3Result<()> {
-        // Write the string data.
-        // TODO: Cleaner way to handle alignment?
-        let mut name_positions = Vec::new();
-        writer.seek(std::io::SeekFrom::Start(*data_ptr))?;
-        align(writer, *data_ptr, alignment, 0u8)?;
-
-        for (name, _) in &self.name_to_offset {
-            // Assume all string pointers are 4 bytes.
-            let position = writer.stream_position()? as u32;
-
-            writer.write_all(name.as_bytes())?;
-            writer.write_all(&[0u8])?;
-
-            // Apply alignment to each string.
-            let position_after_write = writer.stream_position()?;
-            align(writer, position_after_write, alignment, 0u8)?;
-
-            name_positions.push(position);
-        }
-        *data_ptr = (*data_ptr).max(writer.stream_position()?);
-
-        // Update offsets.
-        let base_offset = name_positions.first().copied().unwrap_or_default();
-        for ((_, offset), position) in self.name_to_offset.iter().zip(name_positions) {
-            writer.seek(std::io::SeekFrom::Start(*offset))?;
-            position
-                .saturating_sub(base_offset)
-                .xc3_write(writer, endian)?;
-        }
-
+        args.borrow_mut().insert_offset32(&self.name);
         Ok(())
     }
 }
