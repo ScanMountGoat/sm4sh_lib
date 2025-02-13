@@ -76,7 +76,7 @@ pub struct Texture {
 }
 
 // TODO: Test these in game with renderdoc.
-#[derive(Debug, BinRead)]
+#[derive(Debug, BinRead, PartialEq, Eq, Clone, Copy)]
 #[br(repr(u8))]
 pub enum NutFormat {
     Bc1 = 0,
@@ -95,7 +95,7 @@ pub enum NutFormat {
 #[br(magic(b"GIDX"))]
 pub struct Gidx {
     pub unk1: u32,
-    pub unk2: (u16, u16),
+    pub hash: u32, // TODO: does this match with material texture hash?
     pub unk3: u32,
 }
 

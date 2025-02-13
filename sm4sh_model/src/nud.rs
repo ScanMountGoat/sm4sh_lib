@@ -7,6 +7,8 @@ use sm4sh_lib::{
 };
 use vertex::{read_vertex_indices, read_vertices, write_vertex_indices, write_vertices, Vertices};
 
+pub use sm4sh_lib::nut::NutFormat;
+
 pub mod vertex;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -27,6 +29,15 @@ pub struct NudMesh {
     pub vertex_indices: Vec<u16>,
     pub primitive_type: PrimitiveType,
     // TODO: material?
+    pub material1: Option<NudMaterial>,
+    pub material2: Option<NudMaterial>,
+    pub material3: Option<NudMaterial>,
+    pub material4: Option<NudMaterial>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct NudMaterial {
+    pub texture_hashes: Vec<u32>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -36,7 +47,14 @@ pub enum PrimitiveType {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ImageTexture {}
+pub struct ImageTexture {
+    pub hash_id: u32,
+    pub width: u32,
+    pub height: u32,
+    pub mipmap_count: u32,
+    pub image_format: NutFormat,
+    pub image_data: Vec<u8>,
+}
 
 impl NudModel {
     pub fn from_nud(nud: &Nud, nut: &Nut) -> BinResult<Self> {
@@ -72,6 +90,10 @@ impl NudModel {
                     vertices,
                     vertex_indices,
                     primitive_type,
+                    material1: mesh.material1.as_ref().map(nud_material),
+                    material2: mesh.material2.as_ref().map(nud_material),
+                    material3: mesh.material3.as_ref().map(nud_material),
+                    material4: mesh.material4.as_ref().map(nud_material),
                 });
 
                 mesh_index += 1;
@@ -80,8 +102,21 @@ impl NudModel {
             groups.push(NudMeshGroup { meshes });
         }
 
-        // TODO: deswizzle nut textures.
-        let textures = Vec::new();
+        let textures = match nut {
+            Nut::Ntwu(ntwu) => ntwu
+                .textures
+                .iter()
+                .map(|t| ImageTexture {
+                    hash_id: t.gidx.hash,
+                    width: t.width as u32,
+                    height: t.height as u32,
+                    mipmap_count: t.mipmap_count as u32,
+                    image_format: t.format,
+                    image_data: t.deswizzle().unwrap(),
+                })
+                .collect(),
+            Nut::Ntp3(ntp3) => todo!(),
+        };
 
         Ok(Self { groups, textures })
     }
@@ -141,4 +176,10 @@ fn align<W: Write + Seek>(writer: &mut W, align: u64, pad: u8) -> Result<(), std
     let padding = aligned_size - size;
     writer.write_all(&vec![pad; padding as usize])?;
     Ok(())
+}
+
+fn nud_material(material: &sm4sh_lib::nud::Material) -> NudMaterial {
+    NudMaterial {
+        texture_hashes: material.textures.iter().map(|t| t.hash).collect(),
+    }
 }

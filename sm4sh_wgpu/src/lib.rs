@@ -9,6 +9,10 @@ mod shader;
 pub use model::{load_model, Mesh, Model};
 pub use renderer::Renderer;
 
+/// The features required by [Renderer].
+pub const FEATURES: wgpu::Features =
+    wgpu::Features::TEXTURE_COMPRESSION_BC.union(wgpu::Features::POLYGON_MODE_LINE);
+
 trait DeviceBufferExt {
     fn create_uniform_buffer<T: ShaderType + WriteInto + ShaderSize>(
         &self,

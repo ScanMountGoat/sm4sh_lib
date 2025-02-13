@@ -155,17 +155,17 @@ impl Uvs {
 pub struct UvsFloat16 {
     #[br(map = f16::from_bits)]
     #[bw(map = |x| x.to_bits())]
-    u: f16,
+    pub u: f16,
 
     #[br(map = f16::from_bits)]
     #[bw(map = |x| x.to_bits())]
-    v: f16,
+    pub v: f16,
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct UvsFloat32 {
-    u: f32,
-    v: f32,
+    pub u: f32,
+    pub v: f32,
 }
 
 #[derive(Debug, PartialEq, Clone)]

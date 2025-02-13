@@ -63,7 +63,13 @@ impl<'a> State<'a> {
         info!("{:?}", adapter.get_info());
 
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    required_features: sm4sh_wgpu::FEATURES,
+                    ..Default::default()
+                },
+                None,
+            )
             .await
             .unwrap();
 
@@ -92,7 +98,7 @@ impl<'a> State<'a> {
         let nud = Nud::from_file(path)?;
         let nut = Nut::from_file(path.with_file_name("model.nut"))?;
         let nud_model = NudModel::from_nud(&nud, &nut)?;
-        let model = load_model(&device, &nud_model);
+        let model = load_model(&device, &queue, &nud_model);
 
         Ok(Self {
             surface,

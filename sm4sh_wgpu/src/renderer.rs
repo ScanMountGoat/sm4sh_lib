@@ -85,7 +85,7 @@ impl Renderer {
             occlusion_query_set: None,
         });
 
-        crate::shader::model::set_bind_groups(&mut render_pass, &self.model_bind_group0);
+        self.model_bind_group0.set(&mut render_pass);
         model.draw(
             &mut render_pass,
             &self.model_pipeline_triangle_list,

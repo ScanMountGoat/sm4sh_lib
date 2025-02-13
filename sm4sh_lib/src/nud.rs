@@ -201,7 +201,7 @@ pub struct BoundingSphere {
 #[derive(Debug, BinRead, Xc3Write)]
 #[br(import_raw(strings_offset: u32))]
 pub struct Material {
-    pub flags: u32,
+    pub flags: u32, // TODO: proper bit flags type
     pub unk1: u32,
     pub src_factor: SrcFactor,
     pub tex_count: u16,
@@ -221,6 +221,8 @@ pub struct Material {
     #[br(args_raw(strings_offset))]
     pub properties: Vec<MaterialProperty>,
 }
+
+// TODO: material flags use bits to set which textures are present?
 
 // TODO: retest these with renderdoc.
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
@@ -298,11 +300,11 @@ pub enum CullMode {
 
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
 pub struct MaterialTexture {
-    pub hash: u32,
+    pub hash: u32, // TODO: matches nut gidx hash?
     pub unk1: [u16; 3],
     pub map_mode: MapMode,
-    pub wrap_mode_s: u8,
-    pub wrap_mode_t: u8,
+    pub wrap_mode_s: WrapMode,
+    pub wrap_mode_t: WrapMode,
     pub min_filter: MinFilter,
     pub mag_filter: MagFilter,
     pub mip_detail: MipDetail,
@@ -354,6 +356,15 @@ pub enum MipDetail {
     FourMipLevelsTrilinearAnisotropic = 6,
 }
 
+// TODO: retest these with renderdoc.
+#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
+#[brw(repr(u8))]
+pub enum WrapMode {
+    Repeat = 1,
+    MirroredRepeat = 2,
+    ClampToEdge = 3,
+}
+
 #[derive(Debug, BinRead, Xc3Write)]
 #[br(import_raw(strings_offset: u32))]
 pub struct MaterialProperty {
@@ -381,7 +392,8 @@ xc3_write_binwrite_impl!(
     VertexFlags,
     VertexIndexFlags,
     UvColorFlags,
-    CullMode
+    CullMode,
+    WrapMode
 );
 
 impl Xc3WriteOffsets for NudOffsets<'_> {
