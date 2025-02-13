@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use glam::{vec2, vec3, Vec2, Vec3};
+use glam::{vec4, Vec4};
 use sm4sh_model::nud::{
     vertex::{Normals, Uvs},
     NudModel,
@@ -22,6 +22,9 @@ pub struct Mesh {
 }
 
 pub fn load_model(device: &wgpu::Device, queue: &wgpu::Queue, model: &NudModel) -> Model {
+    let default_texture = create_default_black_texture(device, queue)
+        .create_view(&wgpu::TextureViewDescriptor::default());
+
     // TODO: texture module
     let textures = model
         .textures
@@ -58,7 +61,11 @@ pub fn load_model(device: &wgpu::Device, queue: &wgpu::Queue, model: &NudModel) 
         meshes: model
             .groups
             .iter()
-            .flat_map(|g| g.meshes.iter().map(|m| create_mesh(device, m, &textures)))
+            .flat_map(|g| {
+                g.meshes
+                    .iter()
+                    .map(|m| create_mesh(device, m, &textures, &default_texture))
+            })
             .collect(),
     }
 }
@@ -67,15 +74,18 @@ fn create_mesh(
     device: &wgpu::Device,
     m: &sm4sh_model::nud::NudMesh,
     hash_to_texture: &BTreeMap<u32, wgpu::TextureView>,
+    default_texture: &wgpu::TextureView,
 ) -> Mesh {
     let mut vertices: Vec<_> = m
         .vertices
         .positions
         .iter()
         .map(|p| crate::shader::model::VertexInput0 {
-            position: (*p).into(),
-            normal: Vec3::ZERO,
-            uv0: Vec2::ZERO,
+            position: vec4(p[0], p[1], p[2], 1.0),
+            normal: Vec4::ZERO,
+            tangent: Vec4::ZERO,
+            bitangent: Vec4::ZERO,
+            uv0: Vec4::ZERO,
         })
         .collect();
 
@@ -95,14 +105,31 @@ fn create_mesh(
     });
 
     // TODO: Load all textures and samplers.
-    // TODO: Avoid unwrap and use default textures.
-    let texture_hash = m
-        .material1
-        .as_ref()
-        .and_then(|m| m.texture_hashes.first())
-        .unwrap();
+    let mut color_texture = None;
+    let mut normal_texture = None;
 
-    let color_texture = hash_to_texture.get(texture_hash).unwrap();
+    if let Some(material) = &m.material1 {
+        // TODO: Is this the "correct" way to detect texture types?
+        // TODO: Cross reference this with shader uniforms?
+        let mut texture_index = 0;
+        if material.flags.unk1().diffuse() {
+            color_texture = hash_to_texture.get(&material.texture_hashes[texture_index]);
+            texture_index += 1;
+        }
+        if material.flags.unk1().sphere() {
+            texture_index += 1;
+        }
+        if material.flags.unk1().normal() {
+            normal_texture = hash_to_texture.get(&material.texture_hashes[texture_index]);
+            texture_index += 1;
+        }
+        if material.flags.unk1().ramp_or_cube() {
+            texture_index += 1;
+        }
+        if material.flags.unk1().dummy_ramp() {
+            texture_index += 1;
+        }
+    }
 
     // TODO: Get sampler values from material textures.
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -114,7 +141,8 @@ fn create_mesh(
     let bind_group1 = crate::shader::model::bind_groups::BindGroup1::from_bindings(
         device,
         crate::shader::model::bind_groups::BindGroupLayout1 {
-            color_texture,
+            color_texture: color_texture.unwrap_or(default_texture),
+            normal_texture: normal_texture.unwrap_or(default_texture),
             color_sampler: &sampler,
         },
     );
@@ -135,27 +163,25 @@ fn set_normals(
     match normals {
         Normals::None(_) => (),
         Normals::NormalsFloat32(items) => set_attribute(vertices, items, |v, i| {
-            v.normal = vec3(i.normal[0], i.normal[1], i.normal[2])
+            v.normal = i.normal.into();
         }),
         Normals::Unk2(items) => set_attribute(vertices, items, |v, i| {
-            v.normal = vec3(i.normal[0], i.normal[1], i.normal[2])
+            v.normal = i.normal.into();
+            v.tangent = i.tangent.into();
+            v.bitangent = i.bitangent.into();
         }),
         Normals::NormalsTangentBitangentFloat32(items) => set_attribute(vertices, items, |v, i| {
-            v.normal = vec3(i.normal[0], i.normal[1], i.normal[2])
+            v.normal = i.normal.into();
+            v.tangent = i.tangent.into();
+            v.bitangent = i.bitangent.into();
         }),
         Normals::NormalsFloat16(items) => set_attribute(vertices, items, |v, i| {
-            v.normal = vec3(
-                i.normal[0].to_f32(),
-                i.normal[1].to_f32(),
-                i.normal[2].to_f32(),
-            )
+            v.normal = i.normal.map(|f| f.to_f32()).into();
         }),
         Normals::NormalsTangentBitangentFloat16(items) => set_attribute(vertices, items, |v, i| {
-            v.normal = vec3(
-                i.normal[0].to_f32(),
-                i.normal[1].to_f32(),
-                i.normal[2].to_f32(),
-            )
+            v.normal = i.normal.map(|f| f.to_f32()).into();
+            v.tangent = i.tangent.map(|f| f.to_f32()).into();
+            v.bitangent = i.bitangent.map(|f| f.to_f32()).into();
         }),
     }
 }
@@ -167,9 +193,11 @@ fn set_uvs(
     if let Some(uvs) = uvs.first() {
         match uvs {
             Uvs::Float16(items) => set_attribute(vertices, items, |v, i| {
-                v.uv0 = vec2(i.u.to_f32(), i.v.to_f32())
+                v.uv0 = vec4(i.u.to_f32(), i.v.to_f32(), 0.0, 0.0)
             }),
-            Uvs::Float32(items) => set_attribute(vertices, items, |v, i| v.uv0 = vec2(i.u, i.v)),
+            Uvs::Float32(items) => {
+                set_attribute(vertices, items, |v, i| v.uv0 = vec4(i.u, i.v, 0.0, 0.0))
+            }
         }
     }
 }
@@ -222,4 +250,26 @@ impl Model {
             render_pass.draw_indexed(0..mesh.vertex_index_count, 0, 0..1);
         }
     }
+}
+
+pub fn create_default_black_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
+    device.create_texture_with_data(
+        queue,
+        &wgpu::TextureDescriptor {
+            label: Some("DEFAULT"),
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        },
+        wgpu::util::TextureDataOrder::LayerMajor,
+        &[0u8; 4 * 4 * 4],
+    )
 }

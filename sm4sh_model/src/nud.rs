@@ -2,7 +2,7 @@ use std::io::{Cursor, Seek, Write};
 
 use binrw::BinResult;
 use sm4sh_lib::{
-    nud::{BoundingSphere, Nud},
+    nud::{BoundingSphere, MaterialFlags, Nud},
     nut::Nut,
 };
 use vertex::{read_vertex_indices, read_vertices, write_vertex_indices, write_vertices, Vertices};
@@ -37,6 +37,8 @@ pub struct NudMesh {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudMaterial {
+    // TODO: Should this recreate flags or store them directly?
+    pub flags: MaterialFlags,
     pub texture_hashes: Vec<u32>,
 }
 
@@ -180,6 +182,7 @@ fn align<W: Write + Seek>(writer: &mut W, align: u64, pad: u8) -> Result<(), std
 
 fn nud_material(material: &sm4sh_lib::nud::Material) -> NudMaterial {
     NudMaterial {
+        flags: material.flags,
         texture_hashes: material.textures.iter().map(|t| t.hash).collect(),
     }
 }

@@ -201,7 +201,7 @@ pub struct BoundingSphere {
 #[derive(Debug, BinRead, Xc3Write)]
 #[br(import_raw(strings_offset: u32))]
 pub struct Material {
-    pub flags: u32, // TODO: proper bit flags type
+    pub flags: MaterialFlags,
     pub unk1: u32,
     pub src_factor: SrcFactor,
     pub tex_count: u16,
@@ -223,6 +223,29 @@ pub struct Material {
 }
 
 // TODO: material flags use bits to set which textures are present?
+#[bitsize(32)]
+#[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
+#[br(try_map = |x: u32| x.try_into().map_err(|e| format!("{e:?}")))]
+#[bw(map = |&x| u32::from(x))]
+pub struct MaterialFlags {
+    pub unk1: TextureFlags,
+    pub unk2: u8,
+    pub unk3: u8,
+    pub unk4: u8,
+}
+
+#[bitsize(8)]
+#[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
+pub struct TextureFlags {
+    pub diffuse: bool,
+    pub normal: bool,
+    pub ramp_or_cube: bool,
+    pub ambient_occlusion: bool,
+    pub sphere: bool,
+    pub dummy_ramp: bool,
+    pub shadow: bool,
+    pub glow: bool,
+}
 
 // TODO: retest these with renderdoc.
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
@@ -393,7 +416,8 @@ xc3_write_binwrite_impl!(
     VertexIndexFlags,
     UvColorFlags,
     CullMode,
-    WrapMode
+    WrapMode,
+    MaterialFlags
 );
 
 impl Xc3WriteOffsets for NudOffsets<'_> {
