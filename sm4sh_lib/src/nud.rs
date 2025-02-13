@@ -119,8 +119,7 @@ pub struct Mesh {
     pub material4: Option<Material>,
 
     pub vertex_index_count: u16,
-    // TODO: What are in these flags?
-    pub vertex_index_flags: u16,
+    pub vertex_index_flags: VertexIndexFlags,
 
     // TODO: padding?
     pub unk: [u32; 3],
@@ -133,6 +132,19 @@ pub struct Mesh {
 pub struct VertexFlags {
     pub normals: NormalType,
     pub bones: BoneType,
+}
+
+#[bitsize(16)]
+#[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
+#[br(try_map = |x: u16| x.try_into().map_err(|e| format!("{e:?}")))]
+#[bw(map = |&x| u16::from(x))]
+pub struct VertexIndexFlags {
+    pub unk1: bool,
+    pub unk2: bool,
+    pub unk3: bool, // TODO: ???
+    pub unk4: u11,
+    pub is_triangle_list: bool,
+    pub unk5: bool,
 }
 
 #[bitsize(4)]
@@ -367,6 +379,7 @@ xc3_write_binwrite_impl!(
     MagFilter,
     MipDetail,
     VertexFlags,
+    VertexIndexFlags,
     UvColorFlags,
     CullMode
 );

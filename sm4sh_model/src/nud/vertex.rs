@@ -52,48 +52,48 @@ impl Normals {
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct NormalsFloat32 {
-    unk1: f32,
-    normal: [f32; 4],
+    pub unk1: f32,
+    pub normal: [f32; 4],
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct NormalsUnk2 {
-    unk1: f32,
-    normal: [f32; 4],
+    pub unk1: f32,
+    pub normal: [f32; 4],
     // TODO: is this order correct?
-    bitangent: [f32; 4],
-    tangent: [f32; 4],
+    pub bitangent: [f32; 4],
+    pub tangent: [f32; 4],
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct NormalsTangentBitangentFloat32 {
-    unk1: f32,
-    normal: [f32; 4],
+    pub unk1: f32,
+    pub normal: [f32; 4],
     // TODO: is this order correct?
-    bitangent: [f32; 4],
-    tangent: [f32; 4],
+    pub bitangent: [f32; 4],
+    pub tangent: [f32; 4],
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct NormalsFloat16 {
     #[br(map = |x: [u16; 4]| x.map(f16::from_bits))]
     #[bw(map = |x| x.map(f16::to_bits))]
-    normal: [f16; 4],
+    pub normal: [f16; 4],
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct NormalsTangentBitangentFloat16 {
     #[br(map = |x: [u16; 4]| x.map(f16::from_bits))]
     #[bw(map = |x| x.map(f16::to_bits))]
-    normal: [f16; 4],
+    pub normal: [f16; 4],
 
     #[br(map = |x: [u16; 4]| x.map(f16::from_bits))]
     #[bw(map = |x| x.map(f16::to_bits))]
-    bitangent: [f16; 4],
+    pub bitangent: [f16; 4],
 
     #[br(map = |x: [u16; 4]| x.map(f16::from_bits))]
     #[bw(map = |x| x.map(f16::to_bits))]
-    tangent: [f16; 4],
+    pub tangent: [f16; 4],
 }
 
 #[derive(Debug, PartialEq, Clone)]

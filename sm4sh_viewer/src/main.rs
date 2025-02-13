@@ -1,9 +1,11 @@
+use std::path::Path;
+
 use anyhow::Context;
 use clap::Parser;
 use futures::executor::block_on;
 use glam::{vec3, Vec3};
 use log::{error, info};
-use sm4sh_lib::nud::Nud;
+use sm4sh_lib::{nud::Nud, nut::Nut};
 use sm4sh_model::nud::NudModel;
 use sm4sh_wgpu::{load_model, CameraData, Model, Renderer};
 use winit::{
@@ -86,8 +88,10 @@ impl<'a> State<'a> {
         let camera_data = calculate_camera_data(size, translation, rotation_xyz);
         renderer.update_camera(&queue, &camera_data);
 
-        let nud = Nud::from_file(&cli.file)?;
-        let nud_model = NudModel::from_nud(&nud)?;
+        let path = Path::new(&cli.file);
+        let nud = Nud::from_file(path)?;
+        let nut = Nut::from_file(path.with_file_name("model.nut"))?;
+        let nud_model = NudModel::from_nud(&nud, &nut)?;
         let model = load_model(&device, &nud_model);
 
         Ok(Self {

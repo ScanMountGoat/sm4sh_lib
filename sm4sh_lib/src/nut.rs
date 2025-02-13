@@ -1,19 +1,24 @@
-use std::{io::Cursor, path::Path};
+use binrw::{args, binread, BinRead, FilePtr32};
 
-use binrw::{args, binread, BinRead, BinReaderExt, BinResult, FilePtr32};
+use crate::parse_opt_ptr32;
 
+// TODO: Write support.
 #[derive(Debug, BinRead)]
 pub enum Nut {
     Ntwu(Ntwu),
     Ntp3(Ntp3),
 }
 
-// TODO: Are these the same type just with different endianness?
+// TODO: Identical to ntwu other than magic?
 #[derive(Debug, BinRead)]
 #[br(magic(b"NTP3"))]
 pub struct Ntp3 {
     pub unk1: u16,
-    // TODO: more fields
+    pub count: u16,
+    pub unk2: u64,
+
+    #[br(count = count as usize)]
+    pub textures: Vec<Texture>,
 }
 
 #[derive(Debug, BinRead)]
@@ -32,7 +37,7 @@ pub struct Ntwu {
 #[derive(Debug)]
 #[br(stream = r)]
 pub struct Texture {
-    #[br(try_calc = r.stream_position())]
+    #[br(temp, try_calc = r.stream_position())]
     base_offset: u64,
 
     pub size: u32,
@@ -46,42 +51,43 @@ pub struct Texture {
     pub format: NutFormat,
     pub width: u16,
     pub height: u16,
-    pub unk5: u32,
+    pub unk5: u32, // TODO: 0 for ntp3?
     pub caps2: u32,
 
     // TODO: all mipmaps?
-    #[br(restore_position)]
-    data_offset: u32,
-
     #[br(parse_with = FilePtr32::parse)]
     #[br(args { offset: base_offset, inner: args! { count: data_size as usize}})]
     pub data: Vec<u8>,
 
     pub mipmap_data_offset: u32,
 
-    #[br(parse_with = FilePtr32::parse, offset = base_offset)]
-    pub gtx_header: GtxHeader,
+    // TODO: null for ntp3 nuts?
+    #[br(parse_with = parse_opt_ptr32, offset = base_offset)]
+    pub gtx_header: Option<GtxHeader>,
 
     pub unk6: u32,
 
     // TODO: cube map stuff?
-    #[br(count = (header_size - 64) / 4)]
+    #[br(count = (header_size - 80) / 4)]
     pub unks: Vec<u32>,
 
+    pub ext: Ext,
     pub gidx: Gidx,
 }
 
+// TODO: Test these in game with renderdoc.
 #[derive(Debug, BinRead)]
 #[br(repr(u8))]
 pub enum NutFormat {
     Bc1 = 0,
     Bc2 = 1,
     Bc3 = 2,
+    Unk6 = 6,
     Rg16 = 8,
     Rgba16 = 12,
     Rgba8 = 14,
     Bgra8 = 16,
-    // Rgba8 = 17,
+    Rgba82 = 17,
     Unk22 = 22,
 }
 
@@ -90,6 +96,14 @@ pub enum NutFormat {
 pub struct Gidx {
     pub unk1: u32,
     pub unk2: (u16, u16),
+    pub unk3: u32,
+}
+
+#[derive(Debug, BinRead)]
+#[br(magic(b"eXt\x00"))]
+pub struct Ext {
+    pub unk1: u32,
+    pub unk2: u32,
     pub unk3: u32,
 }
 
@@ -136,13 +150,6 @@ pub enum TileMode {
     D2TiledThick = 7,
 }
 
-impl Nut {
-    pub fn from_file<P: AsRef<Path>>(path: P) -> BinResult<Self> {
-        let mut reader = Cursor::new(std::fs::read(path)?);
-        reader.read_be()
-    }
-}
-
 impl SurfaceFormat {
     pub fn block_dim(&self) -> (u32, u32) {
         match self {
@@ -169,35 +176,32 @@ impl SurfaceFormat {
     }
 }
 
-// 64x64 6 layers BC1 2 mipmaps
-// layer 0 mip 0:  448 (0x1c0)
-// layer 1 mip 0: 1088 (0x440)
-// layer 5 mip 0: 5184 (0x1440)
-// layer 0 mip 1: 0, 6144 (0x1800)
-// layer 1 mip 1: 128, 6272 (0x1880)
-// layer 5 mip 1: 640, 6784 (0x1A80)
 impl Texture {
     pub fn deswizzle(&self) -> Result<Vec<u8>, wiiu_swizzle::SwizzleError> {
         // TODO: Avoid unwrap.
-        wiiu_swizzle::Gx2Surface {
-            dim: wiiu_swizzle::SurfaceDim::from_repr(self.gtx_header.dim).unwrap(),
-            width: self.gtx_header.width,
-            height: self.gtx_header.height,
-            depth_or_array_layers: self.gtx_header.depth_or_array_layers,
-            mipmap_count: self.gtx_header.mipmap_count,
-            format: wiiu_swizzle::SurfaceFormat::from_repr(self.gtx_header.format as u32).unwrap(),
-            aa: wiiu_swizzle::AaMode::from_repr(self.gtx_header.aa).unwrap(),
-            usage: self.gtx_header.usage,
-            image_data: &self.data[..self.gtx_header.image_data_size as usize],
-            mipmap_data: &self.data[self.gtx_header.mipmap_offsets[0] as usize
-                ..self.gtx_header.mipmap_offsets[0] as usize
-                    + self.gtx_header.mipmap_data_size as usize],
-            tile_mode: wiiu_swizzle::TileMode::from_repr(self.gtx_header.tile_mode as u32).unwrap(),
-            swizzle: self.gtx_header.swizzle,
-            alignment: self.gtx_header.alignment,
-            pitch: self.gtx_header.pitch,
-            mipmap_offsets: self.gtx_header.mipmap_offsets,
+        if let Some(gtx_header) = &self.gtx_header {
+            wiiu_swizzle::Gx2Surface {
+                dim: wiiu_swizzle::SurfaceDim::from_repr(gtx_header.dim).unwrap(),
+                width: gtx_header.width,
+                height: gtx_header.height,
+                depth_or_array_layers: gtx_header.depth_or_array_layers,
+                mipmap_count: gtx_header.mipmap_count,
+                format: wiiu_swizzle::SurfaceFormat::from_repr(gtx_header.format as u32).unwrap(),
+                aa: wiiu_swizzle::AaMode::from_repr(gtx_header.aa).unwrap(),
+                usage: gtx_header.usage,
+                image_data: &self.data[..gtx_header.image_data_size as usize],
+                mipmap_data: &self.data[gtx_header.mipmap_offsets[0] as usize
+                    ..gtx_header.mipmap_offsets[0] as usize + gtx_header.mipmap_data_size as usize],
+                tile_mode: wiiu_swizzle::TileMode::from_repr(gtx_header.tile_mode as u32).unwrap(),
+                swizzle: gtx_header.swizzle,
+                alignment: gtx_header.alignment,
+                pitch: gtx_header.pitch,
+                mipmap_offsets: gtx_header.mipmap_offsets,
+            }
+            .deswizzle()
+        } else {
+            // TODO: How to handle textures without gx2 data?
+            Ok(self.data.clone())
         }
-        .deswizzle()
     }
 }

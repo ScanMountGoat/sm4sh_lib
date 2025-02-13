@@ -22,6 +22,9 @@ struct Cli {
     #[arg(long)]
     vbn: bool,
 
+    #[arg(long)]
+    nud_model: bool,
+
     /// Process all file types.
     #[arg(long)]
     all: bool,
@@ -46,6 +49,11 @@ fn main() {
     if cli.vbn || cli.all {
         println!("Checking Vbn files...");
         check_all(root, &["*.vbn"], check_vbn);
+    }
+
+    if cli.nud_model || cli.all {
+        println!("Checking Nud models...");
+        check_all(root, &["*.nud"], check_nud_model);
     }
 
     println!("Finished in {:?}", start.elapsed());
@@ -80,19 +88,28 @@ fn check_nud(nud: Nud, path: &Path, original_bytes: &[u8]) {
     if writer.into_inner() != original_bytes {
         println!("Nud read/write not 1:1 for {path:?}");
     }
+}
 
-    // Check nud model conversions.
-    let model = NudModel::from_nud(&nud).unwrap();
-    let new_nud = model.to_nud().unwrap();
+fn check_nud_model(nud: Nud, path: &Path, original_bytes: &[u8]) {
+    let nut_path = path.with_file_name("model.nut");
+    match Nut::from_file(&nut_path) {
+        Ok(nut) => {
+            let model = NudModel::from_nud(&nud, &nut).unwrap();
 
-    if new_nud.vertex_buffer0 != nud.vertex_buffer0 {
-        println!("Vertex buffer0 read/write not 1:1 for {path:?}");
-    }
-    if new_nud.vertex_buffer1 != nud.vertex_buffer1 {
-        println!("Vertex buffer1 read/write not 1:1 for {path:?}");
-    }
-    if new_nud.index_buffer != nud.index_buffer {
-        println!("Vertex indices read/write not 1:1 for {path:?}");
+            // Check nud model conversions.
+            let new_nud = model.to_nud().unwrap();
+
+            if new_nud.vertex_buffer0 != nud.vertex_buffer0 {
+                println!("Vertex buffer0 read/write not 1:1 for {path:?}");
+            }
+            if new_nud.vertex_buffer1 != nud.vertex_buffer1 {
+                println!("Vertex buffer1 read/write not 1:1 for {path:?}");
+            }
+            if new_nud.index_buffer != nud.index_buffer {
+                println!("Vertex indices read/write not 1:1 for {path:?}");
+            }
+        }
+        Err(e) => println!("Error reading Nut from {nut_path:?}: {e}"),
     }
 }
 

@@ -1,7 +1,10 @@
 use std::io::{Cursor, Seek, Write};
 
 use binrw::BinResult;
-use sm4sh_lib::nud::{BoundingSphere, Nud};
+use sm4sh_lib::{
+    nud::{BoundingSphere, Nud},
+    nut::Nut,
+};
 use vertex::{read_vertex_indices, read_vertices, write_vertex_indices, write_vertices, Vertices};
 
 pub mod vertex;
@@ -9,6 +12,7 @@ pub mod vertex;
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudModel {
     pub groups: Vec<NudMeshGroup>,
+    pub textures: Vec<ImageTexture>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -21,11 +25,21 @@ pub struct NudMesh {
     // Assume meshes have unique vertex data.
     pub vertices: Vertices,
     pub vertex_indices: Vec<u16>,
+    pub primitive_type: PrimitiveType,
     // TODO: material?
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum PrimitiveType {
+    TriangleList,
+    TriangleStrip,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ImageTexture {}
+
 impl NudModel {
-    pub fn from_nud(nud: &Nud) -> BinResult<Self> {
+    pub fn from_nud(nud: &Nud, nut: &Nut) -> BinResult<Self> {
         let mut groups = Vec::new();
 
         let mut mesh_index = 0;
@@ -48,9 +62,16 @@ impl NudModel {
                     mesh.vertex_index_count,
                 )?;
 
+                let primitive_type = if mesh.vertex_index_flags.is_triangle_list() {
+                    PrimitiveType::TriangleList
+                } else {
+                    PrimitiveType::TriangleStrip
+                };
+
                 meshes.push(NudMesh {
                     vertices,
                     vertex_indices,
+                    primitive_type,
                 });
 
                 mesh_index += 1;
@@ -59,7 +80,10 @@ impl NudModel {
             groups.push(NudMeshGroup { meshes });
         }
 
-        Ok(Self { groups })
+        // TODO: deswizzle nut textures.
+        let textures = Vec::new();
+
+        Ok(Self { groups, textures })
     }
 
     pub fn to_nud(&self) -> BinResult<Nud> {
