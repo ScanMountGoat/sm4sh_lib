@@ -16,6 +16,7 @@ Cargo.lock
 # Output files
 *.bin
 *.txt
+*.dds
 
 # Development Scripts
 *.sh

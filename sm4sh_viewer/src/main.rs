@@ -98,7 +98,7 @@ impl<'a> State<'a> {
         let nud = Nud::from_file(path)?;
         let nut = Nut::from_file(path.with_file_name("model.nut"))?;
         let nud_model = NudModel::from_nud(&nud, &nut)?;
-        let model = load_model(&device, &queue, &nud_model);
+        let model = load_model(&device, &queue, &nud_model, config.format);
 
         Ok(Self {
             surface,

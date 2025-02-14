@@ -7,6 +7,7 @@ use sm4sh_lib::{
 };
 use vertex::{read_vertex_indices, read_vertices, write_vertex_indices, write_vertices, Vertices};
 
+pub use sm4sh_lib::nud::{AlphaFunc, CullMode, DstFactor, SrcFactor};
 pub use sm4sh_lib::nut::NutFormat;
 
 pub mod vertex;
@@ -39,6 +40,12 @@ pub struct NudMesh {
 pub struct NudMaterial {
     // TODO: Should this recreate flags or store them directly?
     pub flags: MaterialFlags,
+
+    pub src_factor: SrcFactor,
+    pub dst_factor: DstFactor,
+    pub alpha_func: AlphaFunc,
+    pub cull_mode: CullMode,
+
     pub texture_hashes: Vec<u32>,
 }
 
@@ -117,7 +124,18 @@ impl NudModel {
                     image_data: t.deswizzle().unwrap(),
                 })
                 .collect(),
-            Nut::Ntp3(ntp3) => todo!(),
+            Nut::Ntp3(ntp3) => ntp3
+                .textures
+                .iter()
+                .map(|t| ImageTexture {
+                    hash_id: t.gidx.hash,
+                    width: t.width as u32,
+                    height: t.height as u32,
+                    mipmap_count: t.mipmap_count as u32,
+                    image_format: t.format,
+                    image_data: t.deswizzle().unwrap(),
+                })
+                .collect(),
         };
 
         Ok(Self { groups, textures })
@@ -183,6 +201,10 @@ fn align<W: Write + Seek>(writer: &mut W, align: u64, pad: u8) -> Result<(), std
 fn nud_material(material: &sm4sh_lib::nud::Material) -> NudMaterial {
     NudMaterial {
         flags: material.flags,
+        src_factor: material.src_factor,
+        dst_factor: material.dst_factor,
+        alpha_func: material.alpha_func,
+        cull_mode: material.cull_mode,
         texture_hashes: material.textures.iter().map(|t| t.hash).collect(),
     }
 }

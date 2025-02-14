@@ -66,7 +66,6 @@ pub struct Nud {
     #[br(count = vertex_buffer1_size)]
     #[xc3(save_position(false))]
     pub vertex_buffer1: Vec<u8>,
-    // TODO: add string section type with 16-byte aligned strings?
 }
 
 #[derive(Debug, BinRead, Xc3Write)]

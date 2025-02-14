@@ -1,8 +1,10 @@
 use binrw::{args, binread, BinRead, FilePtr32};
+use image_dds::{ddsfile::Dds, Surface};
 
 use crate::parse_opt_ptr32;
 
 // TODO: Write support.
+// TODO: Same inner type for all variants?
 #[derive(Debug, BinRead)]
 pub enum Nut {
     Ntwu(Ntwu),
@@ -202,6 +204,42 @@ impl Texture {
         } else {
             // TODO: How to handle textures without gx2 data?
             Ok(self.data.clone())
+        }
+    }
+
+    pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, wiiu_swizzle::SwizzleError> {
+        // TODO: cube maps
+        Ok(Surface {
+            width: self.width as u32,
+            height: self.height as u32,
+            depth: 1,
+            layers: 1,
+            mipmaps: self.mipmap_count as u32,
+            image_format: self.format.into(),
+            data: self.deswizzle()?,
+        })
+    }
+
+    pub fn to_dds(&self) -> Result<Dds, image_dds::CreateDdsError> {
+        // TODO: Create error type to avoid unwrap.
+        self.to_surface().unwrap().to_dds()
+    }
+}
+
+impl From<NutFormat> for image_dds::ImageFormat {
+    fn from(value: NutFormat) -> Self {
+        match value {
+            NutFormat::Bc1 => image_dds::ImageFormat::BC1RgbaUnorm,
+            NutFormat::Bc2 => image_dds::ImageFormat::BC2RgbaUnorm,
+            NutFormat::Bc3 => image_dds::ImageFormat::BC3RgbaUnorm,
+            NutFormat::Unk6 => todo!(),
+            // TODO: 16 bit RGBA support for image_dds
+            NutFormat::Rg16 => todo!(),
+            NutFormat::Rgba16 => todo!(),
+            NutFormat::Rgba8 => image_dds::ImageFormat::Rgba8Unorm,
+            NutFormat::Bgra8 => image_dds::ImageFormat::Bgra8Unorm,
+            NutFormat::Rgba82 => image_dds::ImageFormat::Rgba8Unorm,
+            NutFormat::Unk22 => todo!(),
         }
     }
 }

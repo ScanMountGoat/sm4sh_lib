@@ -1,15 +1,12 @@
 use glam::{Mat4, Vec4};
-use sm4sh_model::nud::PrimitiveType;
 
 use crate::{CameraData, DeviceBufferExt, Model, QueueBufferExt};
 
-const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 pub struct Renderer {
     camera_buffer: wgpu::Buffer,
     model_bind_group0: crate::shader::model::bind_groups::BindGroup0,
-    model_pipeline_triangle_list: wgpu::RenderPipeline,
-    model_pipeline_triangle_strip: wgpu::RenderPipeline,
     textures: Textures,
 }
 
@@ -20,15 +17,6 @@ impl Renderer {
         height: u32,
         output_format: wgpu::TextureFormat,
     ) -> Self {
-        // TODO: Should models store the pipelines instead?
-        let model_pipeline_triangle_list =
-            model_pipeline(device, output_format, wgpu::PrimitiveTopology::TriangleList);
-        let model_pipeline_triangle_strip = model_pipeline(
-            device,
-            output_format,
-            wgpu::PrimitiveTopology::TriangleStrip,
-        );
-
         let camera = CameraData {
             view: Mat4::IDENTITY,
             projection: Mat4::IDENTITY,
@@ -50,8 +38,6 @@ impl Renderer {
 
         Self {
             camera_buffer,
-            model_pipeline_triangle_list,
-            model_pipeline_triangle_strip,
             model_bind_group0,
             textures,
         }
@@ -86,11 +72,7 @@ impl Renderer {
         });
 
         self.model_bind_group0.set(&mut render_pass);
-        model.draw(
-            &mut render_pass,
-            &self.model_pipeline_triangle_list,
-            &self.model_pipeline_triangle_strip,
-        );
+        model.draw(&mut render_pass);
     }
 
     pub fn update_camera(&self, queue: &wgpu::Queue, camera_data: &CameraData) {
@@ -139,41 +121,4 @@ fn create_texture(
     });
 
     texture.create_view(&Default::default())
-}
-
-fn model_pipeline(
-    device: &wgpu::Device,
-    output_format: wgpu::TextureFormat,
-    topology: wgpu::PrimitiveTopology,
-) -> wgpu::RenderPipeline {
-    let module = crate::shader::model::create_shader_module(device);
-    let pipeline_layout = crate::shader::model::create_pipeline_layout(device);
-    let model_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("Model Pipeline"),
-        layout: Some(&pipeline_layout),
-        vertex: crate::shader::model::vertex_state(
-            &module,
-            &crate::shader::model::vs_main_entry(wgpu::VertexStepMode::Vertex),
-        ),
-        primitive: wgpu::PrimitiveState {
-            topology,
-            strip_index_format: topology.is_strip().then_some(wgpu::IndexFormat::Uint16),
-            ..Default::default()
-        },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::LessEqual,
-            stencil: wgpu::StencilState::default(),
-            bias: wgpu::DepthBiasState::default(),
-        }),
-        multisample: wgpu::MultisampleState::default(),
-        fragment: Some(crate::shader::model::fragment_state(
-            &module,
-            &crate::shader::model::fs_main_entry([Some(output_format.into())]),
-        )),
-        multiview: None,
-        cache: None,
-    });
-    model_pipeline
 }

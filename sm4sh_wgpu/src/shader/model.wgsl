@@ -70,18 +70,20 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Normals are in view space, so the view vector is simple.
     let view = vec3(0.0, 0.0, 1.0);
 
-    let normal_map = textureSample(normal_texture, color_sampler, in.uv0).xyz;
+    let normal_map_ao = textureSample(normal_texture, color_sampler, in.uv0).rgba;
+    let normal_map = normal_map_ao.rgb;
+    let ao = normal_map_ao.a;
     let vertex_tangent = normalize(in.tangent);
     let vertex_bitangent = normalize(in.bitangent);
     let vertex_normal = normalize(in.normal);
     // TODO: How is gamma handled for in game shaders?
     let normal = apply_normal_map(pow(normal_map, vec3(2.2)), vertex_tangent, vertex_bitangent, vertex_normal);
 
-    let lighting = dot(normal, view) * 0.5 + 0.5;
+    let lighting = mix(0.5 * ao, 1.0, max(dot(normal, view), 0.0));
 
-    let color = textureSample(color_texture, color_sampler, in.uv0).rgb;
+    let color = textureSample(color_texture, color_sampler, in.uv0).rgba;
 
     var out: FragmentOutput;
-    out.color = vec4(color * lighting, 1.0);
+    out.color = vec4(color.rgb * lighting, color.a);
     return out;
 }
