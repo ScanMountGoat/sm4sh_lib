@@ -113,7 +113,13 @@ fn check_nud_model(nud: Nud, path: &Path, original_bytes: &[u8]) {
     }
 }
 
-fn check_nut(nut: Nut, path: &Path, original_bytes: &[u8]) {}
+fn check_nut(nut: Nut, path: &Path, original_bytes: &[u8]) {
+    let mut writer = Cursor::new(Vec::new());
+    nut.write(&mut writer).unwrap();
+    if writer.into_inner() != original_bytes {
+        println!("Nut read/write not 1:1 for {path:?}");
+    }
+}
 
 fn check_vbn(vbn: Vbn, path: &Path, original_bytes: &[u8]) {
     if !write_le_bytes_equals(&vbn, original_bytes) {

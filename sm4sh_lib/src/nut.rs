@@ -1,19 +1,21 @@
-use binrw::{args, binread, BinRead, FilePtr32};
+use binrw::{args, binread, BinRead, BinWrite, FilePtr32};
 use image_dds::{ddsfile::Dds, Surface};
+use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
-use crate::parse_opt_ptr32;
+use crate::{parse_opt_ptr32, xc3_write_binwrite_impl};
 
 // TODO: Write support.
 // TODO: Same inner type for all variants?
-#[derive(Debug, BinRead)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
 pub enum Nut {
     Ntwu(Ntwu),
     Ntp3(Ntp3),
 }
 
 // TODO: Identical to ntwu other than magic?
-#[derive(Debug, BinRead)]
+#[derive(Debug, BinRead, Xc3Write)]
 #[br(magic(b"NTP3"))]
+#[xc3(magic(b"NTP3"))]
 pub struct Ntp3 {
     pub unk1: u16,
     pub count: u16,
@@ -23,8 +25,9 @@ pub struct Ntp3 {
     pub textures: Vec<Texture>,
 }
 
-#[derive(Debug, BinRead)]
+#[derive(Debug, BinRead, Xc3Write)]
 #[br(magic(b"NTWU"))]
+#[xc3(magic(b"NTWU"))]
 pub struct Ntwu {
     pub unk1: u16,
     pub count: u16,
@@ -36,13 +39,14 @@ pub struct Ntwu {
 
 // TODO: Is caps2 like dds?
 #[binread]
-#[derive(Debug)]
+#[derive(Debug, Xc3Write, Xc3WriteOffsets)]
 #[br(stream = r)]
+#[xc3(base_offset)]
 pub struct Texture {
     #[br(temp, try_calc = r.stream_position())]
     base_offset: u64,
 
-    pub size: u32,
+    pub size: u32, // TODO: data size + header size?
     pub unk1: u32,
     pub data_size: u32,
     pub header_size: u16,
@@ -57,14 +61,18 @@ pub struct Texture {
     pub caps2: u32,
 
     // TODO: all mipmaps?
+    // TODO: Some are aligned to 8192?
     #[br(parse_with = FilePtr32::parse)]
     #[br(args { offset: base_offset, inner: args! { count: data_size as usize}})]
+    #[xc3(offset(u32), align(4096))]
     pub data: Vec<u8>,
 
+    // TODO: calculate this on export?
     pub mipmap_data_offset: u32,
 
     // TODO: null for ntp3 nuts?
     #[br(parse_with = parse_opt_ptr32, offset = base_offset)]
+    #[xc3(offset(u32))]
     pub gtx_header: Option<GtxHeader>,
 
     pub unk6: u32,
@@ -78,8 +86,8 @@ pub struct Texture {
 }
 
 // TODO: Test these in game with renderdoc.
-#[derive(Debug, BinRead, PartialEq, Eq, Clone, Copy)]
-#[br(repr(u8))]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
+#[brw(repr(u8))]
 pub enum NutFormat {
     Bc1 = 0,
     Bc2 = 1,
@@ -93,23 +101,23 @@ pub enum NutFormat {
     Unk22 = 22,
 }
 
-#[derive(Debug, BinRead)]
-#[br(magic(b"GIDX"))]
+#[derive(Debug, BinRead, BinWrite)]
+#[brw(magic(b"GIDX"))]
 pub struct Gidx {
     pub unk1: u32,
     pub hash: u32, // TODO: does this match with material texture hash?
     pub unk3: u32,
 }
 
-#[derive(Debug, BinRead)]
-#[br(magic(b"eXt\x00"))]
+#[derive(Debug, BinRead, BinWrite)]
+#[brw(magic(b"eXt\x00"))]
 pub struct Ext {
     pub unk1: u32,
     pub unk2: u32,
     pub unk3: u32,
 }
 
-#[derive(Debug, BinRead)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
 pub struct GtxHeader {
     pub dim: u32,
     pub width: u32,
@@ -131,7 +139,7 @@ pub struct GtxHeader {
 }
 
 // TODO: Just use the wiiu_swizzle gx2 values directly?
-#[derive(Debug, BinRead, Clone, Copy)]
+#[derive(Debug, BinRead, BinWrite, Clone, Copy)]
 #[brw(repr(u32))]
 pub enum SurfaceFormat {
     R5G5B5A1Unorm = 10,
@@ -144,7 +152,7 @@ pub enum SurfaceFormat {
 }
 
 // TODO: Just use the wiiu_swizzle gx2 values directly?
-#[derive(Debug, BinRead, Clone, Copy)]
+#[derive(Debug, BinRead, BinWrite, Clone, Copy)]
 #[brw(repr(u32))]
 pub enum TileMode {
     D1TiledThin1 = 2,
@@ -241,5 +249,53 @@ impl From<NutFormat> for image_dds::ImageFormat {
             NutFormat::Rgba82 => image_dds::ImageFormat::Rgba8Unorm,
             NutFormat::Unk22 => todo!(),
         }
+    }
+}
+
+xc3_write_binwrite_impl!(NutFormat, Ext, Gidx, SurfaceFormat, TileMode);
+
+impl Xc3WriteOffsets for Ntp3Offsets<'_> {
+    type Args = ();
+
+    fn write_offsets<W: std::io::Write + std::io::Seek>(
+        &self,
+        writer: &mut W,
+        _base_offset: u64,
+        data_ptr: &mut u64,
+        endian: xc3_write::Endian,
+        args: Self::Args,
+    ) -> xc3_write::Xc3Result<()> {
+        for t in &self.textures.0 {
+            t.data
+                .write_full(writer, t.base_offset, data_ptr, endian, args)?;
+        }
+        for t in &self.textures.0 {
+            t.gtx_header
+                .write_full(writer, t.base_offset, data_ptr, endian, args)?;
+        }
+        Ok(())
+    }
+}
+
+impl Xc3WriteOffsets for NtwuOffsets<'_> {
+    type Args = ();
+
+    fn write_offsets<W: std::io::Write + std::io::Seek>(
+        &self,
+        writer: &mut W,
+        _base_offset: u64,
+        data_ptr: &mut u64,
+        endian: xc3_write::Endian,
+        args: Self::Args,
+    ) -> xc3_write::Xc3Result<()> {
+        for t in &self.textures.0 {
+            t.data
+                .write_full(writer, t.base_offset, data_ptr, endian, args)?;
+        }
+        for t in &self.textures.0 {
+            t.gtx_header
+                .write_full(writer, t.base_offset, data_ptr, endian, args)?;
+        }
+        Ok(())
     }
 }
