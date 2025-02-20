@@ -7,7 +7,7 @@ use sm4sh_model::nud::{
 };
 use wgpu::util::DeviceExt;
 
-use crate::renderer::DEPTH_FORMAT;
+use crate::{renderer::DEPTH_FORMAT, texture::create_texture, DeviceBufferExt};
 
 pub struct Model {
     meshes: Vec<Mesh>,
@@ -43,26 +43,7 @@ pub fn load_model(
             data.resize(data.len() + 32, 0u8);
             (
                 t.hash_id,
-                device
-                    .create_texture_with_data(
-                        queue,
-                        &wgpu::TextureDescriptor {
-                            label: Some(&format!("{:x}", t.hash_id)),
-                            size: wgpu::Extent3d {
-                                width: t.width,
-                                height: t.height,
-                                depth_or_array_layers: 1,
-                            },
-                            mip_level_count: t.mipmap_count,
-                            sample_count: 1,
-                            dimension: wgpu::TextureDimension::D2,
-                            format: texture_format(t.image_format),
-                            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-                            view_formats: &[],
-                        },
-                        wgpu::util::TextureDataOrder::LayerMajor,
-                        &data,
-                    )
+                create_texture(device, queue, t)
                     .create_view(&wgpu::TextureViewDescriptor::default()),
             )
         })
@@ -153,12 +134,20 @@ fn create_mesh(
         ..Default::default()
     });
 
+    let uniforms = device.create_uniform_buffer(
+        "Uniforms",
+        &crate::shader::model::Uniforms {
+            has_normal_map: normal_texture.is_some() as u32,
+        },
+    );
+
     let bind_group1 = crate::shader::model::bind_groups::BindGroup1::from_bindings(
         device,
         crate::shader::model::bind_groups::BindGroupLayout1 {
             color_texture: color_texture.unwrap_or(default_texture),
             normal_texture: normal_texture.unwrap_or(default_texture),
             color_sampler: &sampler,
+            uniforms: uniforms.as_entire_buffer_binding(),
         },
     );
 
@@ -228,21 +217,6 @@ fn set_attribute<T, F>(
 {
     for (v, i) in vertices.iter_mut().zip(items) {
         set_attribute(v, i);
-    }
-}
-
-fn texture_format(image_format: sm4sh_model::nud::NutFormat) -> wgpu::TextureFormat {
-    match image_format {
-        sm4sh_model::nud::NutFormat::Bc1 => wgpu::TextureFormat::Bc1RgbaUnorm,
-        sm4sh_model::nud::NutFormat::Bc2 => wgpu::TextureFormat::Bc2RgbaUnorm,
-        sm4sh_model::nud::NutFormat::Bc3 => wgpu::TextureFormat::Bc3RgbaUnorm,
-        sm4sh_model::nud::NutFormat::Unk6 => todo!(),
-        sm4sh_model::nud::NutFormat::Rg16 => wgpu::TextureFormat::Bc1RgbaUnorm,
-        sm4sh_model::nud::NutFormat::Rgba16 => wgpu::TextureFormat::Rgba16Unorm,
-        sm4sh_model::nud::NutFormat::Rgba8 => wgpu::TextureFormat::Rgba8Unorm,
-        sm4sh_model::nud::NutFormat::Bgra8 => wgpu::TextureFormat::Bgra8Unorm,
-        sm4sh_model::nud::NutFormat::Rgba82 => todo!(),
-        sm4sh_model::nud::NutFormat::Unk22 => todo!(),
     }
 }
 

@@ -111,32 +111,7 @@ impl NudModel {
             groups.push(NudMeshGroup { meshes });
         }
 
-        let textures = match nut {
-            Nut::Ntwu(ntwu) => ntwu
-                .textures
-                .iter()
-                .map(|t| ImageTexture {
-                    hash_id: t.gidx.hash,
-                    width: t.width as u32,
-                    height: t.height as u32,
-                    mipmap_count: t.mipmap_count as u32,
-                    image_format: t.format,
-                    image_data: t.deswizzle().unwrap(),
-                })
-                .collect(),
-            Nut::Ntp3(ntp3) => ntp3
-                .textures
-                .iter()
-                .map(|t| ImageTexture {
-                    hash_id: t.gidx.hash,
-                    width: t.width as u32,
-                    height: t.height as u32,
-                    mipmap_count: t.mipmap_count as u32,
-                    image_format: t.format,
-                    image_data: t.deswizzle().unwrap(),
-                })
-                .collect(),
-        };
+        let textures = nut_textures(nut);
 
         Ok(Self { groups, textures })
     }
@@ -190,6 +165,21 @@ impl NudModel {
     }
 }
 
+fn nut_textures(nut: &Nut) -> Vec<ImageTexture> {
+    match nut {
+        Nut::Ntwu(ntwu) => ntwu
+            .textures
+            .iter()
+            .map(|t| ImageTexture::from_surface(t.gidx.hash, t.to_surface().unwrap()))
+            .collect(),
+        Nut::Ntp3(ntp3) => ntp3
+            .textures
+            .iter()
+            .map(|t| ImageTexture::from_surface(t.gidx.hash, t.to_surface().unwrap()))
+            .collect(),
+    }
+}
+
 fn align<W: Write + Seek>(writer: &mut W, align: u64, pad: u8) -> Result<(), std::io::Error> {
     let size = writer.stream_position()?;
     let aligned_size = size.next_multiple_of(align);
@@ -206,5 +196,32 @@ fn nud_material(material: &sm4sh_lib::nud::Material) -> NudMaterial {
         alpha_func: material.alpha_func,
         cull_mode: material.cull_mode,
         texture_hashes: material.textures.iter().map(|t| t.hash).collect(),
+    }
+}
+
+impl ImageTexture {
+    /// Create a view of all image data in this texture
+    /// to use with encode or decode operations.
+    pub fn to_surface(&self) -> image_dds::Surface<&[u8]> {
+        image_dds::Surface {
+            width: self.width,
+            height: self.height,
+            depth: 1,
+            layers: 1,
+            mipmaps: self.mipmap_count,
+            image_format: self.image_format.into(),
+            data: &self.image_data,
+        }
+    }
+
+    pub fn from_surface<T: AsRef<[u8]>>(hash_id: u32, surface: image_dds::Surface<T>) -> Self {
+        Self {
+            hash_id,
+            width: surface.width,
+            height: surface.height,
+            mipmap_count: surface.mipmaps,
+            image_format: surface.image_format.into(),
+            image_data: surface.data.as_ref().to_vec(),
+        }
     }
 }

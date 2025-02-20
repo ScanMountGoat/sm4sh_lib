@@ -86,19 +86,20 @@ pub struct Texture {
 }
 
 // TODO: Test these in game with renderdoc.
+// TODO: gtx format takes priority if present?
 #[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[brw(repr(u8))]
 pub enum NutFormat {
-    Bc1 = 0,
-    Bc2 = 1,
-    Bc3 = 2,
-    Unk6 = 6,
-    Rg16 = 8,
-    Rgba16 = 12,
-    Rgba8 = 14,
-    Bgra8 = 16,
-    Rgba82 = 17,
-    Unk22 = 22,
+    BC1Unorm = 0,
+    BC2Unorm = 1,
+    BC3Unorm = 2,
+    Unk6 = 6, // TODO: test this
+    Rg16 = 8, // TODO: test this
+    Rgb5A1Unorm = 12,
+    Rgba8 = 14,  // TODO: test this
+    Bgra8 = 16,  // TODO: test this
+    Rgba82 = 17, // TODO: test this
+    BC5Unorm = 22,
 }
 
 #[derive(Debug, BinRead, BinWrite)]
@@ -217,6 +218,12 @@ impl Texture {
 
     pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, wiiu_swizzle::SwizzleError> {
         // TODO: cube maps
+        let mut data = self.deswizzle()?;
+        if self.format == NutFormat::Rgb5A1Unorm {
+            // image_dds only supports Bgr5A1Unorm.
+            swap_red_blue_bgr5a1(&mut data);
+        }
+
         Ok(Surface {
             width: self.width as u32,
             height: self.height as u32,
@@ -224,7 +231,7 @@ impl Texture {
             layers: 1,
             mipmaps: self.mipmap_count as u32,
             image_format: self.format.into(),
-            data: self.deswizzle()?,
+            data,
         })
     }
 
@@ -237,19 +244,45 @@ impl Texture {
 impl From<NutFormat> for image_dds::ImageFormat {
     fn from(value: NutFormat) -> Self {
         match value {
-            NutFormat::Bc1 => image_dds::ImageFormat::BC1RgbaUnorm,
-            NutFormat::Bc2 => image_dds::ImageFormat::BC2RgbaUnorm,
-            NutFormat::Bc3 => image_dds::ImageFormat::BC3RgbaUnorm,
+            NutFormat::BC1Unorm => image_dds::ImageFormat::BC1RgbaUnorm,
+            NutFormat::BC2Unorm => image_dds::ImageFormat::BC2RgbaUnorm,
+            NutFormat::BC3Unorm => image_dds::ImageFormat::BC3RgbaUnorm,
             NutFormat::Unk6 => todo!(),
-            // TODO: 16 bit RGBA support for image_dds
             NutFormat::Rg16 => todo!(),
-            NutFormat::Rgba16 => todo!(),
+            NutFormat::Rgb5A1Unorm => image_dds::ImageFormat::Bgr5A1Unorm,
             NutFormat::Rgba8 => image_dds::ImageFormat::Rgba8Unorm,
             NutFormat::Bgra8 => image_dds::ImageFormat::Bgra8Unorm,
             NutFormat::Rgba82 => image_dds::ImageFormat::Rgba8Unorm,
-            NutFormat::Unk22 => todo!(),
+            NutFormat::BC5Unorm => image_dds::ImageFormat::BC5RgUnorm,
         }
     }
+}
+
+impl From<image_dds::ImageFormat> for NutFormat {
+    fn from(value: image_dds::ImageFormat) -> Self {
+        match value {
+            image_dds::ImageFormat::Rgba8Unorm => NutFormat::Rgba8,
+            image_dds::ImageFormat::Bgra8Unorm => NutFormat::Bgra8,
+            image_dds::ImageFormat::BC1RgbaUnorm => NutFormat::BC1Unorm,
+            image_dds::ImageFormat::BC2RgbaUnorm => NutFormat::BC2Unorm,
+            image_dds::ImageFormat::BC3RgbaUnorm => NutFormat::BC3Unorm,
+            image_dds::ImageFormat::BC5RgUnorm => NutFormat::BC5Unorm,
+            image_dds::ImageFormat::Bgr5A1Unorm => NutFormat::Rgb5A1Unorm,
+            _ => todo!(),
+        }
+    }
+}
+
+fn swap_red_blue_bgr5a1(data: &mut Vec<u8>) {
+    // TODO: Move this logic to image_dds?
+    data.chunks_exact_mut(2).for_each(|c| {
+        // Most significant bit -> GGGBBBBBARRRRRGG -> least significant bit.
+        let mut bytes = u16::from_be_bytes(c.try_into().unwrap());
+        let r = (bytes >> 2) & 0x1F;
+        let b = (bytes >> 8) & 0x1F;
+        bytes = bytes & 0b1110000010000011 | (r << 8) | (b << 2);
+        c.copy_from_slice(&bytes.to_be_bytes());
+    });
 }
 
 xc3_write_binwrite_impl!(NutFormat, Ext, Gidx, SurfaceFormat, TileMode);

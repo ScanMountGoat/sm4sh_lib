@@ -21,6 +21,13 @@ var normal_texture: texture_2d<f32>;
 @group(1) @binding(2)
 var color_sampler: sampler;
 
+struct Uniforms {
+    has_normal_map: u32,
+}
+
+@group(1) @binding(3)
+var<uniform> uniforms: Uniforms;
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) position: vec3<f32>,
@@ -77,7 +84,10 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let vertex_bitangent = normalize(in.bitangent);
     let vertex_normal = normalize(in.normal);
     // TODO: How is gamma handled for in game shaders?
-    let normal = apply_normal_map(pow(normal_map, vec3(2.2)), vertex_tangent, vertex_bitangent, vertex_normal);
+    var normal = vertex_normal;
+    if uniforms.has_normal_map == 1u {
+        normal = apply_normal_map(pow(normal_map, vec3(2.2)), vertex_tangent, vertex_bitangent, vertex_normal);
+    }
 
     let lighting = mix(0.5 * ao, 1.0, max(dot(normal, view), 0.0));
 
