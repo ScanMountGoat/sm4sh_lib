@@ -12,4 +12,4 @@ wgpu = "24.0.1"
 glam = "0.29.2"
 log = "0.4.22"
 simple_logger = "5.0.0"
-image_dds = { git = "https://github.com/ScanMountGoat/image_dds", rev = "af17112" }
+image_dds = { git = "https://github.com/ScanMountGoat/image_dds", rev = "af17112", default-features = false }

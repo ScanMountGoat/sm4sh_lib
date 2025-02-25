@@ -21,6 +21,7 @@ pub struct Ntp3 {
     pub count: u16,
     pub unk2: u64,
 
+    // TODO: Are these always not tiled?
     #[br(count = count as usize)]
     pub textures: Vec<Texture>,
 }
@@ -60,6 +61,9 @@ pub struct Texture {
     pub unk5: u32, // TODO: 0 for ntp3?
     pub caps2: u32,
 
+    // TODO: NTP3 image data isn't aligned at all?
+    // TODO: Separate type for non tiled texture?
+
     // TODO: all mipmaps?
     // TODO: Some are aligned to 8192?
     #[br(parse_with = FilePtr32::parse)]
@@ -93,12 +97,13 @@ pub enum NutFormat {
     BC1Unorm = 0,
     BC2Unorm = 1,
     BC3Unorm = 2,
-    Unk6 = 6, // TODO: test this
-    Rg16 = 8, // TODO: test this
+    Bgr5A1Unorm = 6,  // TODO: are the channels the same as rgb5a1?
+    Bgr5A1Unorm2 = 8, // TODO: are the channels the same as rgb5a1?
+    B5G6R5Unorm = 10,
     Rgb5A1Unorm = 12,
-    Rgba8 = 14,  // TODO: test this
-    Bgra8 = 16,  // TODO: test this
-    Rgba82 = 17, // TODO: test this
+    Rgba8Unorm = 14,
+    R32Float = 16,
+    Rgba82 = 17,
     BC5Unorm = 22,
 }
 
@@ -211,7 +216,6 @@ impl Texture {
             }
             .deswizzle()
         } else {
-            // TODO: How to handle textures without gx2 data?
             Ok(self.data.clone())
         }
     }
@@ -247,11 +251,12 @@ impl From<NutFormat> for image_dds::ImageFormat {
             NutFormat::BC1Unorm => image_dds::ImageFormat::BC1RgbaUnorm,
             NutFormat::BC2Unorm => image_dds::ImageFormat::BC2RgbaUnorm,
             NutFormat::BC3Unorm => image_dds::ImageFormat::BC3RgbaUnorm,
-            NutFormat::Unk6 => todo!(),
-            NutFormat::Rg16 => todo!(),
+            NutFormat::Bgr5A1Unorm => todo!(),
+            NutFormat::Bgr5A1Unorm2 => todo!(),
+            NutFormat::B5G6R5Unorm => todo!(),
             NutFormat::Rgb5A1Unorm => image_dds::ImageFormat::Bgr5A1Unorm,
-            NutFormat::Rgba8 => image_dds::ImageFormat::Rgba8Unorm,
-            NutFormat::Bgra8 => image_dds::ImageFormat::Bgra8Unorm,
+            NutFormat::Rgba8Unorm => image_dds::ImageFormat::Rgba8Unorm,
+            NutFormat::R32Float => image_dds::ImageFormat::R32Float,
             NutFormat::Rgba82 => image_dds::ImageFormat::Rgba8Unorm,
             NutFormat::BC5Unorm => image_dds::ImageFormat::BC5RgUnorm,
         }
@@ -261,8 +266,8 @@ impl From<NutFormat> for image_dds::ImageFormat {
 impl From<image_dds::ImageFormat> for NutFormat {
     fn from(value: image_dds::ImageFormat) -> Self {
         match value {
-            image_dds::ImageFormat::Rgba8Unorm => NutFormat::Rgba8,
-            image_dds::ImageFormat::Bgra8Unorm => NutFormat::Bgra8,
+            image_dds::ImageFormat::Rgba8Unorm => NutFormat::Rgba8Unorm,
+            image_dds::ImageFormat::R32Float => NutFormat::R32Float,
             image_dds::ImageFormat::BC1RgbaUnorm => NutFormat::BC1Unorm,
             image_dds::ImageFormat::BC2RgbaUnorm => NutFormat::BC2Unorm,
             image_dds::ImageFormat::BC3RgbaUnorm => NutFormat::BC3Unorm,

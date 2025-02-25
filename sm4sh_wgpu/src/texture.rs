@@ -51,12 +51,13 @@ fn texture_format(image_format: NutFormat) -> Option<wgpu::TextureFormat> {
         NutFormat::BC1Unorm => Some(wgpu::TextureFormat::Bc1RgbaUnorm),
         NutFormat::BC2Unorm => Some(wgpu::TextureFormat::Bc2RgbaUnorm),
         NutFormat::BC3Unorm => Some(wgpu::TextureFormat::Bc3RgbaUnorm),
-        NutFormat::Unk6 => None,
-        NutFormat::Rg16 => Some(wgpu::TextureFormat::Bc1RgbaUnorm),
-        NutFormat::Rgb5A1Unorm => None, // channel swapping handled in sm4sh_lib
-        NutFormat::Rgba8 => Some(wgpu::TextureFormat::Rgba8Unorm),
-        NutFormat::Bgra8 => Some(wgpu::TextureFormat::Bgra8Unorm),
+        NutFormat::Bgr5A1Unorm => None,
+        NutFormat::Bgr5A1Unorm2 => None,
+        NutFormat::Rgb5A1Unorm => None,
+        NutFormat::Rgba8Unorm => Some(wgpu::TextureFormat::Rgba8Unorm),
+        NutFormat::R32Float => Some(wgpu::TextureFormat::R32Float),
         NutFormat::Rgba82 => None,
         NutFormat::BC5Unorm => Some(wgpu::TextureFormat::Bc5RgUnorm),
+        NutFormat::B5G6R5Unorm => None,
     }
 }
