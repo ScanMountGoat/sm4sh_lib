@@ -63,13 +63,10 @@ impl<'a> State<'a> {
         info!("{:?}", adapter.get_info());
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    required_features: sm4sh_wgpu::FEATURES,
-                    ..Default::default()
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: sm4sh_wgpu::FEATURES,
+                ..Default::default()
+            })
             .await
             .unwrap();
 

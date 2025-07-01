@@ -1,4 +1,4 @@
-use wgsl_to_wgpu::{create_shader_module_embedded, MatrixVectorTypes, WriteOptions};
+use wgsl_to_wgpu::{create_shader_modules, MatrixVectorTypes, WriteOptions};
 
 fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();
@@ -13,7 +13,7 @@ fn write_shader(wgsl_source: &str, wgsl_path: &str, output_path: String) {
     println!("cargo:rerun-if-changed={wgsl_path}");
 
     // Generate the Rust bindings and write to a file.
-    let text = create_shader_module_embedded(
+    let text = create_shader_modules(
         wgsl_source,
         WriteOptions {
             derive_bytemuck_vertex: true,
@@ -21,6 +21,7 @@ fn write_shader(wgsl_source: &str, wgsl_path: &str, output_path: String) {
             matrix_vector_types: MatrixVectorTypes::Glam,
             ..Default::default()
         },
+        wgsl_to_wgpu::demangle_identity,
     )
     .unwrap();
 

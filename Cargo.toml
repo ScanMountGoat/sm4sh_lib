@@ -4,12 +4,12 @@ resolver = "2"
 
 [workspace.dependencies]
 bilge = "0.2.0"
-binrw = "0.14.1"
+binrw = "0.15.0"
 half = "2.4.1"
 clap = {version = "4.5.28", features = ["derive"] }
 rayon = "1.10.0"
-wgpu = "24.0.1"
-glam = "0.29.2"
+wgpu = "25.0.2"
+glam = "0.30.4"
 log = "0.4.22"
 simple_logger = "5.0.0"
-image_dds = { git = "https://github.com/ScanMountGoat/image_dds", rev = "af17112", default-features = false }
+image_dds = { version = "0.7.2", default-features = false }

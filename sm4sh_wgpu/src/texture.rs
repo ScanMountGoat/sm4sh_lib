@@ -31,7 +31,7 @@ pub fn create_texture(
     )
 }
 
-fn image_format_data(texture: &ImageTexture) -> (wgpu::TextureFormat, Cow<'_, Vec<u8>>) {
+fn image_format_data(texture: &ImageTexture) -> (wgpu::TextureFormat, Cow<'_, [u8]>) {
     // TODO: Why do final mipmaps not work for some non square textures?
     let mut data = texture.image_data.clone();
     data.resize(data.len() + 32, 0u8);

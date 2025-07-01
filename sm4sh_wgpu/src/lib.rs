@@ -21,11 +21,9 @@ trait DeviceBufferExt {
         contents: &T,
     ) -> wgpu::Buffer;
 
-    fn create_storage_buffer<T: ShaderType + WriteInto + ShaderSize>(
-        &self,
-        label: &str,
-        contents: &[T],
-    ) -> wgpu::Buffer;
+    fn create_storage_buffer<T>(&self, label: &str, contents: &[T]) -> wgpu::Buffer
+    where
+        [T]: WriteInto + ShaderType;
 }
 
 impl DeviceBufferExt for wgpu::Device {
@@ -45,13 +43,12 @@ impl DeviceBufferExt for wgpu::Device {
         })
     }
 
-    fn create_storage_buffer<T: ShaderType + WriteInto + ShaderSize>(
-        &self,
-        label: &str,
-        data: &[T],
-    ) -> wgpu::Buffer {
+    fn create_storage_buffer<T>(&self, label: &str, data: &[T]) -> wgpu::Buffer
+    where
+        [T]: WriteInto + ShaderType,
+    {
         let mut buffer = StorageBuffer::new(Vec::new());
-        buffer.write(&data).unwrap();
+        buffer.write(data).unwrap();
 
         // TODO: is it worth not adding COPY_DST to all buffers?
         self.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -69,11 +66,9 @@ trait QueueBufferExt {
         data: &T,
     );
 
-    fn write_storage_data<T: ShaderType + WriteInto + ShaderSize>(
-        &self,
-        buffer: &wgpu::Buffer,
-        data: &[T],
-    );
+    fn write_storage_data<T>(&self, buffer: &wgpu::Buffer, data: &[T])
+    where
+        [T]: WriteInto + ShaderType;
 }
 
 impl QueueBufferExt for wgpu::Queue {
@@ -88,13 +83,12 @@ impl QueueBufferExt for wgpu::Queue {
         self.write_buffer(buffer, 0, &bytes.into_inner());
     }
 
-    fn write_storage_data<T: ShaderType + WriteInto + ShaderSize>(
-        &self,
-        buffer: &wgpu::Buffer,
-        data: &[T],
-    ) {
+    fn write_storage_data<T>(&self, buffer: &wgpu::Buffer, data: &[T])
+    where
+        [T]: WriteInto + ShaderType,
+    {
         let mut bytes = StorageBuffer::new(Vec::new());
-        bytes.write(&data).unwrap();
+        bytes.write(data).unwrap();
 
         self.write_buffer(buffer, 0, &bytes.into_inner());
     }
