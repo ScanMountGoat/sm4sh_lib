@@ -1,6 +1,7 @@
 use std::io::{Cursor, Seek, Write};
 
 use binrw::BinResult;
+use glam::{Vec3, Vec4};
 use sm4sh_lib::{
     nud::{BoundingSphere, MaterialFlags, Nud},
     nut::Nut,
@@ -21,6 +22,8 @@ pub struct NudModel {
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudMeshGroup {
     pub meshes: Vec<NudMesh>,
+    pub sort_bias: f32,
+    pub bounding_sphere: Vec4,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -108,7 +111,12 @@ impl NudModel {
                 mesh_index += 1;
             }
 
-            groups.push(NudMeshGroup { meshes });
+            groups.push(NudMeshGroup {
+                meshes,
+                sort_bias: g.sort_bias,
+                bounding_sphere: Vec3::from(g.bounding_sphere.center)
+                    .extend(g.bounding_sphere.radius),
+            });
         }
 
         let textures = nut_textures(nut);

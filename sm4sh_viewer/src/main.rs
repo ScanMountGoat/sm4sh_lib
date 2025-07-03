@@ -30,6 +30,7 @@ struct State<'a> {
     // Camera
     translation: Vec3,
     rotation_xyz: Vec3,
+    camera: CameraData,
 
     renderer: Renderer,
 
@@ -88,8 +89,8 @@ impl<'a> State<'a> {
         // Initialize the camera transform.
         let translation = vec3(0.0, -8.0, -50.0);
         let rotation_xyz = Vec3::ZERO;
-        let camera_data = calculate_camera_data(size, translation, rotation_xyz);
-        renderer.update_camera(&queue, &camera_data);
+        let camera = calculate_camera_data(size, translation, rotation_xyz);
+        renderer.update_camera(&queue, &camera);
 
         let path = Path::new(&cli.file);
         let nud = Nud::from_file(path)?;
@@ -105,6 +106,7 @@ impl<'a> State<'a> {
             config,
             translation,
             rotation_xyz,
+            camera,
             renderer,
             model,
             input_state: Default::default(),
@@ -112,8 +114,9 @@ impl<'a> State<'a> {
     }
 
     fn update_camera(&mut self, size: winit::dpi::PhysicalSize<u32>) {
-        let camera_data = calculate_camera_data(size, self.translation, self.rotation_xyz);
-        self.renderer.update_camera(&self.queue, &camera_data);
+        let camera = calculate_camera_data(size, self.translation, self.rotation_xyz);
+        self.camera = camera;
+        self.renderer.update_camera(&self.queue, &camera);
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -142,7 +145,7 @@ impl<'a> State<'a> {
             });
 
         self.renderer
-            .render_model(&mut encoder, &output_view, &self.model);
+            .render_model(&mut encoder, &output_view, &self.model, &self.camera);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();

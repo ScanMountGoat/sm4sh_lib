@@ -48,6 +48,7 @@ impl Renderer {
         encoder: &mut wgpu::CommandEncoder,
         output_view: &wgpu::TextureView,
         model: &Model,
+        camera: &CameraData,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Model Pass"),
@@ -72,11 +73,11 @@ impl Renderer {
         });
 
         self.model_bind_group0.set(&mut render_pass);
-        model.draw(&mut render_pass);
+        model.draw(&mut render_pass, camera);
     }
 
-    pub fn update_camera(&self, queue: &wgpu::Queue, camera_data: &CameraData) {
-        queue.write_uniform_data(&self.camera_buffer, &camera_data.to_shader_data());
+    pub fn update_camera(&self, queue: &wgpu::Queue, camera: &CameraData) {
+        queue.write_uniform_data(&self.camera_buffer, &camera.to_shader_data());
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {

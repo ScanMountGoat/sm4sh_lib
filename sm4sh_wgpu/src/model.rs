@@ -1,15 +1,21 @@
 use std::collections::BTreeMap;
 
-use glam::{vec4, Vec4};
+use glam::{vec4, Vec4, Vec4Swizzles};
 use sm4sh_model::nud::{
     vertex::{Normals, Uvs},
-    NudMesh, NudModel,
+    DstFactor, NudMesh, NudModel, SrcFactor,
 };
 use wgpu::util::DeviceExt;
 
-use crate::{renderer::DEPTH_FORMAT, texture::create_texture, DeviceBufferExt};
+use crate::{renderer::DEPTH_FORMAT, texture::create_texture, CameraData, DeviceBufferExt};
 
 pub struct Model {
+    groups: Vec<MeshGroup>,
+}
+
+pub struct MeshGroup {
+    sort_bias: f32,
+    bounding_sphere: Vec4,
     meshes: Vec<Mesh>,
 }
 
@@ -50,13 +56,17 @@ pub fn load_model(
         .collect();
 
     Model {
-        meshes: model
+        groups: model
             .groups
             .iter()
-            .flat_map(|g| {
-                g.meshes
+            .map(|g| MeshGroup {
+                meshes: g
+                    .meshes
                     .iter()
                     .map(|m| create_mesh(device, m, &textures, &default_texture, output_format))
+                    .collect(),
+                sort_bias: g.sort_bias,
+                bounding_sphere: g.bounding_sphere,
             })
             .collect(),
     }
@@ -221,14 +231,27 @@ fn set_attribute<T, F>(
 }
 
 impl Model {
-    pub fn draw(&self, render_pass: &mut wgpu::RenderPass) {
-        for mesh in &self.meshes {
-            render_pass.set_pipeline(&mesh.pipeline);
-            mesh.bind_group1.set(render_pass);
+    pub fn draw(&self, render_pass: &mut wgpu::RenderPass, camera: &CameraData) {
+        // TODO: opaque sorted front to back?
+        // TODO: transparent sorted back to front?
+        let mut sorted: Vec<_> = self.groups.iter().collect();
+        sorted.sort_by_key(|g| {
+            // Render farther objects first.
+            let camera_distance = camera.position.xyz().distance(g.bounding_sphere.xyz());
+            let distance = -camera_distance + g.sort_bias;
+            ordered_float::OrderedFloat::from(distance)
+        });
 
-            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..mesh.vertex_index_count, 0, 0..1);
+        for group in &sorted {
+            for mesh in &group.meshes {
+                render_pass.set_pipeline(&mesh.pipeline);
+                mesh.bind_group1.set(render_pass);
+
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..mesh.vertex_index_count, 0, 0..1);
+            }
         }
     }
 }
@@ -321,62 +344,58 @@ fn blend_state(m: &sm4sh_model::nud::NudMaterial) -> wgpu::BlendState {
     wgpu::BlendState {
         color: wgpu::BlendComponent {
             src_factor: match m.src_factor {
-                sm4sh_model::nud::SrcFactor::One => wgpu::BlendFactor::One,
-                sm4sh_model::nud::SrcFactor::SourceAlpha => wgpu::BlendFactor::SrcAlpha,
-                sm4sh_model::nud::SrcFactor::One2 => wgpu::BlendFactor::One,
-                sm4sh_model::nud::SrcFactor::SourceAlpha2 => wgpu::BlendFactor::SrcAlpha,
-                sm4sh_model::nud::SrcFactor::Zero => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::SrcFactor::SourceAlpha3 => wgpu::BlendFactor::SrcAlpha,
-                sm4sh_model::nud::SrcFactor::DestinationAlpha => wgpu::BlendFactor::DstAlpha,
-                sm4sh_model::nud::SrcFactor::DestinationAlpha7 => wgpu::BlendFactor::DstAlpha,
-                sm4sh_model::nud::SrcFactor::DestinationColor => wgpu::BlendFactor::Dst,
-                sm4sh_model::nud::SrcFactor::Unk11 => todo!(),
-                sm4sh_model::nud::SrcFactor::Unk15 => todo!(),
-                sm4sh_model::nud::SrcFactor::Unk16 => todo!(),
-                sm4sh_model::nud::SrcFactor::Unk33 => todo!(),
-                sm4sh_model::nud::SrcFactor::Unk37 => todo!(),
+                SrcFactor::One => wgpu::BlendFactor::One,
+                SrcFactor::SourceAlpha => wgpu::BlendFactor::SrcAlpha,
+                SrcFactor::One2 => wgpu::BlendFactor::One,
+                SrcFactor::SourceAlpha2 => wgpu::BlendFactor::SrcAlpha,
+                SrcFactor::Zero => wgpu::BlendFactor::Zero,
+                SrcFactor::SourceAlpha3 => wgpu::BlendFactor::SrcAlpha,
+                SrcFactor::DestinationAlpha => wgpu::BlendFactor::DstAlpha,
+                SrcFactor::DestinationAlpha7 => wgpu::BlendFactor::DstAlpha,
+                SrcFactor::DestinationColor => wgpu::BlendFactor::Dst,
+                SrcFactor::Unk11 => wgpu::BlendFactor::One,
+                SrcFactor::Unk15 => wgpu::BlendFactor::One,
+                SrcFactor::Unk16 => wgpu::BlendFactor::One,
+                SrcFactor::Unk33 => wgpu::BlendFactor::One,
+                SrcFactor::Unk37 => wgpu::BlendFactor::One,
             },
             dst_factor: match m.dst_factor {
-                sm4sh_model::nud::DstFactor::Zero => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::DstFactor::OneMinusSourceAlpha => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::DstFactor::One => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::DstFactor::OneReverseSubtract => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::DstFactor::SourceAlpha => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::DstFactor::SourceAlphaReverseSubtract => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::DstFactor::OneMinusDestinationAlpha => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::DstFactor::One2 => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::DstFactor::Zero2 => wgpu::BlendFactor::Zero,
-                sm4sh_model::nud::DstFactor::Unk10 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk11 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk12 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk64 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk112 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk114 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk129 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk130 => todo!(),
+                DstFactor::Zero => wgpu::BlendFactor::Zero,
+                DstFactor::OneMinusSourceAlpha => wgpu::BlendFactor::OneMinusSrcAlpha,
+                DstFactor::One => wgpu::BlendFactor::One,
+                DstFactor::OneReverseSubtract => wgpu::BlendFactor::One,
+                DstFactor::SourceAlpha => wgpu::BlendFactor::SrcAlpha,
+                DstFactor::SourceAlphaReverseSubtract => wgpu::BlendFactor::SrcAlpha,
+                DstFactor::OneMinusDestinationAlpha => wgpu::BlendFactor::OneMinusDstAlpha,
+                DstFactor::One2 => wgpu::BlendFactor::One,
+                DstFactor::Zero2 => wgpu::BlendFactor::Zero,
+                DstFactor::Unk10 => wgpu::BlendFactor::Zero,
+                DstFactor::Unk11 => wgpu::BlendFactor::Zero,
+                DstFactor::Unk12 => wgpu::BlendFactor::Zero,
+                DstFactor::Unk64 => wgpu::BlendFactor::Zero,
+                DstFactor::Unk112 => wgpu::BlendFactor::Zero,
+                DstFactor::Unk114 => wgpu::BlendFactor::Zero,
+                DstFactor::Unk129 => wgpu::BlendFactor::Zero,
+                DstFactor::Unk130 => wgpu::BlendFactor::Zero,
             },
             operation: match m.dst_factor {
-                sm4sh_model::nud::DstFactor::Zero => wgpu::BlendOperation::Add,
-                sm4sh_model::nud::DstFactor::OneMinusSourceAlpha => wgpu::BlendOperation::Add,
-                sm4sh_model::nud::DstFactor::One => wgpu::BlendOperation::Add,
-                sm4sh_model::nud::DstFactor::OneReverseSubtract => {
-                    wgpu::BlendOperation::ReverseSubtract
-                }
-                sm4sh_model::nud::DstFactor::SourceAlpha => wgpu::BlendOperation::Add,
-                sm4sh_model::nud::DstFactor::SourceAlphaReverseSubtract => {
-                    wgpu::BlendOperation::ReverseSubtract
-                }
-                sm4sh_model::nud::DstFactor::OneMinusDestinationAlpha => wgpu::BlendOperation::Add,
-                sm4sh_model::nud::DstFactor::One2 => wgpu::BlendOperation::Add,
-                sm4sh_model::nud::DstFactor::Zero2 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk10 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk11 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk12 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk64 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk112 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk114 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk129 => todo!(),
-                sm4sh_model::nud::DstFactor::Unk130 => todo!(),
+                DstFactor::Zero => wgpu::BlendOperation::Add,
+                DstFactor::OneMinusSourceAlpha => wgpu::BlendOperation::Add,
+                DstFactor::One => wgpu::BlendOperation::Add,
+                DstFactor::OneReverseSubtract => wgpu::BlendOperation::ReverseSubtract,
+                DstFactor::SourceAlpha => wgpu::BlendOperation::Add,
+                DstFactor::SourceAlphaReverseSubtract => wgpu::BlendOperation::ReverseSubtract,
+                DstFactor::OneMinusDestinationAlpha => wgpu::BlendOperation::Add,
+                DstFactor::One2 => wgpu::BlendOperation::Add,
+                DstFactor::Zero2 => wgpu::BlendOperation::Add,
+                DstFactor::Unk10 => wgpu::BlendOperation::Add,
+                DstFactor::Unk11 => wgpu::BlendOperation::Add,
+                DstFactor::Unk12 => wgpu::BlendOperation::Add,
+                DstFactor::Unk64 => wgpu::BlendOperation::Add,
+                DstFactor::Unk112 => wgpu::BlendOperation::Add,
+                DstFactor::Unk114 => wgpu::BlendOperation::Add,
+                DstFactor::Unk129 => wgpu::BlendOperation::Add,
+                DstFactor::Unk130 => wgpu::BlendOperation::Add,
             },
         },
         alpha: wgpu::BlendComponent {
