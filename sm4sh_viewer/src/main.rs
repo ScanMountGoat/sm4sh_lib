@@ -7,7 +7,7 @@ use glam::{vec3, Vec3};
 use log::{error, info};
 use sm4sh_lib::{nud::Nud, nut::Nut};
 use sm4sh_model::nud::NudModel;
-use sm4sh_wgpu::{load_model, CameraData, Model, Renderer};
+use sm4sh_wgpu::{load_model, CameraData, Model, Renderer, SharedData};
 use winit::{
     dpi::PhysicalPosition,
     event::*,
@@ -92,11 +92,13 @@ impl<'a> State<'a> {
         let camera = calculate_camera_data(size, translation, rotation_xyz);
         renderer.update_camera(&queue, &camera);
 
+        let shared_data = SharedData::new(&device);
+
         let path = Path::new(&cli.file);
         let nud = Nud::from_file(path)?;
         let nut = Nut::from_file(path.with_file_name("model.nut"))?;
         let nud_model = NudModel::from_nud(&nud, &nut)?;
-        let model = load_model(&device, &queue, &nud_model, config.format);
+        let model = load_model(&device, &queue, &nud_model, config.format, &shared_data);
 
         Ok(Self {
             surface,

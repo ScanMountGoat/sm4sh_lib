@@ -7,7 +7,9 @@ use sm4sh_model::nud::{
 };
 use wgpu::util::DeviceExt;
 
-use crate::{renderer::DEPTH_FORMAT, texture::create_texture, CameraData, DeviceBufferExt};
+use crate::{
+    renderer::DEPTH_FORMAT, texture::create_texture, CameraData, DeviceBufferExt, SharedData,
+};
 
 pub struct Model {
     groups: Vec<MeshGroup>,
@@ -35,6 +37,7 @@ pub fn load_model(
     queue: &wgpu::Queue,
     model: &NudModel,
     output_format: wgpu::TextureFormat,
+    shared_data: &SharedData,
 ) -> Model {
     let default_texture = create_default_black_texture(device, queue)
         .create_view(&wgpu::TextureViewDescriptor::default());
@@ -44,9 +47,6 @@ pub fn load_model(
         .textures
         .iter()
         .map(|t| {
-            // TODO: Why do final mipmaps not work for some non square textures?
-            let mut data = t.image_data.clone();
-            data.resize(data.len() + 32, 0u8);
             (
                 t.hash_id,
                 create_texture(device, queue, t)
@@ -63,7 +63,16 @@ pub fn load_model(
                 meshes: g
                     .meshes
                     .iter()
-                    .map(|m| create_mesh(device, m, &textures, &default_texture, output_format))
+                    .map(|m| {
+                        create_mesh(
+                            device,
+                            m,
+                            &textures,
+                            &default_texture,
+                            output_format,
+                            shared_data,
+                        )
+                    })
                     .collect(),
                 sort_bias: g.sort_bias,
                 bounding_sphere: g.bounding_sphere,
@@ -78,6 +87,7 @@ fn create_mesh(
     hash_to_texture: &BTreeMap<u32, wgpu::TextureView>,
     default_texture: &wgpu::TextureView,
     output_format: wgpu::TextureFormat,
+    shared_data: &SharedData,
 ) -> Mesh {
     let mut vertices: Vec<_> = m
         .vertices
@@ -161,7 +171,7 @@ fn create_mesh(
         },
     );
 
-    let pipeline = model_pipeline(device, output_format, m);
+    let pipeline = model_pipeline(device, output_format, shared_data, m);
 
     Mesh {
         vertex_buffer,
@@ -281,11 +291,9 @@ pub fn create_default_black_texture(device: &wgpu::Device, queue: &wgpu::Queue) 
 fn model_pipeline(
     device: &wgpu::Device,
     output_format: wgpu::TextureFormat,
+    shared_data: &SharedData,
     mesh: &NudMesh,
 ) -> wgpu::RenderPipeline {
-    let module = crate::shader::model::create_shader_module(device);
-    let pipeline_layout = crate::shader::model::create_pipeline_layout(device);
-
     let topology = match mesh.primitive_type {
         sm4sh_model::nud::PrimitiveType::TriangleList => wgpu::PrimitiveTopology::TriangleList,
         sm4sh_model::nud::PrimitiveType::TriangleStrip => wgpu::PrimitiveTopology::TriangleStrip,
@@ -308,9 +316,9 @@ fn model_pipeline(
     // TODO: alpha testing.
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Model Pipeline"),
-        layout: Some(&pipeline_layout),
+        layout: Some(&shared_data.model_layout),
         vertex: crate::shader::model::vertex_state(
-            &module,
+            &shared_data.model_shader,
             &crate::shader::model::vs_main_entry(wgpu::VertexStepMode::Vertex),
         ),
         primitive: wgpu::PrimitiveState {
@@ -328,7 +336,7 @@ fn model_pipeline(
         }),
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(crate::shader::model::fragment_state(
-            &module,
+            &shared_data.model_shader,
             &crate::shader::model::fs_main_entry([Some(wgpu::ColorTargetState {
                 format: output_format,
                 blend,
@@ -353,11 +361,11 @@ fn blend_state(m: &sm4sh_model::nud::NudMaterial) -> wgpu::BlendState {
                 SrcFactor::DestinationAlpha => wgpu::BlendFactor::DstAlpha,
                 SrcFactor::DestinationAlpha7 => wgpu::BlendFactor::DstAlpha,
                 SrcFactor::DestinationColor => wgpu::BlendFactor::Dst,
-                SrcFactor::Unk11 => wgpu::BlendFactor::One,
-                SrcFactor::Unk15 => wgpu::BlendFactor::One,
+                SrcFactor::SrcAlpha3 => wgpu::BlendFactor::SrcAlpha,
+                SrcFactor::SrcAlpha4 => wgpu::BlendFactor::SrcAlpha,
                 SrcFactor::Unk16 => wgpu::BlendFactor::One,
                 SrcFactor::Unk33 => wgpu::BlendFactor::One,
-                SrcFactor::Unk37 => wgpu::BlendFactor::One,
+                SrcFactor::SrcAlpha5 => wgpu::BlendFactor::SrcAlpha,
             },
             dst_factor: match m.dst_factor {
                 DstFactor::Zero => wgpu::BlendFactor::Zero,
@@ -370,13 +378,13 @@ fn blend_state(m: &sm4sh_model::nud::NudMaterial) -> wgpu::BlendState {
                 DstFactor::One2 => wgpu::BlendFactor::One,
                 DstFactor::Zero2 => wgpu::BlendFactor::Zero,
                 DstFactor::Unk10 => wgpu::BlendFactor::Zero,
-                DstFactor::Unk11 => wgpu::BlendFactor::Zero,
-                DstFactor::Unk12 => wgpu::BlendFactor::Zero,
-                DstFactor::Unk64 => wgpu::BlendFactor::Zero,
-                DstFactor::Unk112 => wgpu::BlendFactor::Zero,
-                DstFactor::Unk114 => wgpu::BlendFactor::Zero,
-                DstFactor::Unk129 => wgpu::BlendFactor::Zero,
-                DstFactor::Unk130 => wgpu::BlendFactor::Zero,
+                DstFactor::OneMinusSourceAlpha2 => wgpu::BlendFactor::OneMinusSrcAlpha,
+                DstFactor::One3 => wgpu::BlendFactor::One,
+                DstFactor::Zero5 => wgpu::BlendFactor::Zero,
+                DstFactor::Zero3 => wgpu::BlendFactor::Zero,
+                DstFactor::One4 => wgpu::BlendFactor::One,
+                DstFactor::OneMinusSourceAlpha3 => wgpu::BlendFactor::OneMinusSrcAlpha,
+                DstFactor::One5 => wgpu::BlendFactor::One,
             },
             operation: match m.dst_factor {
                 DstFactor::Zero => wgpu::BlendOperation::Add,
@@ -389,13 +397,13 @@ fn blend_state(m: &sm4sh_model::nud::NudMaterial) -> wgpu::BlendState {
                 DstFactor::One2 => wgpu::BlendOperation::Add,
                 DstFactor::Zero2 => wgpu::BlendOperation::Add,
                 DstFactor::Unk10 => wgpu::BlendOperation::Add,
-                DstFactor::Unk11 => wgpu::BlendOperation::Add,
-                DstFactor::Unk12 => wgpu::BlendOperation::Add,
-                DstFactor::Unk64 => wgpu::BlendOperation::Add,
-                DstFactor::Unk112 => wgpu::BlendOperation::Add,
-                DstFactor::Unk114 => wgpu::BlendOperation::Add,
-                DstFactor::Unk129 => wgpu::BlendOperation::Add,
-                DstFactor::Unk130 => wgpu::BlendOperation::Add,
+                DstFactor::OneMinusSourceAlpha2 => wgpu::BlendOperation::Add,
+                DstFactor::One3 => wgpu::BlendOperation::Add,
+                DstFactor::Zero5 => wgpu::BlendOperation::Add,
+                DstFactor::Zero3 => wgpu::BlendOperation::Add,
+                DstFactor::One4 => wgpu::BlendOperation::Add,
+                DstFactor::OneMinusSourceAlpha3 => wgpu::BlendOperation::Add,
+                DstFactor::One5 => wgpu::BlendOperation::Add,
             },
         },
         alpha: wgpu::BlendComponent {

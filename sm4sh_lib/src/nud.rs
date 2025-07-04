@@ -260,12 +260,12 @@ pub enum SrcFactor {
     DestinationAlpha = 6,
     DestinationAlpha7 = 7,
     DestinationColor = 8,
+    SrcAlpha3 = 11,
+    SrcAlpha4 = 15,
     // TODO: Test these
-    Unk11 = 11,
-    Unk15 = 15,
     Unk16 = 16,
     Unk33 = 33,
-    Unk37 = 37,
+    SrcAlpha5 = 37,
 }
 
 // TODO: retest these with renderdoc.
@@ -283,13 +283,13 @@ pub enum DstFactor {
     One2 = 7,
     Zero2 = 8,
     Unk10 = 10,
-    Unk11 = 11,
-    Unk12 = 12,
-    Unk64 = 64,
-    Unk112 = 112,
-    Unk114 = 114,
-    Unk129 = 129,
-    Unk130 = 130,
+    OneMinusSourceAlpha2 = 11,
+    One3 = 12,  // TODO: Sets src to one?
+    Zero5 = 64, // TODO: sets src to one?
+    Zero3 = 112,
+    One4 = 114,
+    OneMinusSourceAlpha3 = 129, // TODO: also affects alpha?
+    One5 = 130,                 // TODO: also affects alpha?
 }
 
 // TODO: retest these with renderdoc.

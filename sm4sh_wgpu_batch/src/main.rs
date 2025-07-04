@@ -2,10 +2,11 @@ use std::path::Path;
 
 use futures::executor::block_on;
 use image::ImageBuffer;
+use log::error;
 use rayon::prelude::*;
 use sm4sh_lib::{nud::Nud, nut::Nut};
 use sm4sh_model::nud::NudModel;
-use sm4sh_wgpu::{CameraData, Model, Renderer, load_model};
+use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData, load_model};
 use wgpu::{
     DeviceDescriptor, Extent3d, PowerPreference, RequestAdapterOptions, TextureDescriptor,
     TextureDimension, TextureUsages,
@@ -104,6 +105,8 @@ fn main() {
     let output = device.create_texture(&texture_desc);
     let output_view = output.create_view(&Default::default());
 
+    let shared_data = SharedData::new(&device);
+
     // Load and render folders individually to save on memory.
     let source_folder = Path::new(source_folder);
 
@@ -117,46 +120,59 @@ fn main() {
         .for_each(|e| {
             let path = e.path();
 
-            // Create a unique buffer to avoid mapping a buffer from multiple threads.
-            let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                size: WIDTH as u64 * HEIGHT as u64 * 4,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                label: None,
-                mapped_at_creation: false,
-            });
+            let nud_model = load_nud_model(path);
 
-            // Convert fighter/mario/model/body/c00/model.nud to mario_model_body_c00.
-            let output_path = path
-                .parent()
-                .unwrap()
-                .strip_prefix(source_folder)
-                .unwrap()
-                .components()
-                .map(|c| c.as_os_str().to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("_");
-            let output_path = source_folder.join(output_path).with_extension("png");
+            match nud_model {
+                Ok(nud_model) => {
+                    let model =
+                        load_model(&device, &queue, &nud_model, surface_format, &shared_data);
 
-            let nud = Nud::from_file(path).unwrap();
-            let nut = Nut::from_file(path.with_file_name("model.nut")).unwrap();
-            let nud_model = NudModel::from_nud(&nud, &nut).unwrap();
-            let model = load_model(&device, &queue, &nud_model, surface_format);
+                    // Create a unique buffer to avoid mapping a buffer from multiple threads.
+                    let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                        size: WIDTH as u64 * HEIGHT as u64 * 4,
+                        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                        label: None,
+                        mapped_at_creation: false,
+                    });
 
-            render_screenshot(
-                &device,
-                &renderer,
-                &output_view,
-                &model,
-                &camera,
-                &output,
-                &output_buffer,
-                texture_desc.size,
-                &queue,
-                output_path,
-            );
+                    // Convert fighter/mario/model/body/c00/model.nud to mario_model_body_c00.
+                    let output_path = path
+                        .parent()
+                        .unwrap()
+                        .strip_prefix(source_folder)
+                        .unwrap()
+                        .components()
+                        .map(|c| c.as_os_str().to_string_lossy())
+                        .collect::<Vec<_>>()
+                        .join("_");
+                    let output_path = source_folder.join(output_path).with_extension("png");
+
+                    render_screenshot(
+                        &device,
+                        &renderer,
+                        &output_view,
+                        &model,
+                        &camera,
+                        &output,
+                        &output_buffer,
+                        texture_desc.size,
+                        &queue,
+                        output_path,
+                    );
+                }
+                Err(e) => {
+                    error!("Error loading {path:?}: {e}");
+                }
+            }
         });
 
     println!("Completed in {:?}", start.elapsed());
+}
+
+fn load_nud_model(path: &Path) -> Result<NudModel, Box<dyn std::error::Error>> {
+    let nud = Nud::from_file(path)?;
+    let nut = Nut::from_file(path.with_file_name("model.nut"))?;
+    NudModel::from_nud(&nud, &nut).map_err(Into::into)
 }
 
 fn render_screenshot(
@@ -174,6 +190,7 @@ fn render_screenshot(
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("Render Encoder"),
     });
+
     renderer.render_model(&mut encoder, output_view, model, camera);
 
     encoder.copy_texture_to_buffer(
@@ -201,7 +218,6 @@ fn render_screenshot(
         // TODO: Find ways to optimize this?
         let buffer_slice = output_buffer.slice(..);
 
-        // TODO: Reuse the channel?
         let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
             tx.send(result).unwrap();
@@ -214,7 +230,6 @@ fn render_screenshot(
             ImageBuffer::<image::Rgba<u8>, _>::from_raw(WIDTH, HEIGHT, data.to_owned()).unwrap();
         // Convert BGRA to RGBA.
         buffer.pixels_mut().for_each(|p| p.0.swap(0, 2));
-
         buffer.save(output_path).unwrap();
     }
     output_buffer.unmap();

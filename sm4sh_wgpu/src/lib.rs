@@ -117,3 +117,17 @@ impl CameraData {
         }
     }
 }
+
+pub struct SharedData {
+    model_layout: wgpu::PipelineLayout,
+    model_shader: wgpu::ShaderModule,
+}
+
+impl SharedData {
+    pub fn new(device: &wgpu::Device) -> Self {
+        Self {
+            model_layout: crate::shader::model::create_pipeline_layout(device),
+            model_shader: crate::shader::model::create_shader_module(device),
+        }
+    }
+}

@@ -10,6 +10,7 @@ pub fn create_texture(
 ) -> wgpu::Texture {
     let (format, data) = image_format_data(texture);
 
+    // TODO: Fix not enough data for mipmaps for some textures.
     device.create_texture_with_data(
         queue,
         &wgpu::TextureDescriptor {
@@ -19,7 +20,7 @@ pub fn create_texture(
                 height: texture.height,
                 depth_or_array_layers: 1,
             },
-            mip_level_count: texture.mipmap_count,
+            mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
@@ -40,7 +41,11 @@ fn image_format_data(texture: &ImageTexture) -> (wgpu::TextureFormat, Cow<'_, [u
     match texture_format(texture.image_format) {
         Some(format) => (format, Cow::Owned(data)),
         None => {
-            let rgba8 = texture.to_surface().decode_rgba8().unwrap();
+            // TODO: Fix mipmaps for some textures.
+            let rgba8 = texture
+                .to_surface()
+                .decode_layers_mipmaps_rgba8(0..1, 0..1)
+                .expect(&format!("{:?}", texture.image_format));
             (wgpu::TextureFormat::Rgba8Unorm, Cow::Owned(rgba8.data))
         }
     }

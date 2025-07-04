@@ -23,6 +23,8 @@ fn write_shader(wgsl_source: &str, wgsl_path: &str, output_path: String) {
         },
         wgsl_to_wgpu::demangle_identity,
     )
+    .inspect_err(|error| error.emit_to_stderr(&wgsl_source))
+    .map_err(|_| "Failed to validate shader")
     .unwrap();
 
     std::fs::write(output_path, text.as_bytes()).unwrap();
