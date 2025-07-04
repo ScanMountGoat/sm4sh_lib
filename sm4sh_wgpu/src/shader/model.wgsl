@@ -34,7 +34,8 @@ struct VertexOutput {
     @location(1) normal: vec3<f32>,
     @location(2) tangent: vec3<f32>,
     @location(3) bitangent: vec3<f32>,
-    @location(4) uv0: vec2<f32>,
+    @location(4) color: vec4<f32>,
+    @location(5) uv0: vec2<f32>,
 }
 
 struct FragmentOutput {
@@ -48,7 +49,8 @@ struct VertexInput0 {
     @location(1) normal: vec4<f32>,
     @location(2) tangent: vec4<f32>,
     @location(3) bitangent: vec4<f32>,
-    @location(4) uv0: vec4<f32>,
+    @location(4) color: vec4<f32>,
+    @location(5) uv0: vec4<f32>,
 }
 
 @vertex
@@ -59,6 +61,7 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
     out.normal = (camera.view * vec4(in0.normal.xyz, 0.0)).xyz;
     out.tangent = (camera.view * vec4(in0.tangent.xyz, 0.0)).xyz;
     out.bitangent = (camera.view * vec4(in0.bitangent.xyz, 0.0)).xyz;
+    out.color = in0.color;
     out.uv0 = in0.uv0.xy;
     return out;
 }
@@ -89,11 +92,16 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         normal = apply_normal_map(pow(normal_map, vec3(2.2)), vertex_tangent, vertex_bitangent, vertex_normal);
     }
 
-    let lighting = mix(0.5 * ao, 1.0, max(dot(normal, view), 0.0));
+    let lighting = max(dot(normal, view), 0.0);
 
     let color = textureSample(color_texture, color_sampler, in.uv0).rgba;
+    let vertex_color = in.color * 2.0;
+
+    var out_color = color.rgb * vertex_color.rgb * lighting;
+
+    let out_alpha = color.a * vertex_color.a;
 
     var out: FragmentOutput;
-    out.color = vec4(color.rgb * lighting, color.a);
+    out.color = vec4(out_color, out_alpha);
     return out;
 }

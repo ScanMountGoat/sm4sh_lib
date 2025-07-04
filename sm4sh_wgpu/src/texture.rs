@@ -34,12 +34,9 @@ pub fn create_texture(
 
 fn image_format_data(texture: &ImageTexture) -> (wgpu::TextureFormat, Cow<'_, [u8]>) {
     // TODO: Why do final mipmaps not work for some non square textures?
-    let mut data = texture.image_data.clone();
-    data.resize(data.len() + 32, 0u8);
-
     // Convert unsupported formats to rgba8 for compatibility.
     match texture_format(texture.image_format) {
-        Some(format) => (format, Cow::Owned(data)),
+        Some(format) => (format, Cow::Borrowed(&texture.image_data)),
         None => {
             // TODO: Fix mipmaps for some textures.
             let rgba8 = texture

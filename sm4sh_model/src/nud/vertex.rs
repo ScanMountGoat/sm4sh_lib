@@ -189,12 +189,12 @@ impl Colors {
 pub struct ColorFloat16 {
     #[br(map = |x: [u16; 4]| x.map(f16::from_bits))]
     #[bw(map = |x| x.map(f16::to_bits))]
-    rgba: [f16; 4],
+    pub rgba: [f16; 4],
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct ColorByte {
-    rgba: [u8; 4],
+    pub rgba: [u8; 4],
 }
 
 pub fn read_vertex_indices(buffer: &[u8], count: u16) -> BinResult<Vec<u16>> {

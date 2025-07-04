@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use glam::{vec4, Vec4, Vec4Swizzles};
 use sm4sh_model::nud::{
-    vertex::{Normals, Uvs},
+    vertex::{Colors, Normals, Uvs},
     DstFactor, NudMesh, NudModel, SrcFactor,
 };
 use wgpu::util::DeviceExt;
@@ -98,12 +98,14 @@ fn create_mesh(
             normal: Vec4::ZERO,
             tangent: Vec4::ZERO,
             bitangent: Vec4::ZERO,
+            color: Vec4::splat(0.5),
             uv0: Vec4::ZERO,
         })
         .collect();
 
     set_normals(&m.vertices.normals, &mut vertices);
     set_uvs(&m.vertices.uvs, &mut vertices);
+    set_colors(&m.vertices.colors, &mut vertices);
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("vertex buffer"),
@@ -182,10 +184,7 @@ fn create_mesh(
     }
 }
 
-fn set_normals(
-    normals: &sm4sh_model::nud::vertex::Normals,
-    vertices: &mut [crate::shader::model::VertexInput0],
-) {
+fn set_normals(normals: &Normals, vertices: &mut [crate::shader::model::VertexInput0]) {
     match normals {
         Normals::None(_) => (),
         Normals::NormalsFloat32(items) => set_attribute(vertices, items, |v, i| {
@@ -212,10 +211,7 @@ fn set_normals(
     }
 }
 
-fn set_uvs(
-    uvs: &[sm4sh_model::nud::vertex::Uvs],
-    vertices: &mut [crate::shader::model::VertexInput0],
-) {
+fn set_uvs(uvs: &[Uvs], vertices: &mut [crate::shader::model::VertexInput0]) {
     if let Some(uvs) = uvs.first() {
         match uvs {
             Uvs::Float16(items) => set_attribute(vertices, items, |v, i| {
@@ -225,6 +221,18 @@ fn set_uvs(
                 set_attribute(vertices, items, |v, i| v.uv0 = vec4(i.u, i.v, 0.0, 0.0))
             }
         }
+    }
+}
+
+fn set_colors(colors: &Colors, vertices: &mut [crate::shader::model::VertexInput0]) {
+    match colors {
+        Colors::None => (),
+        Colors::Byte(items) => set_attribute(vertices, items, |v, i| {
+            v.color = i.rgba.map(|u| u as f32 / 255.0).into()
+        }),
+        Colors::Float16(items) => set_attribute(vertices, items, |v, i| {
+            v.color = i.rgba.map(|f| f.to_f32()).into()
+        }),
     }
 }
 
