@@ -1,9 +1,12 @@
 use std::io::{Cursor, Seek, Write};
 
 use binrw::BinResult;
-use glam::{Vec3, Vec4};
+use glam::{Vec3, Vec4, Vec4Swizzles};
 use sm4sh_lib::{
-    nud::{BoundingSphere, MaterialFlags, Nud},
+    nud::{
+        BoundingSphere, Material, MaterialFlags, MaterialTexture, Mesh, MeshGroup, Nud,
+        VertexIndexFlags,
+    },
     nut::Nut,
 };
 use vertex::{read_vertex_indices, read_vertices, write_vertex_indices, write_vertices, Vertices};
@@ -17,10 +20,16 @@ pub mod vertex;
 pub struct NudModel {
     pub groups: Vec<NudMeshGroup>,
     pub textures: Vec<ImageTexture>,
+    // TODO: Better way to store skeletons?
+    pub bone_start_index: usize,
+    pub bone_end_index: usize,
+    // TODO: Create a type for this.
+    pub bounding_sphere: Vec4,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudMeshGroup {
+    pub name: String,
     pub meshes: Vec<NudMesh>,
     pub sort_bias: f32,
     pub bounding_sphere: Vec4,
@@ -112,6 +121,7 @@ impl NudModel {
             }
 
             groups.push(NudMeshGroup {
+                name: g.name.clone(),
                 meshes,
                 sort_bias: g.sort_bias,
                 bounding_sphere: Vec3::from(g.bounding_sphere.center)
@@ -121,24 +131,72 @@ impl NudModel {
 
         let textures = nut_textures(nut);
 
-        Ok(Self { groups, textures })
+        Ok(Self {
+            groups,
+            textures,
+            bone_start_index: nud.bone_start_index as usize,
+            bone_end_index: nud.bone_end_index as usize,
+            bounding_sphere: Vec3::from(nud.bounding_sphere.center)
+                .extend(nud.bounding_sphere.radius),
+        })
     }
 
     pub fn to_nud(&self) -> BinResult<Nud> {
+        let mut mesh_groups = Vec::new();
+        let mut meshes = Vec::new();
+
         let mut buffer0 = Cursor::new(Vec::new());
         let mut buffer1 = Cursor::new(Vec::new());
         let mut index_buffer = Cursor::new(Vec::new());
 
-        let mesh_groups = Vec::new();
-        let meshes = Vec::new();
-
         for group in &self.groups {
             for mesh in &group.meshes {
+                let vertex_buffer0_offset = buffer0.position() as u32;
+                let vertex_buffer1_offset = buffer1.position() as u32;
+                let vertex_indices_offset = index_buffer.position() as u32;
+
                 let (vertex_flags, uv_color_flags) =
                     write_vertices(&mesh.vertices, &mut buffer0, &mut buffer1)?;
+                align(&mut buffer0, 16, 0u8)?;
+                align(&mut buffer1, 16, 0u8)?;
 
                 write_vertex_indices(&mut index_buffer, &mesh.vertex_indices)?;
+
+                meshes.push(Mesh {
+                    vertex_indices_offset,
+                    vertex_buffer0_offset,
+                    vertex_buffer1_offset,
+                    vertex_count: mesh.vertices.positions.len() as u16,
+                    vertex_flags,
+                    uv_color_flags,
+                    material1: mesh.material1.as_ref().map(material),
+                    material2: mesh.material2.as_ref().map(material),
+                    material3: mesh.material3.as_ref().map(material),
+                    material4: mesh.material4.as_ref().map(material),
+                    vertex_index_count: mesh.vertex_indices.len() as u16,
+                    vertex_index_flags: VertexIndexFlags::new(
+                        false,
+                        false,
+                        false,
+                        0u8.into(),
+                        true,
+                        false,
+                    ),
+                    unk: [0; 3],
+                });
             }
+
+            mesh_groups.push(MeshGroup {
+                bounding_sphere: bounding_sphere(group.bounding_sphere),
+                center: group.bounding_sphere.xyz().to_array(),
+                sort_bias: group.sort_bias,
+                name: group.name.clone(),
+                unk1: 0,
+                bone_flag: 0,
+                parent_bone_index: -1,
+                mesh_count: group.meshes.len() as u16,
+                position: 0,
+            });
         }
 
         align(&mut buffer0, 16, 0u8)?;
@@ -152,24 +210,62 @@ impl NudModel {
         // TODO: Fill in remaining fields.
         Ok(Nud {
             file_size: 0,
-            version: 0,
+            version: 512,
             mesh_group_count: self.groups.len() as u16,
-            bone_start_index: 0,
-            bone_end_index: 0,
+            bone_start_index: self.bone_start_index as u16,
+            bone_end_index: self.bone_end_index as u16,
             indices_offset: 0,
             indices_size: index_buffer.len() as u32,
             vertex_buffer0_size: vertex_buffer0.len() as u32,
             vertex_buffer1_size: vertex_buffer1.len() as u32,
-            bounding_sphere: BoundingSphere {
-                center: [0.0; 3],
-                radius: 0.0,
-            },
+            bounding_sphere: bounding_sphere(self.bounding_sphere),
             mesh_groups,
             meshes,
             index_buffer,
             vertex_buffer0,
             vertex_buffer1,
         })
+    }
+}
+
+fn material(m: &NudMaterial) -> Material {
+    Material {
+        flags: m.flags,
+        unk1: 0,
+        src_factor: m.src_factor,
+        tex_count: m.texture_hashes.len() as u16,
+        dst_factor: m.dst_factor,
+        alpha_func: m.alpha_func,
+        ref_alpha: 0,
+        cull_mode: m.cull_mode,
+        unk2: 0,
+        unk3: 0,
+        z_buffer_offset: 0,
+        textures: m
+            .texture_hashes
+            .iter()
+            .map(|hash| MaterialTexture {
+                hash: *hash,
+                unk1: [0; 3],
+                map_mode: sm4sh_lib::nud::MapMode::TexCoord,
+                wrap_mode_s: sm4sh_lib::nud::WrapMode::ClampToEdge,
+                wrap_mode_t: sm4sh_lib::nud::WrapMode::ClampToEdge,
+                min_filter: sm4sh_lib::nud::MinFilter::Linear,
+                mag_filter: sm4sh_lib::nud::MagFilter::Linear,
+                mip_detail: sm4sh_lib::nud::MipDetail::FourMipLevels,
+                unk2: 0,
+                unk3: 0,
+                unk4: 0,
+            })
+            .collect(),
+        properties: Vec::new(),
+    }
+}
+
+fn bounding_sphere(sphere: Vec4) -> BoundingSphere {
+    BoundingSphere {
+        center: sphere.xyz().to_array(),
+        radius: sphere.w,
     }
 }
 

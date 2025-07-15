@@ -21,6 +21,7 @@ use crate::{parse_opt_ptr32, parse_string_ptr32, xc3_write_binwrite_impl};
 #[br(magic(b"NDP3"))]
 #[xc3(magic(b"NDP3"))]
 pub struct Nud {
+    #[xc3(shared_offset)]
     pub file_size: u32,
     pub version: u16,
     pub mesh_group_count: u16,
@@ -28,6 +29,7 @@ pub struct Nud {
     pub bone_end_index: u16,
     // TODO: update these in 2nd pass with xc3write?
     // TODO: Just make this an offset to combined vec<u8>?
+    #[xc3(shared_offset)]
     pub indices_offset: u32, // vertex indices relative to 0x30?
     pub indices_size: u32,
     pub vertex_buffer0_size: u32,
@@ -450,6 +452,11 @@ impl Xc3WriteOffsets for NudOffsets<'_> {
 
         let position = writer.stream_position()?;
         align(writer, position, 16, 0u8)?;
+
+        let index_offset = writer.stream_position()?;
+        self.indices_offset
+            .set_offset(writer, index_offset, endian)?;
+
         self.index_buffer.data.xc3_write(writer, endian)?;
         self.vertex_buffer0.data.xc3_write(writer, endian)?;
         self.vertex_buffer1.data.xc3_write(writer, endian)?;
@@ -467,6 +474,9 @@ impl Xc3WriteOffsets for NudOffsets<'_> {
             },
             endian,
         )?;
+
+        let file_size = writer.stream_position()?;
+        self.file_size.set_offset(writer, file_size, endian)?;
 
         Ok(())
     }
