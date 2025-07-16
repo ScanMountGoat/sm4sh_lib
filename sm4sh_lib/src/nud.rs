@@ -74,7 +74,7 @@ pub struct MeshGroup {
     #[xc3(offset(u32), align(16))]
     pub name: String,
     pub unk1: u16,
-    pub bone_flag: u16,
+    pub bone_flags: BoneFlags,
     pub parent_bone_index: i16,
     pub mesh_count: u16,
 
@@ -82,6 +82,14 @@ pub struct MeshGroup {
     #[br(args { inner: args! { inner: strings_offset, count: mesh_count as usize }})]
     #[xc3(offset(u32))]
     pub meshes: Vec<Mesh>,
+}
+
+#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
+#[brw(repr(u16))]
+pub enum BoneFlags {
+    Disabled = 0,
+    Skinning = 4,
+    ParentBone = 8,
 }
 
 /// The data for a single mesh draw call.
@@ -138,12 +146,12 @@ pub struct VertexFlags {
 #[br(try_map = |x: u16| x.try_into().map_err(|e| format!("{e:?}")))]
 #[bw(map = |&x| u16::from(x))]
 pub struct VertexIndexFlags {
-    pub unk1: bool,
-    pub unk2: bool,
-    pub unk3: bool, // TODO: ???
-    pub unk4: u11,
+    pub unk1: bool, // false
+    pub unk2: bool, // false
+    pub unk3: bool, // TODO: affects vertex attributes?
+    pub unk4: u11,  // 0
     pub is_triangle_list: bool,
-    pub unk5: bool,
+    pub unk5: bool, // false
 }
 
 #[bitsize(4)]
@@ -416,7 +424,8 @@ xc3_write_binwrite_impl!(
     UvColorFlags,
     CullMode,
     WrapMode,
-    MaterialFlags
+    MaterialFlags,
+    BoneFlags
 );
 
 impl Xc3WriteOffsets for NudOffsets<'_> {
