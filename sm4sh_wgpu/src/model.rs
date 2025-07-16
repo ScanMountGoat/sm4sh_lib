@@ -129,7 +129,7 @@ fn create_mesh(
         // TODO: Unit tests for all known 4th bytes?
         let mut texture_index = 0;
         if material.flags.unk1().diffuse() {
-            color_texture = hash_to_texture.get(&material.texture_hashes[texture_index]);
+            color_texture = hash_to_texture.get(&material.textures[texture_index].hash);
             texture_index += 1;
         }
         if material.flags.unk1().sphere() {
@@ -138,7 +138,7 @@ fn create_mesh(
         // TODO: has stage cube?
         // TODO: has cube = has ramp or cube and not dummy ramp and not sphere map
         if material.flags.unk1().normal() {
-            normal_texture = hash_to_texture.get(&material.texture_hashes[texture_index]);
+            normal_texture = hash_to_texture.get(&material.textures[texture_index].hash);
             texture_index += 1;
         }
         if material.flags.unk1().ramp_or_cube() {

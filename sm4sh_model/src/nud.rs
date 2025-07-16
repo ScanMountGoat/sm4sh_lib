@@ -4,14 +4,16 @@ use binrw::BinResult;
 use glam::{Vec3, Vec4, Vec4Swizzles};
 use sm4sh_lib::{
     nud::{
-        BoundingSphere, Material, MaterialFlags, MaterialTexture, Mesh, MeshGroup, Nud,
-        VertexIndexFlags,
+        BoundingSphere, Material, MaterialFlags, MaterialProperty, MaterialTexture, Mesh,
+        MeshGroup, Nud, VertexIndexFlags,
     },
     nut::Nut,
 };
 use vertex::{read_vertex_indices, read_vertices, write_vertex_indices, write_vertices, Vertices};
 
-pub use sm4sh_lib::nud::{AlphaFunc, CullMode, DstFactor, SrcFactor};
+pub use sm4sh_lib::nud::{
+    AlphaFunc, CullMode, DstFactor, MagFilter, MapMode, MinFilter, MipDetail, SrcFactor, WrapMode,
+};
 pub use sm4sh_lib::nut::NutFormat;
 
 pub mod vertex;
@@ -33,6 +35,8 @@ pub struct NudMeshGroup {
     pub meshes: Vec<NudMesh>,
     pub sort_bias: f32,
     pub bounding_sphere: Vec4,
+    pub bone_flag: u16, // TODO: proper flags for this?
+    pub parent_bone_index: Option<usize>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -52,13 +56,29 @@ pub struct NudMesh {
 pub struct NudMaterial {
     // TODO: Should this recreate flags or store them directly?
     pub flags: MaterialFlags,
-
     pub src_factor: SrcFactor,
     pub dst_factor: DstFactor,
     pub alpha_func: AlphaFunc,
     pub cull_mode: CullMode,
+    pub textures: Vec<NudTexture>,
+    pub properties: Vec<NudProperty>,
+}
 
-    pub texture_hashes: Vec<u32>,
+#[derive(Debug, PartialEq, Clone)]
+pub struct NudTexture {
+    pub hash: u32,
+    pub map_mode: MapMode,
+    pub wrap_mode_s: WrapMode,
+    pub wrap_mode_t: WrapMode,
+    pub min_filter: MinFilter,
+    pub mag_filter: MagFilter,
+    pub mip_detail: MipDetail,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct NudProperty {
+    pub name: String,
+    pub values: Vec<f32>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -81,12 +101,9 @@ impl NudModel {
     pub fn from_nud(nud: &Nud, nut: &Nut) -> BinResult<Self> {
         let mut groups = Vec::new();
 
-        let mut mesh_index = 0;
         for g in &nud.mesh_groups {
             let mut meshes = Vec::new();
-            for _ in 0..g.mesh_count {
-                let mesh = &nud.meshes[mesh_index];
-
+            for mesh in &g.meshes {
                 // TODO: Avoid potential indexing panics.
                 let vertices = read_vertices(
                     &nud.vertex_buffer0[mesh.vertex_buffer0_offset as usize..],
@@ -116,8 +133,6 @@ impl NudModel {
                     material3: mesh.material3.as_ref().map(nud_material),
                     material4: mesh.material4.as_ref().map(nud_material),
                 });
-
-                mesh_index += 1;
             }
 
             groups.push(NudMeshGroup {
@@ -126,6 +141,8 @@ impl NudModel {
                 sort_bias: g.sort_bias,
                 bounding_sphere: Vec3::from(g.bounding_sphere.center)
                     .extend(g.bounding_sphere.radius),
+                bone_flag: g.bone_flag,
+                parent_bone_index: usize::try_from(g.parent_bone_index).ok(),
             });
         }
 
@@ -143,13 +160,13 @@ impl NudModel {
 
     pub fn to_nud(&self) -> BinResult<Nud> {
         let mut mesh_groups = Vec::new();
-        let mut meshes = Vec::new();
 
         let mut buffer0 = Cursor::new(Vec::new());
         let mut buffer1 = Cursor::new(Vec::new());
         let mut index_buffer = Cursor::new(Vec::new());
 
         for group in &self.groups {
+            let mut meshes = Vec::new();
             for mesh in &group.meshes {
                 let vertex_buffer0_offset = buffer0.position() as u32;
                 let vertex_buffer1_offset = buffer1.position() as u32;
@@ -177,9 +194,9 @@ impl NudModel {
                     vertex_index_flags: VertexIndexFlags::new(
                         false,
                         false,
-                        false,
-                        0u8.into(),
                         true,
+                        0u8.into(),
+                        mesh.primitive_type == PrimitiveType::TriangleList,
                         false,
                     ),
                     unk: [0; 3],
@@ -192,10 +209,10 @@ impl NudModel {
                 sort_bias: group.sort_bias,
                 name: group.name.clone(),
                 unk1: 0,
-                bone_flag: 0,
-                parent_bone_index: -1,
-                mesh_count: group.meshes.len() as u16,
-                position: 0,
+                bone_flag: group.bone_flag,
+                parent_bone_index: group.parent_bone_index.map(|i| i as i16).unwrap_or(-1),
+                mesh_count: meshes.len() as u16,
+                meshes,
             });
         }
 
@@ -220,7 +237,6 @@ impl NudModel {
             vertex_buffer1_size: vertex_buffer1.len() as u32,
             bounding_sphere: bounding_sphere(self.bounding_sphere),
             mesh_groups,
-            meshes,
             index_buffer,
             vertex_buffer0,
             vertex_buffer1,
@@ -233,7 +249,7 @@ fn material(m: &NudMaterial) -> Material {
         flags: m.flags,
         unk1: 0,
         src_factor: m.src_factor,
-        tex_count: m.texture_hashes.len() as u16,
+        tex_count: m.textures.len() as u16,
         dst_factor: m.dst_factor,
         alpha_func: m.alpha_func,
         ref_alpha: 0,
@@ -242,23 +258,41 @@ fn material(m: &NudMaterial) -> Material {
         unk3: 0,
         z_buffer_offset: 0,
         textures: m
-            .texture_hashes
+            .textures
             .iter()
-            .map(|hash| MaterialTexture {
-                hash: *hash,
+            .map(|t| MaterialTexture {
+                hash: t.hash,
                 unk1: [0; 3],
-                map_mode: sm4sh_lib::nud::MapMode::TexCoord,
-                wrap_mode_s: sm4sh_lib::nud::WrapMode::ClampToEdge,
-                wrap_mode_t: sm4sh_lib::nud::WrapMode::ClampToEdge,
-                min_filter: sm4sh_lib::nud::MinFilter::Linear,
-                mag_filter: sm4sh_lib::nud::MagFilter::Linear,
-                mip_detail: sm4sh_lib::nud::MipDetail::FourMipLevels,
+                map_mode: t.map_mode,
+                wrap_mode_s: t.wrap_mode_s,
+                wrap_mode_t: t.wrap_mode_t,
+                min_filter: t.min_filter,
+                mag_filter: t.mag_filter,
+                mip_detail: t.mip_detail,
                 unk2: 0,
                 unk3: 0,
                 unk4: 0,
             })
             .collect(),
-        properties: Vec::new(),
+        properties: m
+            .properties
+            .iter()
+            .map(|p| {
+                let size = if p.name == "NU_materialHash" {
+                    0
+                } else {
+                    16 + p.values.len() as u32 * 4
+                };
+                MaterialProperty {
+                    size,
+                    name: p.name.clone(),
+                    unk1: [0; 3],
+                    value_count: p.values.len() as u8,
+                    unk2: 0,
+                    values: p.values.clone(),
+                }
+            })
+            .collect(),
     }
 }
 
@@ -299,7 +333,27 @@ fn nud_material(material: &sm4sh_lib::nud::Material) -> NudMaterial {
         dst_factor: material.dst_factor,
         alpha_func: material.alpha_func,
         cull_mode: material.cull_mode,
-        texture_hashes: material.textures.iter().map(|t| t.hash).collect(),
+        textures: material
+            .textures
+            .iter()
+            .map(|t| NudTexture {
+                hash: t.hash,
+                map_mode: t.map_mode,
+                wrap_mode_s: t.wrap_mode_s,
+                wrap_mode_t: t.wrap_mode_t,
+                min_filter: t.min_filter,
+                mag_filter: t.mag_filter,
+                mip_detail: t.mip_detail,
+            })
+            .collect(),
+        properties: material
+            .properties
+            .iter()
+            .map(|p| NudProperty {
+                name: p.name.clone(),
+                values: p.values.clone(),
+            })
+            .collect(),
     }
 }
 

@@ -5,7 +5,7 @@ use std::{
 };
 
 use bilge::prelude::*;
-use binrw::{binread, helpers::until, BinRead, BinWrite};
+use binrw::{args, binread, helpers::until, BinRead, BinWrite, FilePtr32};
 use xc3_write::{
     strings::{StringSection, WriteOptions},
     Xc3Write, Xc3WriteOffsets,
@@ -45,12 +45,6 @@ pub struct Nud {
     #[br(args { count: mesh_group_count as usize, inner: strings_offset })]
     pub mesh_groups: Vec<MeshGroup>,
 
-    #[br(args {
-        count: mesh_groups.iter().map(|s| s.mesh_count as usize).sum::<usize>(),
-        inner: strings_offset
-    })]
-    pub meshes: Vec<Mesh>,
-
     // TODO: Find a cleaner way to delay writing these buffers
     // TODO: Is there any alignment between buffers?
     #[br(seek_before = SeekFrom::Start(indices_offset as u64 + 48))]
@@ -83,7 +77,11 @@ pub struct MeshGroup {
     pub bone_flag: u16,
     pub parent_bone_index: i16,
     pub mesh_count: u16,
-    pub position: u32,
+
+    #[br(parse_with = FilePtr32::parse)]
+    #[br(args { inner: args! { inner: strings_offset, count: mesh_count as usize }})]
+    #[xc3(offset(u32))]
+    pub meshes: Vec<Mesh>,
 }
 
 /// The data for a single mesh draw call.
@@ -435,27 +433,28 @@ impl Xc3WriteOffsets for NudOffsets<'_> {
         // The names are stored in a single section.
         let string_section = Rc::new(RefCell::new(StringSection::default()));
 
-        self.mesh_groups.write_offsets(
-            writer,
-            base_offset,
-            data_ptr,
-            endian,
-            string_section.clone(),
-        )?;
-        self.meshes.write_offsets(
-            writer,
-            base_offset,
-            data_ptr,
-            endian,
-            string_section.clone(),
-        )?;
+        // TODO: Find a nicer way to defer material writing.
+        let mut meshes = Vec::new();
+        for g in &self.mesh_groups.0 {
+            string_section.borrow_mut().insert_offset32(&g.name);
+            let group_meshes = g.meshes.write(writer, base_offset, data_ptr, endian)?.0;
+            meshes.extend(group_meshes);
+        }
+        for mesh in meshes {
+            mesh.write_offsets(
+                writer,
+                base_offset,
+                data_ptr,
+                endian,
+                string_section.clone(),
+            )?;
+        }
 
         let position = writer.stream_position()?;
         align(writer, position, 16, 0u8)?;
 
-        let index_offset = writer.stream_position()?;
-        self.indices_offset
-            .set_offset(writer, index_offset, endian)?;
+        // Remove the header size.
+        let index_offset = writer.stream_position()? - 48;
 
         self.index_buffer.data.xc3_write(writer, endian)?;
         self.vertex_buffer0.data.xc3_write(writer, endian)?;
@@ -475,7 +474,12 @@ impl Xc3WriteOffsets for NudOffsets<'_> {
             endian,
         )?;
 
-        let file_size = writer.stream_position()?;
+        let file_size = *data_ptr;
+
+        // TODO: set_offset should return to the original position after writing.
+        self.indices_offset
+            .set_offset(writer, index_offset, endian)?;
+
         self.file_size.set_offset(writer, file_size, endian)?;
 
         Ok(())
@@ -487,13 +491,15 @@ impl Xc3WriteOffsets for MeshGroupOffsets<'_> {
 
     fn write_offsets<W: Write + std::io::Seek>(
         &self,
-        _writer: &mut W,
-        _base_offset: u64,
-        _data_ptr: &mut u64,
-        _endian: xc3_write::Endian,
+        writer: &mut W,
+        base_offset: u64,
+        data_ptr: &mut u64,
+        endian: xc3_write::Endian,
         args: Self::Args,
     ) -> xc3_write::Xc3Result<()> {
         args.borrow_mut().insert_offset32(&self.name);
+        self.meshes
+            .write_full(writer, base_offset, data_ptr, endian, args)?;
         Ok(())
     }
 }
