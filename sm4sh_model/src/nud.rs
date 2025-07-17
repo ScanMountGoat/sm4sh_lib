@@ -17,6 +17,8 @@ pub use sm4sh_lib::nud::{
 };
 pub use sm4sh_lib::nut::NutFormat;
 
+use crate::nud::vertex::{buffer0_stride, buffer1_stride};
+
 pub mod vertex;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -177,10 +179,26 @@ impl NudModel {
 
                 let (vertex_flags, uv_color_flags) =
                     write_vertices(&mesh.vertices, &mut buffer0, &mut buffer1)?;
+                // TODO: Why is this not always aligned?
                 align(&mut buffer0, 16, 0u8)?;
                 align(&mut buffer1, 16, 0u8)?;
 
                 write_vertex_indices(&mut index_buffer, &mesh.vertex_indices)?;
+
+                // TODO: Is there a nicer way of setting offsets to 0?
+                let stride0 = buffer0_stride(vertex_flags, uv_color_flags);
+                let stride1 = buffer1_stride(vertex_flags);
+
+                let vertex_buffer0_offset = if stride0 == 0 {
+                    0
+                } else {
+                    vertex_buffer0_offset
+                };
+                let vertex_buffer1_offset = if stride1 == 0 {
+                    0
+                } else {
+                    vertex_buffer1_offset
+                };
 
                 meshes.push(Mesh {
                     vertex_indices_offset,

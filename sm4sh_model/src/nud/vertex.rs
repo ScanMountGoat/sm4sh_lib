@@ -19,10 +19,6 @@ pub struct Vertices {
     pub uvs: Vec<Uvs>,
 }
 
-impl Vertices {
-    // TODO: method that returns vertex flags
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum Normals {
     None(Vec<f32>),
@@ -514,7 +510,7 @@ where
 }
 
 // TODO: Is it better to just create attributes instead?
-fn buffer0_stride(vertex: VertexFlags, uv_color: UvColorFlags) -> u64 {
+pub fn buffer0_stride(vertex: VertexFlags, uv_color: UvColorFlags) -> u64 {
     if vertex.bones() != BoneType::None {
         uvs_color_size(uv_color)
     } else {
@@ -522,7 +518,7 @@ fn buffer0_stride(vertex: VertexFlags, uv_color: UvColorFlags) -> u64 {
     }
 }
 
-fn buffer1_stride(vertex: VertexFlags) -> u64 {
+pub fn buffer1_stride(vertex: VertexFlags) -> u64 {
     if vertex.bones() != BoneType::None {
         vertex_size(vertex)
     } else {
