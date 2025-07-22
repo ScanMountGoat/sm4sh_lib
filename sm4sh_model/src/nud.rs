@@ -1,4 +1,7 @@
-use std::io::{Cursor, Seek, Write};
+use std::{
+    io::{Cursor, Seek, Write},
+    path::Path,
+};
 
 use binrw::BinResult;
 use glam::{Vec3, Vec4, Vec4Swizzles};
@@ -20,6 +23,14 @@ pub use sm4sh_lib::nut::NutFormat;
 use crate::nud::vertex::{buffer0_stride, buffer1_stride};
 
 pub mod vertex;
+
+pub fn load_model<P: AsRef<Path>>(path: P) -> NudModel {
+    // TODO: Avoid unwrap.
+    let path = path.as_ref();
+    let nud = Nud::from_file(path).unwrap();
+    let nut = Nut::from_file(path.with_file_name("model.nut")).unwrap();
+    NudModel::from_nud(&nud, &nut).unwrap()
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudModel {
