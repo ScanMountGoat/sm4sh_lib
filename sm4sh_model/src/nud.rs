@@ -126,6 +126,7 @@ pub struct VbnSkeleton {
 #[derive(Debug, PartialEq, Clone)]
 pub struct VbnBone {
     pub name: String,
+    pub parent_bone_index: Option<usize>,
     pub bone_type: BoneType,
     pub translation: Vec3,
     pub rotation: Vec3,
@@ -321,6 +322,7 @@ fn vbn_skeleton(vbn: &Vbn) -> VbnSkeleton {
             .zip(transforms)
             .map(|(b, t)| VbnBone {
                 name: b.name.clone(),
+                parent_bone_index: b.parent_bone_index.try_into().ok(),
                 bone_type: b.bone_type,
                 translation: t.translation.into(),
                 rotation: t.rotation.into(),
