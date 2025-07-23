@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     io::{Cursor, Seek, Write},
     path::Path,
 };
@@ -22,7 +23,7 @@ pub use sm4sh_lib::nud::{
 pub use sm4sh_lib::nut::NutFormat;
 pub use sm4sh_lib::vbn::BoneType;
 
-use crate::nud::vertex::{buffer0_stride, buffer1_stride};
+use crate::nud::vertex::{buffer0_stride, buffer1_stride, triangle_strip_to_list};
 
 pub mod vertex;
 
@@ -295,6 +296,17 @@ impl NudModel {
             vertex_buffer0,
             vertex_buffer1,
         })
+    }
+}
+
+impl NudMesh {
+    pub fn triangle_list_indices(&self) -> Cow<[u16]> {
+        match self.primitive_type {
+            PrimitiveType::TriangleList => Cow::Borrowed(&self.vertex_indices),
+            PrimitiveType::TriangleStrip => {
+                Cow::Owned(triangle_strip_to_list(&self.vertex_indices))
+            }
+        }
     }
 }
 

@@ -2,6 +2,7 @@ use std::io::Cursor;
 
 use bilge::prelude::*;
 use binrw::{BinRead, BinReaderExt, BinResult, BinWrite, BinWriterExt, VecArgs};
+use glam::{vec2, Vec2, Vec4};
 use half::f16;
 
 use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvColorFlags, UvType, VertexFlags};
@@ -40,6 +41,28 @@ impl Normals {
             Normals::NormalsTangentBitangentFloat16(_) => {
                 NormalType::NormalsTangentBitangentFloat16
             }
+        }
+    }
+
+    pub fn normals(&self) -> Option<Vec<Vec4>> {
+        match self {
+            Normals::None(_) => None,
+            Normals::NormalsFloat32(items) => Some(items.iter().map(|i| i.normal.into()).collect()),
+            Normals::NormalsTangentBitangentFloat32(items) => {
+                Some(items.iter().map(|i| i.normal.into()).collect())
+            }
+            Normals::NormalsFloat16(items) => Some(
+                items
+                    .iter()
+                    .map(|i| i.normal.map(|f| f.to_f32()).into())
+                    .collect(),
+            ),
+            Normals::NormalsTangentBitangentFloat16(items) => Some(
+                items
+                    .iter()
+                    .map(|i| i.normal.map(|f| f.to_f32()).into())
+                    .collect(),
+            ),
         }
     }
 }
@@ -134,6 +157,17 @@ impl Uvs {
             Uvs::Float32(_) => UvType::Float32,
         }
     }
+
+    pub fn uvs(&self) -> Vec<Vec2> {
+        match self {
+            Uvs::Float16(items) => items
+                .iter()
+                .map(|i| vec2(i.u.to_f32(), i.v.to_f32()))
+                .collect(),
+
+            Uvs::Float32(items) => items.iter().map(|i| vec2(i.u, i.v)).collect(),
+        }
+    }
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
@@ -166,6 +200,24 @@ impl Colors {
             Colors::None => ColorType::None,
             Colors::Byte(_) => ColorType::Byte,
             Colors::Float16(_) => ColorType::Float16,
+        }
+    }
+
+    pub fn colors(&self) -> Option<Vec<Vec4>> {
+        match self {
+            Colors::None => None,
+            Colors::Byte(items) => Some(
+                items
+                    .iter()
+                    .map(|i| i.rgba.map(|u| u as f32 / 255.0).into())
+                    .collect(),
+            ),
+            Colors::Float16(items) => Some(
+                items
+                    .iter()
+                    .map(|i| i.rgba.map(|f| f.to_f32()).into())
+                    .collect(),
+            ),
         }
     }
 }
@@ -556,6 +608,35 @@ fn color_size(flags: UvColorFlags) -> u64 {
     }
 }
 
+pub fn triangle_strip_to_list(indices: &[u16]) -> Vec<u16> {
+    let mut new_indices = Vec::new();
+
+    let mut index = 0;
+    for i in 0..indices.len() - 2 {
+        let face = &indices[i..i + 3];
+
+        // TODO: Skip degenerate triangles with zero area (repeated indices)..
+
+        // Restart primitive assembly if the index is -1.
+        // https://registry.khronos.org/vulkan/specs/latest/html/vkspec.html#drawing
+        if face.contains(&u16::MAX) {
+            index = 0;
+            continue;
+        } else {
+            // Strip indices 0 1 2 3 4 generate triangles (0 1 2) (2 1 3) (2 3 4).
+            if index % 2 == 0 {
+                new_indices.extend([face[0], face[1], face[2]]);
+            } else {
+                new_indices.extend([face[1], face[0], face[2]]);
+            }
+
+            index += 1;
+        }
+    }
+
+    new_indices
+}
+
 // TODO: Attribute with buffer index, relative offset, data type?
 // flags -> attributes -> position, uv, color, normal, bone data?
 // TODO: Add tests for rebuilding vertex data
@@ -674,5 +755,21 @@ mod tests {
         );
         assert_eq!(buffer0, &new_buffer0.into_inner()[..]);
         assert!(new_buffer1.into_inner().is_empty())
+    }
+
+    #[test]
+    fn triangle_strip_to_list_basic() {
+        assert_eq!(
+            vec![0, 1, 2, 2, 1, 3, 2, 3, 4],
+            triangle_strip_to_list(&[0, 1, 2, 3, 4])
+        );
+    }
+
+    #[test]
+    fn triangle_strip_to_list_restart() {
+        assert_eq!(
+            vec![0, 1, 2, 2, 3, 4, 4, 3, 5],
+            triangle_strip_to_list(&[0, 1, 2, u16::MAX, 2, 3, 4, 5])
+        );
     }
 }
