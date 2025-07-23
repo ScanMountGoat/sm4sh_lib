@@ -4,7 +4,7 @@ use futures::executor::block_on;
 use image::ImageBuffer;
 use log::error;
 use rayon::prelude::*;
-use sm4sh_lib::{nud::Nud, nut::Nut};
+use sm4sh_lib::{nud::Nud, nut::Nut, vbn::Vbn};
 use sm4sh_model::nud::NudModel;
 use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData, load_model};
 use wgpu::{
@@ -171,8 +171,9 @@ fn main() {
 
 fn load_nud_model(path: &Path) -> Result<NudModel, Box<dyn std::error::Error>> {
     let nud = Nud::from_file(path)?;
-    let nut = Nut::from_file(path.with_file_name("model.nut"))?;
-    NudModel::from_nud(&nud, &nut).map_err(Into::into)
+    let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
+    let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
+    NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref()).map_err(Into::into)
 }
 
 fn render_screenshot(

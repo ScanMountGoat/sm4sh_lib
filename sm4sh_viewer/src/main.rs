@@ -5,7 +5,7 @@ use clap::Parser;
 use futures::executor::block_on;
 use glam::{vec3, Vec3};
 use log::{error, info};
-use sm4sh_lib::{nud::Nud, nut::Nut};
+use sm4sh_lib::{nud::Nud, nut::Nut, vbn::Vbn};
 use sm4sh_model::nud::NudModel;
 use sm4sh_wgpu::{load_model, CameraData, Model, Renderer, SharedData};
 use winit::{
@@ -96,8 +96,9 @@ impl<'a> State<'a> {
 
         let path = Path::new(&cli.file);
         let nud = Nud::from_file(path)?;
-        let nut = Nut::from_file(path.with_file_name("model.nut"))?;
-        let nud_model = NudModel::from_nud(&nud, &nut)?;
+        let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
+        let vbn = Vbn::from_file(path.with_file_name("model.vbm")).ok();
+        let nud_model = NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref())?;
         let model = load_model(&device, &queue, &nud_model, config.format, &shared_data);
 
         Ok(Self {

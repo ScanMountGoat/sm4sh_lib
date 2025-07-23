@@ -36,7 +36,7 @@ pub struct Bone {
 
 #[derive(Debug, BinRead, BinWrite)]
 pub struct BoneTransform {
-    pub position: [f32; 3],
+    pub translation: [f32; 3],
     pub rotation: [f32; 3], // TODO: xyz_euler?
     pub scale: [f32; 3],
 }

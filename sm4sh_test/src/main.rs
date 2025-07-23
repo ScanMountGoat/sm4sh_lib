@@ -91,11 +91,11 @@ fn check_nud(nud: Nud, path: &Path, original_bytes: &[u8]) {
 }
 
 fn check_nud_model(nud: Nud, path: &Path, original_bytes: &[u8]) {
-    let nut_path = path.with_file_name("model.nut");
-    match Nut::from_file(&nut_path) {
-        Ok(nut) => {
-            let model = NudModel::from_nud(&nud, &nut).unwrap();
+    let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
 
+    let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
+    match NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref()) {
+        Ok(model) => {
             // Check nud model conversions.
             let new_nud = model.to_nud().unwrap();
 
@@ -109,7 +109,7 @@ fn check_nud_model(nud: Nud, path: &Path, original_bytes: &[u8]) {
                 println!("Vertex indices read/write not 1:1 for {path:?}");
             }
         }
-        Err(e) => println!("Error reading Nut from {nut_path:?}: {e}"),
+        Err(e) => println!("Error converting {path:?}: {e}"),
     }
 }
 

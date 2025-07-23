@@ -11,6 +11,7 @@ use sm4sh_lib::{
         MeshGroup, Nud, VertexIndexFlags,
     },
     nut::Nut,
+    vbn::Vbn,
 };
 use vertex::{read_vertex_indices, read_vertices, write_vertex_indices, write_vertices, Vertices};
 
@@ -19,6 +20,7 @@ pub use sm4sh_lib::nud::{
     WrapMode,
 };
 pub use sm4sh_lib::nut::NutFormat;
+pub use sm4sh_lib::vbn::BoneType;
 
 use crate::nud::vertex::{buffer0_stride, buffer1_stride};
 
@@ -28,8 +30,9 @@ pub fn load_model<P: AsRef<Path>>(path: P) -> NudModel {
     // TODO: Avoid unwrap.
     let path = path.as_ref();
     let nud = Nud::from_file(path).unwrap();
-    let nut = Nut::from_file(path.with_file_name("model.nut")).unwrap();
-    NudModel::from_nud(&nud, &nut).unwrap()
+    let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
+    let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
+    NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref()).unwrap()
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -41,6 +44,8 @@ pub struct NudModel {
     pub bone_end_index: usize,
     // TODO: Create a type for this.
     pub bounding_sphere: Vec4,
+
+    pub skeleton: Option<VbnSkeleton>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -112,8 +117,22 @@ pub struct ImageTexture {
     pub image_data: Vec<u8>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct VbnSkeleton {
+    pub bones: Vec<VbnBone>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct VbnBone {
+    pub name: String,
+    pub bone_type: BoneType,
+    pub translation: Vec3,
+    pub rotation: Vec3,
+    pub scale: Vec3,
+}
+
 impl NudModel {
-    pub fn from_nud(nud: &Nud, nut: &Nut) -> BinResult<Self> {
+    pub fn from_nud(nud: &Nud, nut: Option<&Nut>, vbn: Option<&Vbn>) -> BinResult<Self> {
         let mut groups = Vec::new();
 
         for g in &nud.mesh_groups {
@@ -162,7 +181,9 @@ impl NudModel {
             });
         }
 
-        let textures = nut_textures(nut);
+        let textures = nut.map(nut_textures).unwrap_or_default();
+
+        let skeleton = vbn.map(vbn_skeleton);
 
         Ok(Self {
             groups,
@@ -171,6 +192,7 @@ impl NudModel {
             bone_end_index: nud.bone_end_index as usize,
             bounding_sphere: Vec3::from(nud.bounding_sphere.center)
                 .extend(nud.bounding_sphere.radius),
+            skeleton,
         })
     }
 
@@ -273,6 +295,26 @@ impl NudModel {
             vertex_buffer0,
             vertex_buffer1,
         })
+    }
+}
+
+fn vbn_skeleton(vbn: &Vbn) -> VbnSkeleton {
+    let (bones, transforms) = match vbn {
+        Vbn::Le(vbn) => (&vbn.bones, &vbn.transforms),
+        Vbn::Be(vbn) => (&vbn.bones, &vbn.transforms),
+    };
+    VbnSkeleton {
+        bones: bones
+            .iter()
+            .zip(transforms)
+            .map(|(b, t)| VbnBone {
+                name: b.name.clone(),
+                bone_type: b.bone_type,
+                translation: t.translation.into(),
+                rotation: t.rotation.into(),
+                scale: t.scale.into(),
+            })
+            .collect(),
     }
 }
 

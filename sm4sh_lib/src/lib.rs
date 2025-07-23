@@ -127,4 +127,4 @@ macro_rules! file_read_impl {
     };
 }
 
-file_read_impl!(Endian::Big, nud::Nud, nut::Nut, nsh::Nsh);
+file_read_impl!(Endian::Big, nud::Nud, nut::Nut, nsh::Nsh, vbn::Vbn);
