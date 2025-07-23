@@ -1,6 +1,6 @@
 use glam::{Mat4, Vec4};
 
-use crate::{CameraData, DeviceBufferExt, Model, QueueBufferExt};
+use crate::{skeleton::BoneRenderer, CameraData, DeviceBufferExt, Model, QueueBufferExt};
 
 pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
@@ -8,6 +8,7 @@ pub struct Renderer {
     camera_buffer: wgpu::Buffer,
     model_bind_group0: crate::shader::model::bind_groups::BindGroup0,
     textures: Textures,
+    bone_renderer: BoneRenderer,
 }
 
 impl Renderer {
@@ -36,10 +37,13 @@ impl Renderer {
 
         let textures = Textures::new(device, width, height);
 
+        let bone_renderer = BoneRenderer::new(device, &camera_buffer, output_format);
+
         Self {
             camera_buffer,
             model_bind_group0,
             textures,
+            bone_renderer,
         }
     }
 
@@ -74,6 +78,9 @@ impl Renderer {
 
         self.model_bind_group0.set(&mut render_pass);
         model.draw(&mut render_pass, camera);
+
+        self.bone_renderer
+            .draw_bones(&mut render_pass, &model.bone_transforms, model.bone_count);
     }
 
     pub fn update_camera(&self, queue: &wgpu::Queue, camera: &CameraData) {

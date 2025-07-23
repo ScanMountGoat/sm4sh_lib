@@ -3,6 +3,11 @@ use wgsl_to_wgpu::{create_shader_modules, MatrixVectorTypes, WriteOptions};
 fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();
     write_shader(
+        include_str!("src/shader/bone.wgsl"),
+        "src/shader/bone.wgsl",
+        format!("{out_dir}/bone.rs"),
+    );
+    write_shader(
         include_str!("src/shader/model.wgsl"),
         "src/shader/model.wgsl",
         format!("{out_dir}/model.rs"),

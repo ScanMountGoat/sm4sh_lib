@@ -97,7 +97,7 @@ impl<'a> State<'a> {
         let path = Path::new(&cli.file);
         let nud = Nud::from_file(path)?;
         let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
-        let vbn = Vbn::from_file(path.with_file_name("model.vbm")).ok();
+        let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
         let nud_model = NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref())?;
         let model = load_model(&device, &queue, &nud_model, config.format, &shared_data);
 

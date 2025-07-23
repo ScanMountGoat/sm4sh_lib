@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use glam::{vec4, Vec4, Vec4Swizzles};
+use glam::{vec4, Mat4, Vec4, Vec4Swizzles};
 use sm4sh_model::nud::{
     vertex::{Colors, Normals, Uvs},
     DstFactor, NudMesh, NudModel, SrcFactor,
@@ -13,6 +13,9 @@ use crate::{
 
 pub struct Model {
     groups: Vec<MeshGroup>,
+
+    pub(crate) bone_transforms: wgpu::Buffer,
+    pub(crate) bone_count: u32,
 }
 
 pub struct MeshGroup {
@@ -55,6 +58,22 @@ pub fn load_model(
         })
         .collect();
 
+    let bone_transforms = model
+        .skeleton
+        .as_ref()
+        .map(|s| s.model_space_transforms())
+        .unwrap_or(vec![Mat4::IDENTITY]);
+    let bone_transforms = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("bone transforms buffer"),
+        contents: bytemuck::cast_slice(&bone_transforms),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let bone_count = model
+        .skeleton
+        .as_ref()
+        .map(|s| s.bones.len() as u32)
+        .unwrap_or_default();
+
     Model {
         groups: model
             .groups
@@ -78,6 +97,8 @@ pub fn load_model(
                 bounding_sphere: g.bounding_sphere,
             })
             .collect(),
+        bone_transforms,
+        bone_count,
     }
 }
 

@@ -5,7 +5,7 @@ use std::{
 };
 
 use binrw::BinResult;
-use glam::{Vec3, Vec4, Vec4Swizzles};
+use glam::{EulerRot, Mat4, Vec3, Vec4, Vec4Swizzles};
 use sm4sh_lib::{
     nud::{
         BoundingSphere, Material, MaterialFlags, MaterialProperty, MaterialTexture, Mesh,
@@ -311,6 +311,39 @@ impl NudMesh {
     }
 }
 
+impl VbnBone {
+    pub fn matrix(&self) -> Mat4 {
+        Mat4::from_translation(self.translation)
+            * Mat4::from_euler(
+                EulerRot::XYZEx,
+                self.rotation.x,
+                self.rotation.y,
+                self.rotation.z,
+            )
+            * Mat4::from_scale(self.scale)
+    }
+}
+
+impl VbnSkeleton {
+    /// The global transform for each bone in model space
+    /// by recursively applying the parent transform.
+    ///
+    /// This is also known as the bone's "rest pose" or "bind pose".
+    /// For inverse bind matrices, invert each matrix.
+    pub fn model_space_transforms(&self) -> Vec<Mat4> {
+        let mut final_transforms: Vec<_> = self.bones.iter().map(|b| b.matrix()).collect();
+
+        // TODO: Don't assume bones appear after their parents.
+        for i in 0..final_transforms.len() {
+            if let Some(parent) = self.bones[i].parent_bone_index {
+                final_transforms[i] = final_transforms[parent] * self.bones[i].matrix();
+            }
+        }
+
+        final_transforms
+    }
+}
+
 fn vbn_skeleton(vbn: &Vbn) -> VbnSkeleton {
     let (bones, transforms) = match vbn {
         Vbn::Le(vbn) => (&vbn.bones, &vbn.transforms),
@@ -322,7 +355,8 @@ fn vbn_skeleton(vbn: &Vbn) -> VbnSkeleton {
             .zip(transforms)
             .map(|(b, t)| VbnBone {
                 name: b.name.clone(),
-                parent_bone_index: b.parent_bone_index.try_into().ok(),
+                // TODO: Figure out why 0xFFFFFFF is used instead of 0xFFFFFFFF.
+                parent_bone_index: u16::try_from(b.parent_bone_index).ok().map(Into::into),
                 bone_type: b.bone_type,
                 translation: t.translation.into(),
                 rotation: t.rotation.into(),
