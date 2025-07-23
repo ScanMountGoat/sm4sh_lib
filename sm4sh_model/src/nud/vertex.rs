@@ -121,6 +121,40 @@ impl Bones {
             Bones::Byte(_) => BoneType::Byte,
         }
     }
+
+    pub fn bone_indices_weights(&self) -> Option<(Vec<[u32; 4]>, Vec<Vec4>)> {
+        match self {
+            Bones::None => None,
+            Bones::Float32(items) => Some(
+                items
+                    .iter()
+                    .map(|i| (i.bone_indices, Vec4::from(i.bone_weights)))
+                    .unzip(),
+            ),
+            Bones::Float16(items) => Some(
+                items
+                    .iter()
+                    .map(|i| {
+                        (
+                            i.bone_indices.map(Into::into),
+                            Vec4::from(i.bone_weights.map(f16::to_f32)),
+                        )
+                    })
+                    .unzip(),
+            ),
+            Bones::Byte(items) => Some(
+                items
+                    .iter()
+                    .map(|i| {
+                        (
+                            i.bone_indices.map(Into::into),
+                            Vec4::from(i.bone_weights.map(|u| u as f32 / 255.0)),
+                        )
+                    })
+                    .unzip(),
+            ),
+        }
+    }
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
