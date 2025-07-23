@@ -190,11 +190,6 @@ fn set_normals(normals: &Normals, vertices: &mut [crate::shader::model::VertexIn
         Normals::NormalsFloat32(items) => set_attribute(vertices, items, |v, i| {
             v.normal = i.normal.into();
         }),
-        Normals::Unk2(items) => set_attribute(vertices, items, |v, i| {
-            v.normal = i.normal.into();
-            v.tangent = i.tangent.into();
-            v.bitangent = i.bitangent.into();
-        }),
         Normals::NormalsTangentBitangentFloat32(items) => set_attribute(vertices, items, |v, i| {
             v.normal = i.normal.into();
             v.tangent = i.tangent.into();

@@ -23,7 +23,6 @@ pub struct Vertices {
 pub enum Normals {
     None(Vec<f32>),
     NormalsFloat32(Vec<NormalsFloat32>),
-    Unk2(Vec<NormalsUnk2>),
     NormalsTangentBitangentFloat32(Vec<NormalsTangentBitangentFloat32>),
     NormalsFloat16(Vec<NormalsFloat16>),
     NormalsTangentBitangentFloat16(Vec<NormalsTangentBitangentFloat16>),
@@ -34,7 +33,6 @@ impl Normals {
         match self {
             Normals::None(_) => NormalType::None,
             Normals::NormalsFloat32(_) => NormalType::NormalsFloat32,
-            Normals::Unk2(_) => NormalType::Unk2,
             Normals::NormalsTangentBitangentFloat32(_) => {
                 NormalType::NormalsTangentBitangentFloat32
             }
@@ -50,15 +48,6 @@ impl Normals {
 pub struct NormalsFloat32 {
     pub unk1: f32,
     pub normal: [f32; 4],
-}
-
-#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
-pub struct NormalsUnk2 {
-    pub unk1: f32,
-    pub normal: [f32; 4],
-    // TODO: is this order correct?
-    pub bitangent: [f32; 4],
-    pub tangent: [f32; 4],
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
@@ -385,7 +374,6 @@ fn read_normals(
         NormalType::NormalsFloat32 => {
             read_elements(buffer, stride, offset, count).map(Normals::NormalsFloat32)
         }
-        NormalType::Unk2 => read_elements(buffer, stride, offset, count).map(Normals::Unk2),
         NormalType::NormalsTangentBitangentFloat32 => read_elements(buffer, stride, offset, count)
             .map(Normals::NormalsTangentBitangentFloat32),
         NormalType::NormalsFloat16 => {
@@ -405,7 +393,6 @@ fn write_normals(
     match normals {
         Normals::None(elements) => write_elements(buffer, elements, stride, offset),
         Normals::NormalsFloat32(elements) => write_elements(buffer, elements, stride, offset),
-        Normals::Unk2(elements) => write_elements(buffer, elements, stride, offset),
         Normals::NormalsTangentBitangentFloat32(elements) => {
             write_elements(buffer, elements, stride, offset)
         }
@@ -535,7 +522,6 @@ fn normals_size(flags: VertexFlags) -> u64 {
     match flags.normals() {
         NormalType::None => 4,
         NormalType::NormalsFloat32 => 5 * 4,
-        NormalType::Unk2 => 13 * 4,
         NormalType::NormalsTangentBitangentFloat32 => 13 * 4,
         NormalType::NormalsFloat16 => 4 * 2,
         NormalType::NormalsTangentBitangentFloat16 => 12 * 2,

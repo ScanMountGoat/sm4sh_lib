@@ -159,7 +159,6 @@ pub struct VertexIndexFlags {
 pub enum NormalType {
     None = 0,
     NormalsFloat32 = 1,
-    Unk2 = 2,
     NormalsTangentBitangentFloat32 = 3,
     NormalsFloat16 = 6,
     NormalsTangentBitangentFloat16 = 7,
