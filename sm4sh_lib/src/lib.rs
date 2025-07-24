@@ -8,7 +8,7 @@ pub mod nut;
 pub mod vbn;
 // TODO: Add sb?
 // TODO: mta
-// TODO: pack
+pub mod omo;
 pub mod pack;
 
 fn parse_opt_ptr32<T, R, Args>(
@@ -133,5 +133,6 @@ file_read_impl!(
     nut::Nut,
     nsh::Nsh,
     vbn::Vbn,
-    pack::Pack
+    pack::Pack,
+    omo::Omo
 );

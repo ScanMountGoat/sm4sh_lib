@@ -3,7 +3,7 @@ use std::{io::Cursor, path::Path};
 use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
-use sm4sh_lib::{nud::Nud, nut::Nut, pack::Pack, vbn::Vbn};
+use sm4sh_lib::{nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
 use sm4sh_model::nud::NudModel;
 
 #[derive(Parser)]
@@ -144,6 +144,21 @@ fn check_vbn(vbn: Vbn, path: &Path, original_bytes: &[u8]) {
 fn check_pack(pack: Pack, path: &Path, original_bytes: &[u8]) {
     if !write_be_bytes_equals(&pack, original_bytes) {
         println!("Pack read/write not 1:1 for {path:?}");
+    }
+
+    for item in pack.items {
+        if item.name.ends_with(".omo") {
+            match Omo::from_bytes(&item.data) {
+                Ok(omo) => check_omo(omo, path, &item.data),
+                Err(e) => println!("Error reading {} for {path:?}: {e}", item.name),
+            }
+        }
+    }
+}
+
+fn check_omo(omo: Omo, path: &Path, original_bytes: &[u8]) {
+    if !write_be_bytes_equals(&omo, original_bytes) {
+        println!("Omo read/write not 1:1 for {path:?}");
     }
 }
 
