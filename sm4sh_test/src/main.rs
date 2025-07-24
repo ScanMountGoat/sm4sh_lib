@@ -99,6 +99,12 @@ fn check_nud_model(nud: Nud, path: &Path, original_bytes: &[u8]) {
             // Check nud model conversions.
             let new_nud = model.to_nud().unwrap();
 
+            if new_nud.bone_start_index != nud.bone_start_index
+                || new_nud.bone_end_index != nud.bone_end_index
+            {
+                println!("Bone index range not 1:1 for {path:?}",);
+            }
+
             if new_nud.vertex_buffer0 != nud.vertex_buffer0 {
                 println!("Vertex buffer0 read/write not 1:1 for {path:?}");
             }

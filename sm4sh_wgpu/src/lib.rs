@@ -5,8 +5,8 @@ use wgpu::util::DeviceExt;
 mod model;
 mod renderer;
 mod shader;
-mod texture;
 mod skeleton;
+mod texture;
 
 pub use model::{load_model, Mesh, Model};
 pub use renderer::Renderer;

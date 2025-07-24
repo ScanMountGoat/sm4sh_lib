@@ -25,7 +25,9 @@ pub struct Nud {
     pub file_size: u32,
     pub version: u16,
     pub mesh_group_count: u16,
-    pub bone_start_index: u16, // TODO: is this related to skinning bone indices?
+    /// The smallest bone index from vertex skinning or [MeshGroup] bone parenting.
+    pub bone_start_index: u16,
+    /// The largest bone index from vertex skinning or [MeshGroup] bone parenting.
     pub bone_end_index: u16,
     // TODO: update these in 2nd pass with xc3write?
     // TODO: Just make this an offset to combined vec<u8>?

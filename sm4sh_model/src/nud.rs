@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    collections::BTreeSet,
     io::{Cursor, Seek, Write},
     path::Path,
 };
@@ -27,25 +28,20 @@ use crate::nud::vertex::{buffer0_stride, buffer1_stride, triangle_strip_to_list}
 
 pub mod vertex;
 
-pub fn load_model<P: AsRef<Path>>(path: P) -> NudModel {
-    // TODO: Avoid unwrap.
+/// Load a nud model from `path` and the corresponding `"model.nut"` and `"model.vbn"` if present.
+pub fn load_model<P: AsRef<Path>>(path: P) -> BinResult<NudModel> {
     let path = path.as_ref();
-    let nud = Nud::from_file(path).unwrap();
+    let nud = Nud::from_file(path)?;
     let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
     let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
-    NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref()).unwrap()
+    NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref())
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudModel {
     pub groups: Vec<NudMeshGroup>,
     pub textures: Vec<ImageTexture>,
-    // TODO: Better way to store skeletons?
-    pub bone_start_index: usize,
-    pub bone_end_index: usize,
-    // TODO: Create a type for this.
-    pub bounding_sphere: Vec4,
-
+    pub bounding_sphere: Vec4, // TODO: Create a type for bounding spheres.
     pub skeleton: Option<VbnSkeleton>,
 }
 
@@ -190,8 +186,6 @@ impl NudModel {
         Ok(Self {
             groups,
             textures,
-            bone_start_index: nud.bone_start_index as usize,
-            bone_end_index: nud.bone_end_index as usize,
             bounding_sphere: Vec3::from(nud.bounding_sphere.center)
                 .extend(nud.bounding_sphere.radius),
             skeleton,
@@ -205,7 +199,13 @@ impl NudModel {
         let mut buffer1 = Cursor::new(Vec::new());
         let mut index_buffer = Cursor::new(Vec::new());
 
+        let mut used_bone_indices = BTreeSet::new();
+
         for group in &self.groups {
+            if let Some(index) = group.parent_bone_index {
+                used_bone_indices.insert(index as u32);
+            }
+
             let mut meshes = Vec::new();
             for mesh in &group.meshes {
                 let vertex_buffer0_offset = buffer0.position() as u32;
@@ -234,6 +234,10 @@ impl NudModel {
                 } else {
                     vertex_buffer1_offset
                 };
+
+                if let Some((indices, _)) = mesh.vertices.bones.bone_indices_weights() {
+                    used_bone_indices.extend(indices.iter().flatten());
+                }
 
                 meshes.push(Mesh {
                     vertex_indices_offset,
@@ -280,13 +284,16 @@ impl NudModel {
         let vertex_buffer1 = buffer1.into_inner();
         let index_buffer = index_buffer.into_inner();
 
+        let bone_start_index = used_bone_indices.iter().copied().min().unwrap_or_default() as u16;
+        let bone_end_index = used_bone_indices.iter().copied().max().unwrap_or_default() as u16;
+
         // TODO: Fill in remaining fields.
         Ok(Nud {
             file_size: 0,
             version: 512,
             mesh_group_count: self.groups.len() as u16,
-            bone_start_index: self.bone_start_index as u16,
-            bone_end_index: self.bone_end_index as u16,
+            bone_start_index,
+            bone_end_index,
             indices_offset: 0,
             indices_size: index_buffer.len() as u32,
             vertex_buffer0_size: vertex_buffer0.len() as u32,
