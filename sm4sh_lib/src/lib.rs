@@ -8,9 +8,6 @@ pub mod nut;
 pub mod vbn;
 // TODO: Add sb?
 
-// TODO: Create a separate NudModel struct without creating a separate project?
-// TODO: possible to preserve binary file types 1:1?
-
 fn parse_opt_ptr32<T, R, Args>(
     reader: &mut R,
     endian: binrw::Endian,

@@ -98,7 +98,6 @@ pub enum BoneFlags {
 #[derive(Debug, BinRead, Xc3Write)]
 #[br(import_raw(strings_offset: u32))]
 pub struct Mesh {
-    // TODO: Read vertices and indices here if ranges are increasing and non overlapping?
     pub vertex_indices_offset: u32,
     pub vertex_buffer0_offset: u32,
     pub vertex_buffer1_offset: u32,

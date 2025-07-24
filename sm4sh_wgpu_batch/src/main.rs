@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use futures::executor::block_on;
-use image::ImageBuffer;
 use log::error;
 use rayon::prelude::*;
 use sm4sh_lib::{nud::Nud, nut::Nut, vbn::Vbn};
@@ -75,7 +74,7 @@ fn main() {
     }))
     .unwrap();
 
-    let surface_format = wgpu::TextureFormat::Bgra8UnormSrgb;
+    let surface_format = wgpu::TextureFormat::Rgba8UnormSrgb;
     let renderer = Renderer::new(&device, WIDTH, HEIGHT, surface_format);
 
     // TODO: Frame each model individually?
@@ -216,7 +215,6 @@ fn render_screenshot(
     // Save the output texture.
     // Adapted from WGPU Example https://github.com/gfx-rs/wgpu/tree/master/wgpu/examples/capture
     {
-        // TODO: Find ways to optimize this?
         let buffer_slice = output_buffer.slice(..);
 
         let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
@@ -227,10 +225,7 @@ fn render_screenshot(
         block_on(rx.receive()).unwrap().unwrap();
 
         let data = buffer_slice.get_mapped_range();
-        let mut buffer =
-            ImageBuffer::<image::Rgba<u8>, _>::from_raw(WIDTH, HEIGHT, data.to_owned()).unwrap();
-        // Convert BGRA to RGBA.
-        buffer.pixels_mut().for_each(|p| p.0.swap(0, 2));
+        let buffer = image::RgbaImage::from_raw(WIDTH, HEIGHT, data.to_owned()).unwrap();
         buffer.save(output_path).unwrap();
     }
     output_buffer.unmap();

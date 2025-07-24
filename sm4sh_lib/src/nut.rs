@@ -4,7 +4,6 @@ use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
 use crate::{parse_opt_ptr32, xc3_write_binwrite_impl};
 
-// TODO: Write support.
 // TODO: Same inner type for all variants?
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
 pub enum Nut {
@@ -194,8 +193,8 @@ impl SurfaceFormat {
 
 impl Texture {
     pub fn deswizzle(&self) -> Result<Vec<u8>, wiiu_swizzle::SwizzleError> {
-        // TODO: Avoid unwrap.
         if let Some(gtx_header) = &self.gtx_header {
+            // TODO: Avoid unwrap.
             wiiu_swizzle::Gx2Surface {
                 dim: wiiu_swizzle::SurfaceDim::from_repr(gtx_header.dim).unwrap(),
                 width: gtx_header.width,

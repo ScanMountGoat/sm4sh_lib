@@ -62,7 +62,6 @@ pub struct NudMesh {
     pub vertex_indices: Vec<u16>,
     pub unk3: bool,
     pub primitive_type: PrimitiveType,
-    // TODO: material?
     pub material1: Option<NudMaterial>,
     pub material2: Option<NudMaterial>,
     pub material3: Option<NudMaterial>,
@@ -287,7 +286,6 @@ impl NudModel {
         let bone_start_index = used_bone_indices.iter().copied().min().unwrap_or_default() as u16;
         let bone_end_index = used_bone_indices.iter().copied().max().unwrap_or_default() as u16;
 
-        // TODO: Fill in remaining fields.
         Ok(Nud {
             file_size: 0,
             version: 512,

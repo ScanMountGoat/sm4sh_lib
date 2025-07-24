@@ -95,8 +95,6 @@ impl QueueBufferExt for wgpu::Queue {
     }
 }
 
-// TODO: Render type for nud model.
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CameraData {
     pub view: Mat4,

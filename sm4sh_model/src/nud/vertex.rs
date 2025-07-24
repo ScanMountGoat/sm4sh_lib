@@ -7,7 +7,6 @@ use half::f16;
 
 use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvColorFlags, UvType, VertexFlags};
 
-// TODO: use glam types directly?
 // TODO: Is it possible to rebuild the vertex buffers from this?
 // TODO: Find a simpler representation after looking at more game data like pokken.
 #[derive(Debug, PartialEq, Clone)]
