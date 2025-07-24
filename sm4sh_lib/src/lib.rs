@@ -7,7 +7,7 @@ pub mod nud;
 pub mod nut;
 pub mod vbn;
 // TODO: Add sb?
-// TODO: mta
+pub mod mta;
 pub mod omo;
 pub mod pack;
 
@@ -53,6 +53,15 @@ fn parse_string_ptr32<R: Read + Seek>(
     reader.seek(SeekFrom::Start(saved_pos))?;
 
     Ok(value.to_string())
+}
+
+fn parse_string_opt_ptr32<R: Read + Seek>(
+    reader: &mut R,
+    endian: binrw::Endian,
+    args: FilePtrArgs<()>,
+) -> BinResult<Option<String>> {
+    let value: Option<NullString> = parse_opt_ptr32(reader, endian, args)?;
+    Ok(value.map(|value| value.to_string()))
 }
 
 macro_rules! file_write_full_impl {
@@ -134,5 +143,6 @@ file_read_impl!(
     nsh::Nsh,
     vbn::Vbn,
     pack::Pack,
-    omo::Omo
+    omo::Omo,
+    mta::Mta
 );

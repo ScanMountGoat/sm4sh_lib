@@ -3,7 +3,7 @@ use std::{io::Cursor, path::Path};
 use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
-use sm4sh_lib::{nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
+use sm4sh_lib::{mta::Mta, nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
 use sm4sh_model::nud::NudModel;
 
 #[derive(Parser)]
@@ -24,6 +24,9 @@ struct Cli {
 
     #[arg(long)]
     pack: bool,
+
+    #[arg(long)]
+    mta: bool,
 
     #[arg(long)]
     nud_model: bool,
@@ -59,6 +62,11 @@ fn main() {
         check_all(root, &["*.pac"], check_pack);
     }
 
+    if cli.mta || cli.all {
+        println!("Checking Mta files...");
+        check_all(root, &["*.mta"], check_mta);
+    }
+
     if cli.nud_model || cli.all {
         println!("Checking Nud models...");
         check_all(root, &["*.nud"], check_nud_model);
@@ -79,12 +87,15 @@ where
         .for_each(|entry| {
             let path = entry.as_ref().unwrap().path();
             let original_bytes = std::fs::read(path).unwrap();
-            let mut reader = Cursor::new(&original_bytes);
-            match T::read_be(&mut reader) {
-                Ok(file) => {
-                    check_file(file, path, &original_bytes);
+            // TODO: Why are some mta files empty?
+            if !original_bytes.is_empty() {
+                let mut reader = Cursor::new(&original_bytes);
+                match T::read_be(&mut reader) {
+                    Ok(file) => {
+                        check_file(file, path, &original_bytes);
+                    }
+                    Err(e) => println!("Error reading {path:?}: {e}"),
                 }
-                Err(e) => println!("Error reading {path:?}: {e}"),
             }
         });
 }
@@ -147,10 +158,17 @@ fn check_pack(pack: Pack, path: &Path, original_bytes: &[u8]) {
     }
 
     for item in pack.items {
-        if item.name.ends_with(".omo") {
-            match Omo::from_bytes(&item.data) {
-                Ok(omo) => check_omo(omo, path, &item.data),
-                Err(e) => println!("Error reading {} for {path:?}: {e}", item.name),
+        if !item.data.is_empty() {
+            if item.name.ends_with(".omo") {
+                match Omo::from_bytes(&item.data) {
+                    Ok(omo) => check_omo(omo, path, &item.data),
+                    Err(e) => println!("Error reading {} for {path:?}: {e}", item.name),
+                }
+            } else if item.name.ends_with("mta") {
+                match Mta::from_bytes(&item.data) {
+                    Ok(mta) => check_mta(mta, path, &item.data),
+                    Err(e) => println!("Error reading {} for {path:?}: {e}", item.name),
+                }
             }
         }
     }
@@ -161,6 +179,8 @@ fn check_omo(omo: Omo, path: &Path, original_bytes: &[u8]) {
         println!("Omo read/write not 1:1 for {path:?}");
     }
 }
+
+fn check_mta(mta: Mta, path: &Path, original_bytes: &[u8]) {}
 
 fn write_be_bytes_equals<T>(value: &T, original_bytes: &[u8]) -> bool
 where
