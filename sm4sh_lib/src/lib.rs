@@ -7,6 +7,9 @@ pub mod nud;
 pub mod nut;
 pub mod vbn;
 // TODO: Add sb?
+// TODO: mta
+// TODO: pack
+pub mod pack;
 
 fn parse_opt_ptr32<T, R, Args>(
     reader: &mut R,
@@ -124,4 +127,11 @@ macro_rules! file_read_impl {
     };
 }
 
-file_read_impl!(Endian::Big, nud::Nud, nut::Nut, nsh::Nsh, vbn::Vbn);
+file_read_impl!(
+    Endian::Big,
+    nud::Nud,
+    nut::Nut,
+    nsh::Nsh,
+    vbn::Vbn,
+    pack::Pack
+);

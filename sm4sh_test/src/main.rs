@@ -3,7 +3,7 @@ use std::{io::Cursor, path::Path};
 use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
-use sm4sh_lib::{nud::Nud, nut::Nut, vbn::Vbn};
+use sm4sh_lib::{nud::Nud, nut::Nut, pack::Pack, vbn::Vbn};
 use sm4sh_model::nud::NudModel;
 
 #[derive(Parser)]
@@ -21,6 +21,9 @@ struct Cli {
 
     #[arg(long)]
     vbn: bool,
+
+    #[arg(long)]
+    pack: bool,
 
     #[arg(long)]
     nud_model: bool,
@@ -49,6 +52,11 @@ fn main() {
     if cli.vbn || cli.all {
         println!("Checking Vbn files...");
         check_all(root, &["*.vbn"], check_vbn);
+    }
+
+    if cli.pack || cli.all {
+        println!("Checking Pack files...");
+        check_all(root, &["*.pac"], check_pack);
     }
 
     if cli.nud_model || cli.all {
@@ -131,6 +139,21 @@ fn check_vbn(vbn: Vbn, path: &Path, original_bytes: &[u8]) {
     if !write_le_bytes_equals(&vbn, original_bytes) {
         println!("Vbn read/write not 1:1 for {path:?}");
     }
+}
+
+fn check_pack(pack: Pack, path: &Path, original_bytes: &[u8]) {
+    if !write_be_bytes_equals(&pack, original_bytes) {
+        println!("Pack read/write not 1:1 for {path:?}");
+    }
+}
+
+fn write_be_bytes_equals<T>(value: &T, original_bytes: &[u8]) -> bool
+where
+    for<'a> T: BinWrite<Args<'a> = ()>,
+{
+    let mut writer = Cursor::new(Vec::new());
+    value.write_be(&mut writer).unwrap();
+    writer.into_inner() == original_bytes
 }
 
 fn write_le_bytes_equals<T>(value: &T, original_bytes: &[u8]) -> bool
