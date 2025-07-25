@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
-use glam::{vec4, Mat4, Vec4, Vec4Swizzles};
+use glam::{vec4, Mat4, UVec4, Vec4, Vec4Swizzles};
 use sm4sh_model::nud::{
-    vertex::{Colors, Normals, Uvs},
+    vertex::{Bones, Colors, Normals, Uvs},
     DstFactor, NudMesh, NudModel, SrcFactor, VbnSkeleton,
 };
 use wgpu::util::DeviceExt;
@@ -18,7 +18,10 @@ pub struct Model {
     skeleton: Option<VbnSkeleton>,
     pub(crate) bone_transforms: wgpu::Buffer,
     pub(crate) skinning_transforms: wgpu::Buffer,
+    pub(crate) skinning_transforms_inv_transpose: wgpu::Buffer,
     pub(crate) bone_count: u32,
+
+    bind_group1: crate::shader::model::bind_groups::BindGroup1,
 }
 
 pub struct MeshGroup {
@@ -35,7 +38,7 @@ pub struct Mesh {
 
     pipeline: wgpu::RenderPipeline,
 
-    bind_group1: crate::shader::model::bind_groups::BindGroup1,
+    bind_group2: crate::shader::model::bind_groups::BindGroup2,
 }
 
 pub fn load_model(
@@ -69,8 +72,14 @@ pub fn load_model(
     let skinning_transforms = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("skinning transforms buffer"),
         contents: bytemuck::cast_slice(&vec![Mat4::IDENTITY; bone_transforms.len()]),
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
     });
+    let skinning_transforms_inv_transpose =
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("skinning transforms inverse transpose buffer"),
+            contents: bytemuck::cast_slice(&vec![Mat4::IDENTITY; bone_transforms.len()]),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
     let bone_transforms = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("bone transforms buffer"),
         contents: bytemuck::cast_slice(&bone_transforms),
@@ -82,6 +91,15 @@ pub fn load_model(
         .as_ref()
         .map(|s| s.bones.len() as u32)
         .unwrap_or_default();
+
+    let bind_group1 = crate::shader::model::bind_groups::BindGroup1::from_bindings(
+        device,
+        crate::shader::model::bind_groups::BindGroupLayout1 {
+            skinning_transforms: skinning_transforms.as_entire_buffer_binding(),
+            skinning_transforms_inv_transpose: skinning_transforms_inv_transpose
+                .as_entire_buffer_binding(),
+        },
+    );
 
     Model {
         groups: model
@@ -108,8 +126,10 @@ pub fn load_model(
             .collect(),
         bone_transforms,
         skinning_transforms,
+        skinning_transforms_inv_transpose,
         bone_count,
         skeleton: model.skeleton.clone(),
+        bind_group1,
     }
 }
 
@@ -131,10 +151,13 @@ fn create_mesh(
             tangent: Vec4::ZERO,
             bitangent: Vec4::ZERO,
             color: Vec4::splat(0.5),
+            indices: UVec4::ZERO,
+            weights: Vec4::ZERO,
             uv0: Vec4::ZERO,
         })
         .collect();
 
+    set_bones(&m.vertices.bones, &mut vertices);
     set_normals(&m.vertices.normals, &mut vertices);
     set_uvs(&m.vertices.uvs, &mut vertices);
     set_colors(&m.vertices.colors, &mut vertices);
@@ -195,9 +218,9 @@ fn create_mesh(
         },
     );
 
-    let bind_group1 = crate::shader::model::bind_groups::BindGroup1::from_bindings(
+    let bind_group2 = crate::shader::model::bind_groups::BindGroup2::from_bindings(
         device,
-        crate::shader::model::bind_groups::BindGroupLayout1 {
+        crate::shader::model::bind_groups::BindGroupLayout2 {
             color_texture: color_texture.unwrap_or(default_texture),
             normal_texture: normal_texture.unwrap_or(default_texture),
             color_sampler: &sampler,
@@ -211,8 +234,19 @@ fn create_mesh(
         vertex_buffer,
         index_buffer,
         vertex_index_count: m.vertex_indices.len() as u32,
-        bind_group1,
+        bind_group2,
         pipeline,
+    }
+}
+
+fn set_bones(bones: &Bones, vertices: &mut [crate::shader::model::VertexInput0]) {
+    if let Some((indices, weights)) = bones.bone_indices_weights() {
+        set_attribute(vertices, &indices, |v, i| {
+            v.indices = (*i).into();
+        });
+        set_attribute(vertices, &weights, |v, i| {
+            v.weights = (*i).into();
+        });
     }
 }
 
@@ -287,10 +321,12 @@ impl Model {
             ordered_float::OrderedFloat::from(distance)
         });
 
+        self.bind_group1.set(render_pass);
+
         for group in &sorted {
             for mesh in &group.meshes {
                 render_pass.set_pipeline(&mesh.pipeline);
-                mesh.bind_group1.set(render_pass);
+                mesh.bind_group2.set(render_pass);
 
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass
@@ -309,6 +345,15 @@ impl Model {
         if let Some(skeleton) = &self.skeleton {
             let skinning_transforms = animation.skinning_transforms(skeleton);
             queue.write_storage_data(&self.skinning_transforms, &skinning_transforms);
+
+            let skinning_transforms_inv_transpose: Vec<_> = skinning_transforms
+                .iter()
+                .map(|t| t.inverse().transpose())
+                .collect();
+            queue.write_storage_data(
+                &self.skinning_transforms_inv_transpose,
+                &skinning_transforms_inv_transpose,
+            );
 
             let transforms = animation.model_space_transforms(skeleton);
             queue.write_storage_data(&self.bone_transforms, &transforms);

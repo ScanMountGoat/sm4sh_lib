@@ -10,22 +10,29 @@ struct Camera {
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 
-// PerMaterial values
-// TODO: Add uniform structs.
+// PerModel values
 @group(1) @binding(0)
-var color_texture: texture_2d<f32>;
+var<storage> skinning_transforms: array<mat4x4<f32>>;
 
 @group(1) @binding(1)
+var<storage> skinning_transforms_inv_transpose: array<mat4x4<f32>>;
+
+// PerMaterial values
+// TODO: Add uniform structs.
+@group(2) @binding(0)
+var color_texture: texture_2d<f32>;
+
+@group(2) @binding(1)
 var normal_texture: texture_2d<f32>;
 
-@group(1) @binding(2)
+@group(2) @binding(2)
 var color_sampler: sampler;
 
 struct Uniforms {
     has_normal_map: u32,
 }
 
-@group(1) @binding(3)
+@group(2) @binding(3)
 var<uniform> uniforms: Uniforms;
 
 struct VertexOutput {
@@ -50,17 +57,35 @@ struct VertexInput0 {
     @location(2) tangent: vec4<f32>,
     @location(3) bitangent: vec4<f32>,
     @location(4) color: vec4<f32>,
-    @location(5) uv0: vec4<f32>,
+    @location(5) indices: vec4<u32>,
+    @location(6) weights: vec4<f32>,
+    @location(7) uv0: vec4<f32>,
 }
 
 @vertex
 fn vs_main(in0: VertexInput0) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = camera.view_projection * vec4(in0.position.xyz, 1.0);
+
+    var position = vec3(0.0);
+    var tangent = vec3(0.0);
+    var normal = vec3(0.0);
+    var bitangent = vec3(0.0);
+    for (var i = 0u; i < 4u; i += 1u) {
+        let bone_index = in0.indices[i];
+        let skin_weight = in0.weights[i];
+
+        position += skin_weight * (skinning_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
+        tangent += skin_weight * (skinning_transforms_inv_transpose[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
+        bitangent += skin_weight * (skinning_transforms_inv_transpose[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
+        normal += skin_weight * (skinning_transforms_inv_transpose[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
+    }
+
+    out.clip_position = camera.view_projection * vec4(position, 1.0);
+
     out.position = in0.position.xyz;
-    out.normal = (camera.view * vec4(in0.normal.xyz, 0.0)).xyz;
-    out.tangent = (camera.view * vec4(in0.tangent.xyz, 0.0)).xyz;
-    out.bitangent = (camera.view * vec4(in0.bitangent.xyz, 0.0)).xyz;
+    out.normal = (camera.view * vec4(normal, 0.0)).xyz;
+    out.tangent = (camera.view * vec4(tangent, 0.0)).xyz;
+    out.bitangent = (camera.view * vec4(bitangent, 0.0)).xyz;
     out.color = in0.color;
     out.uv0 = in0.uv0.xy;
     return out;

@@ -76,6 +76,7 @@ pub enum RotationType {
 #[bitsize(8)]
 #[derive(TryFromBits, Debug, PartialEq)]
 pub enum PositionType {
+    Unk4 = 0x04,
     Inter = 0x08,
     Const = 0x20,
 }

@@ -36,6 +36,9 @@ struct State<'a> {
 
     model: Model,
 
+    animations: Vec<(String, Animation)>,
+    animation_index: usize,
+
     input_state: InputState,
 }
 
@@ -102,13 +105,16 @@ impl<'a> State<'a> {
         let model = load_model(&device, &queue, &nud_model, config.format, &shared_data);
 
         // TODO: proper animation playback.
-        // TODO: cycle through animations
+        let mut animations = Vec::new();
         if let Some(anim) = &cli.anim {
             let pac = Pack::from_file(anim).unwrap();
-            let omo = Omo::from_bytes(&pac.items[5].data).unwrap();
-            let animation = Animation::from_omo(&omo);
-            model.update_bone_transforms(&queue, &animation, 0.0);
-            dbg!(&pac.items[5].name);
+            for item in pac.items {
+                if item.name.ends_with(".omo") {
+                    let omo = Omo::from_bytes(&item.data).unwrap();
+                    let animation = Animation::from_omo(&omo);
+                    animations.push((item.name, animation));
+                }
+            }
         }
 
         Ok(Self {
@@ -122,6 +128,8 @@ impl<'a> State<'a> {
             camera,
             renderer,
             model,
+            animations,
+            animation_index: 0,
             input_state: Default::default(),
         })
     }
@@ -146,6 +154,11 @@ impl<'a> State<'a> {
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        if let Some((_, animation)) = self.animations.get(self.animation_index) {
+            self.model
+                .update_bone_transforms(&self.queue, animation, 0.0);
+        }
+
         let output = self.surface.get_current_texture()?;
         let output_view = output
             .texture
@@ -166,18 +179,37 @@ impl<'a> State<'a> {
     }
 
     // Make this a reusable library that only requires glam?
-    fn handle_input(&mut self, event: &WindowEvent) {
+    fn handle_input(&mut self, event: &WindowEvent, window: &Window) {
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
-                if let winit::keyboard::Key::Named(named) = &event.logical_key {
-                    match named {
+                match &event.logical_key {
+                    winit::keyboard::Key::Named(named) => match named {
                         // Basic camera controls using arrow keys.
                         NamedKey::ArrowLeft => self.translation.x += 0.1,
                         NamedKey::ArrowRight => self.translation.x -= 0.1,
                         NamedKey::ArrowUp => self.translation.y -= 0.1,
                         NamedKey::ArrowDown => self.translation.y += 0.1,
                         _ => (),
+                    },
+                    winit::keyboard::Key::Character(c) => {
+                        match c.as_str() {
+                            // Animation playback.
+                            "." => {
+                                if event.state == ElementState::Released {
+                                    self.animation_index += 1;
+                                    self.set_window_title(window);
+                                }
+                            }
+                            "," => {
+                                if event.state == ElementState::Released {
+                                    self.animation_index = self.animation_index.saturating_sub(1);
+                                    self.set_window_title(window);
+                                }
+                            }
+                            _ => (),
+                        }
                     }
+                    _ => (),
                 }
             }
             WindowEvent::MouseInput { button, state, .. } => {
@@ -235,6 +267,15 @@ impl<'a> State<'a> {
             _ => (),
         }
     }
+
+    fn set_window_title(&self, window: &Window) {
+        let mut title = concat!("sm4sh_viewer ", env!("CARGO_PKG_VERSION")).to_string();
+        if let Some((name, _)) = self.animations.get(self.animation_index) {
+            title = format!("{title} - {name}");
+        }
+
+        window.set_title(&title);
+    }
 }
 
 fn calculate_camera_data(
@@ -291,6 +332,7 @@ fn main() -> anyhow::Result<()> {
         .unwrap();
 
     let mut state = block_on(State::new(&window, &cli))?;
+    state.set_window_title(&window);
     event_loop
         .run(|event, target| match event {
             Event::WindowEvent {
@@ -314,7 +356,7 @@ fn main() -> anyhow::Result<()> {
                     window.request_redraw();
                 }
                 _ => {
-                    state.handle_input(event);
+                    state.handle_input(event, &window);
                     state.update_camera(window.inner_size());
                     window.request_redraw();
                 }

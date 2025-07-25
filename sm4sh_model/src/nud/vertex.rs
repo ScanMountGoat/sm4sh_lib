@@ -64,6 +64,10 @@ impl Normals {
             ),
         }
     }
+
+    // TODO: "constructor" for each variant using attribute arrays?
+    // TODO: Just redo the variants to work like this instead?
+    // structs <-> attribute arrays
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
@@ -158,23 +162,23 @@ impl Bones {
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct BonesFloat32 {
-    bone_indices: [u32; 4],
-    bone_weights: [f32; 4],
+    pub bone_indices: [u32; 4],
+    pub bone_weights: [f32; 4],
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct BonesFloat16 {
-    bone_indices: [u16; 4],
+    pub bone_indices: [u16; 4],
 
     #[br(map = |x: [u16; 4]| x.map(f16::from_bits))]
     #[bw(map = |x| x.map(f16::to_bits))]
-    bone_weights: [f16; 4],
+    pub bone_weights: [f16; 4],
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct BonesByte {
-    bone_indices: [u8; 4],
-    bone_weights: [u8; 4], // TODO: unorm8?
+    pub bone_indices: [u8; 4],
+    pub bone_weights: [u8; 4], // TODO: unorm8?
 }
 
 #[derive(Debug, PartialEq, Clone)]
