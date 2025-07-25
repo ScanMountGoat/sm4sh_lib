@@ -3,18 +3,21 @@ use std::collections::BTreeMap;
 use glam::{vec4, Mat4, Vec4, Vec4Swizzles};
 use sm4sh_model::nud::{
     vertex::{Colors, Normals, Uvs},
-    DstFactor, NudMesh, NudModel, SrcFactor,
+    DstFactor, NudMesh, NudModel, SrcFactor, VbnSkeleton,
 };
 use wgpu::util::DeviceExt;
 
 use crate::{
-    renderer::DEPTH_FORMAT, texture::create_texture, CameraData, DeviceBufferExt, SharedData,
+    renderer::DEPTH_FORMAT, texture::create_texture, CameraData, DeviceBufferExt, QueueBufferExt,
+    SharedData,
 };
 
 pub struct Model {
     groups: Vec<MeshGroup>,
 
+    skeleton: Option<VbnSkeleton>,
     pub(crate) bone_transforms: wgpu::Buffer,
+    pub(crate) skinning_transforms: wgpu::Buffer,
     pub(crate) bone_count: u32,
 }
 
@@ -63,11 +66,17 @@ pub fn load_model(
         .as_ref()
         .map(|s| s.model_space_transforms())
         .unwrap_or(vec![Mat4::IDENTITY]);
+    let skinning_transforms = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("skinning transforms buffer"),
+        contents: bytemuck::cast_slice(&vec![Mat4::IDENTITY; bone_transforms.len()]),
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    });
     let bone_transforms = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("bone transforms buffer"),
         contents: bytemuck::cast_slice(&bone_transforms),
-        usage: wgpu::BufferUsages::VERTEX,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     });
+
     let bone_count = model
         .skeleton
         .as_ref()
@@ -98,7 +107,9 @@ pub fn load_model(
             })
             .collect(),
         bone_transforms,
+        skinning_transforms,
         bone_count,
+        skeleton: model.skeleton.clone(),
     }
 }
 
@@ -286,6 +297,21 @@ impl Model {
                     .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..mesh.vertex_index_count, 0, 0..1);
             }
+        }
+    }
+
+    pub fn update_bone_transforms(
+        &self,
+        queue: &wgpu::Queue,
+        animation: &sm4sh_model::animation::Animation,
+        current_time_seconds: f32,
+    ) {
+        if let Some(skeleton) = &self.skeleton {
+            let skinning_transforms = animation.skinning_transforms(skeleton);
+            queue.write_storage_data(&self.skinning_transforms, &skinning_transforms);
+
+            let transforms = animation.model_space_transforms(skeleton);
+            queue.write_storage_data(&self.bone_transforms, &transforms);
         }
     }
 }

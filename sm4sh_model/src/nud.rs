@@ -121,6 +121,7 @@ pub struct VbnSkeleton {
 #[derive(Debug, PartialEq, Clone)]
 pub struct VbnBone {
     pub name: String,
+    pub hash: u32,
     pub parent_bone_index: Option<usize>,
     pub bone_type: BoneType,
     pub translation: Vec3,
@@ -360,6 +361,7 @@ fn vbn_skeleton(vbn: &Vbn) -> VbnSkeleton {
             .zip(transforms)
             .map(|(b, t)| VbnBone {
                 name: b.name.clone(),
+                hash: b.bone_id,
                 // TODO: Figure out why 0xFFFFFFF is used instead of 0xFFFFFFFF.
                 parent_bone_index: u16::try_from(b.parent_bone_index).ok().map(Into::into),
                 bone_type: b.bone_type,

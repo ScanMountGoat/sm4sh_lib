@@ -5,8 +5,8 @@ use clap::Parser;
 use futures::executor::block_on;
 use glam::{vec3, Vec3};
 use log::{error, info};
-use sm4sh_lib::{nud::Nud, nut::Nut, vbn::Vbn};
-use sm4sh_model::nud::NudModel;
+use sm4sh_lib::{nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
+use sm4sh_model::{animation::Animation, nud::NudModel};
 use sm4sh_wgpu::{load_model, CameraData, Model, Renderer, SharedData};
 use winit::{
     dpi::PhysicalPosition,
@@ -100,6 +100,16 @@ impl<'a> State<'a> {
         let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
         let nud_model = NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref())?;
         let model = load_model(&device, &queue, &nud_model, config.format, &shared_data);
+
+        // TODO: proper animation playback.
+        // TODO: cycle through animations
+        if let Some(anim) = &cli.anim {
+            let pac = Pack::from_file(anim).unwrap();
+            let omo = Omo::from_bytes(&pac.items[5].data).unwrap();
+            let animation = Animation::from_omo(&omo);
+            model.update_bone_transforms(&queue, &animation, 0.0);
+            dbg!(&pac.items[5].name);
+        }
 
         Ok(Self {
             surface,
@@ -260,6 +270,8 @@ fn calculate_camera_data(
 struct Cli {
     /// The nud file
     file: String,
+    /// The animation file
+    anim: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {

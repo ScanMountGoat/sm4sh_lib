@@ -1,3 +1,4 @@
+use bilge::prelude::*;
 use binrw::{args, binrw, BinRead, BinWrite, FilePtr32};
 use bitflags::bitflags;
 
@@ -24,7 +25,7 @@ pub struct Omo {
     // TODO: Does this always go until the start of keys?
     #[br(parse_with = FilePtr32::parse)]
     #[br(args { inner: args! { count: (offsets[1] - offsets[0]) as usize }})]
-    pub inter_offset: Vec<u8>,
+    pub inter_data: Vec<u8>,
 
     #[br(parse_with = FilePtr32::parse)]
     #[br(args { inner: args! { count: frame_size as usize }})]
@@ -33,29 +34,48 @@ pub struct Omo {
 
 #[derive(Debug, BinRead, BinWrite)]
 pub struct OmoNode {
-    #[br(map(|x: u32| OmoFlags::from_bits_retain(x)))]
-    #[bw(map(|x| x.bits()))]
     pub flags: OmoFlags,
     pub hash: u32,
     pub inter_offset: u32,
     pub key_offset: u32,
 }
 
-// TODO: Are some of these meant to be mutually exclusive?
-bitflags! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct OmoFlags: u32 {
-        const POSITION = 0x01000000;
-        const ROTATION = 0x02000000;
-        const SCALE = 0x04000000;
-        const POSITION_INTER = 0x00080000;
-        const POSITION_CONST = 0x00200000;
-        const ROTATION_INTER = 0x00005000;
-        const ROTATION_FCONST = 0x00006000;
-        const ROTATION_CONST = 0x00007000;
-        const ROTATION_FRAME = 0x0000A000;
-        const SCALE_CONST = 0x00000200;
-        const SCALE_CONST2 = 0x00000300;
-        const SCALE_INTER = 0x00000080;
-    }
+// TODO: what does 0x1 do?
+#[bitsize(32)]
+#[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
+#[br(try_map = |x: u32| x.try_into().map_err(|e| format!("{e:?}")))]
+#[bw(map = |&x| u32::from(x))]
+pub struct OmoFlags {
+    pub unk1: u4,
+    pub scale_type: ScaleType,
+    pub rotation_type: RotationType,
+    pub position_type: PositionType,
+    pub position: bool,
+    pub rotation: bool,
+    pub scale: bool,
+    pub unk4: u5,
+}
+
+#[bitsize(8)]
+#[derive(TryFromBits, Debug, PartialEq)]
+pub enum ScaleType {
+    Const = 0x20,
+    Const2 = 0x30,
+    Inter = 0x08,
+}
+
+#[bitsize(4)]
+#[derive(TryFromBits, Debug, PartialEq)]
+pub enum RotationType {
+    Inter = 0x5,
+    FConst = 0x6,
+    Const = 0x7,
+    Frame = 0xA,
+}
+
+#[bitsize(8)]
+#[derive(TryFromBits, Debug, PartialEq)]
+pub enum PositionType {
+    Inter = 0x08,
+    Const = 0x20,
 }

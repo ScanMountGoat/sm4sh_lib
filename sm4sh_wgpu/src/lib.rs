@@ -59,7 +59,6 @@ impl DeviceBufferExt for wgpu::Device {
         })
     }
 }
-
 trait QueueBufferExt {
     fn write_uniform_data<T: ShaderType + WriteInto + ShaderSize>(
         &self,
@@ -67,9 +66,11 @@ trait QueueBufferExt {
         data: &T,
     );
 
-    fn write_storage_data<T>(&self, buffer: &wgpu::Buffer, data: &[T])
-    where
-        [T]: WriteInto + ShaderType;
+    fn write_storage_data<T: ShaderType + WriteInto + ShaderSize>(
+        &self,
+        buffer: &wgpu::Buffer,
+        data: &[T],
+    );
 }
 
 impl QueueBufferExt for wgpu::Queue {
@@ -84,12 +85,13 @@ impl QueueBufferExt for wgpu::Queue {
         self.write_buffer(buffer, 0, &bytes.into_inner());
     }
 
-    fn write_storage_data<T>(&self, buffer: &wgpu::Buffer, data: &[T])
-    where
-        [T]: WriteInto + ShaderType,
-    {
+    fn write_storage_data<T: ShaderType + WriteInto + ShaderSize>(
+        &self,
+        buffer: &wgpu::Buffer,
+        data: &[T],
+    ) {
         let mut bytes = StorageBuffer::new(Vec::new());
-        bytes.write(data).unwrap();
+        bytes.write(&data).unwrap();
 
         self.write_buffer(buffer, 0, &bytes.into_inner());
     }

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 bytemuck = { version = "1.21.0", features = ["derive"] }
-encase = { version = "0.11.1", features = ["glam"] }
+encase = { version = "=0.11.0", features = ["glam"] }
 sm4sh_model = { path = "../sm4sh_model" }
 wgpu.workspace = true
 glam = { workspace = true, features = ["bytemuck"] }
