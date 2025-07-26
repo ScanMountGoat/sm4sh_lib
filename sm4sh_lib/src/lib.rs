@@ -81,7 +81,13 @@ macro_rules! file_write_full_impl {
         )*
     };
 }
-file_write_full_impl!(xc3_write::Endian::Big, nud::Nud, nut::Nut, omo::Omo);
+file_write_full_impl!(
+    xc3_write::Endian::Big,
+    nud::Nud,
+    nut::Nut,
+    omo::Omo,
+    mta::Mta
+);
 
 macro_rules! xc3_write_binwrite_impl {
     ($($ty:ty),*) => {
