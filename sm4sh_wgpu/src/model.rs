@@ -343,7 +343,7 @@ impl Model {
         current_time_seconds: f32,
     ) {
         if let Some(skeleton) = &self.skeleton {
-            let skinning_transforms = animation.skinning_transforms(skeleton);
+            let skinning_transforms = animation.skinning_transforms(skeleton, current_time_seconds);
             queue.write_storage_data(&self.skinning_transforms, &skinning_transforms);
 
             let skinning_transforms_inv_transpose: Vec<_> = skinning_transforms
@@ -355,7 +355,7 @@ impl Model {
                 &skinning_transforms_inv_transpose,
             );
 
-            let transforms = animation.model_space_transforms(skeleton);
+            let transforms = animation.model_space_transforms(skeleton, current_time_seconds);
             queue.write_storage_data(&self.bone_transforms, &transforms);
         }
     }

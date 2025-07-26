@@ -1,5 +1,5 @@
 use bilge::prelude::*;
-use binrw::{args, binrw, BinRead, BinWrite, FilePtr32};
+use binrw::{args, binrw, helpers::until_eof, BinRead, BinWrite, FilePtr32};
 use bitflags::bitflags;
 
 #[binrw]
@@ -28,9 +28,11 @@ pub struct Omo {
     pub inter_data: Vec<u8>,
 
     #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: frame_size as usize }})]
-    pub keys: Vec<u8>, // TODO: u16?
+    pub keys: Keys,
 }
+
+#[derive(Debug, BinRead, BinWrite)]
+pub struct Keys(#[br(parse_with = until_eof)] pub Vec<u8>);
 
 #[derive(Debug, BinRead, BinWrite)]
 pub struct OmoNode {

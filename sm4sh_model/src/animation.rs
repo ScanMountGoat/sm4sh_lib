@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use binrw::BinReaderExt;
-use glam::{EulerRot, Mat4, Quat, Vec3, Vec4, Vec4Swizzles};
+use glam::{vec3, EulerRot, Mat4, Vec3};
 use sm4sh_lib::omo::{Omo, OmoNode, PositionType, RotationType, ScaleType};
 
 use crate::nud::VbnSkeleton;
@@ -14,31 +14,46 @@ pub struct Animation {
 #[derive(Debug, PartialEq, Clone)]
 pub struct AnimationNode {
     pub hash: u32,
-    pub translation: Option<Vec3>,
-    pub rotation: Option<Quat>, // TODO: enum for Vec3 euler or Quat?
-    pub scale: Option<Vec3>,
+    pub translations: Vec<Option<Vec3>>,
+    pub rotations: Vec<Option<Vec3>>, // TODO: enum for Vec3 euler or Quat?
+    pub scales: Vec<Option<Vec3>>,
 }
 
 impl Animation {
     pub fn from_omo(omo: &Omo) -> Self {
-        let mut nodes = Vec::new();
+        let mut frames = Vec::new();
+        let mut reader = Cursor::new(&omo.keys.0);
+        for _ in 0..omo.frame_count {
+            let mut frame = Vec::new();
+            for _ in 0..omo.frame_size / 2 {
+                let key: u16 = reader.read_be().unwrap();
+                frame.push(key);
+            }
+            frames.push(frame);
+        }
 
+        let mut nodes = Vec::new();
         for node in &omo.nodes {
             let data = omo_node_data(node, &omo.inter_data);
 
-            // TODO: apply "frames" and interpolate
+            // TODO: Find a nicer way to select key data for each frame.
+            let mut translations = Vec::new();
+            let mut rotations = Vec::new();
+            let mut scales = Vec::new();
 
-            let key = if let Some([x, y]) = omo.keys.get(0..2) {
-                u16::from_be_bytes([*x, *y])
-            } else {
-                0
-            };
+            for frame in &frames {
+                // Convert a byte offset to an index for u16s.
+                let mut key_index = node.key_offset as usize / 2;
+                translations.push(data.translation(frame, &mut key_index));
+                rotations.push(data.rotation(frame, &mut key_index));
+                scales.push(data.scale(frame, &mut key_index));
+            }
 
             let animation_node = AnimationNode {
                 hash: node.hash,
-                translation: data.translation(key),
-                rotation: data.rotation(key),
-                scale: data.scale(key),
+                translations,
+                rotations,
+                scales,
             };
             nodes.push(animation_node);
         }
@@ -46,25 +61,41 @@ impl Animation {
         Self { nodes }
     }
 
-    pub fn model_space_transforms(&self, skeleton: &VbnSkeleton) -> Vec<Mat4> {
+    pub fn model_space_transforms(
+        &self,
+        skeleton: &VbnSkeleton,
+        current_time_seconds: f32,
+    ) -> Vec<Mat4> {
+        // TODO: interpolation and looping.
+        let frame_index = (current_time_seconds * 60.0) as usize;
+
         let mut final_transforms: Vec<_> = skeleton
             .bones
             .iter()
             .map(|b| {
                 if let Some(node) = self.nodes.iter().find(|n| n.hash == b.hash) {
-                    Mat4::from_translation(node.translation.unwrap_or(b.translation))
-                        * node
-                            .rotation
-                            .map(|r| Mat4::from_quat(r))
-                            .unwrap_or_else(|| {
-                                Mat4::from_euler(
-                                    EulerRot::XYZEx,
-                                    b.rotation.x,
-                                    b.rotation.y,
-                                    b.rotation.z,
-                                )
-                            })
-                        * Mat4::from_scale(node.scale.unwrap_or(b.scale))
+                    let translation = node
+                        .translations
+                        .get(frame_index)
+                        .copied()
+                        .flatten()
+                        .unwrap_or(b.translation);
+                    let rotation = node
+                        .rotations
+                        .get(frame_index)
+                        .copied()
+                        .flatten()
+                        .unwrap_or(b.rotation);
+                    let scale = node
+                        .scales
+                        .get(frame_index)
+                        .copied()
+                        .flatten()
+                        .unwrap_or(b.scale);
+
+                    Mat4::from_translation(translation)
+                        * Mat4::from_euler(EulerRot::XYZEx, rotation.x, rotation.y, rotation.z)
+                        * Mat4::from_scale(scale)
                 } else {
                     b.matrix()
                 }
@@ -81,8 +112,12 @@ impl Animation {
         final_transforms
     }
 
-    pub fn skinning_transforms(&self, skeleton: &VbnSkeleton) -> Vec<Mat4> {
-        let anim_transforms = self.model_space_transforms(skeleton);
+    pub fn skinning_transforms(
+        &self,
+        skeleton: &VbnSkeleton,
+        current_time_seconds: f32,
+    ) -> Vec<Mat4> {
+        let anim_transforms = self.model_space_transforms(skeleton, current_time_seconds);
         let bind_transforms = skeleton.model_space_transforms();
 
         let mut animated_transforms = vec![Mat4::IDENTITY; skeleton.bones.len()];
@@ -96,54 +131,53 @@ impl Animation {
 }
 
 #[derive(Debug)]
-struct Transform {
+struct TransformData {
     translation_min: Option<Vec3>,
     translation_max: Option<Vec3>,
 
-    rotation_min: Option<Quat>,
-    rotation_max: Option<Quat>,
+    rotation_min: Option<Vec3>,
+    rotation_max: Option<Vec3>,
 
     scale_min: Option<Vec3>,
     scale_max: Option<Vec3>,
 }
 
-impl Transform {
-    fn translation(&self, key: u16) -> Option<Vec3> {
-        interpolate(self.translation_min, self.translation_max, key)
+impl TransformData {
+    fn translation(&self, keys: &[u16], key_index: &mut usize) -> Option<Vec3> {
+        interpolate_vec3(self.translation_min, self.translation_max, keys, key_index)
     }
 
-    fn rotation(&self, key: u16) -> Option<Quat> {
-        interpolate_quat(self.rotation_min, self.rotation_max, key)
+    fn rotation(&self, keys: &[u16], key_index: &mut usize) -> Option<Vec3> {
+        interpolate_vec3(self.rotation_min, self.rotation_max, keys, key_index)
     }
 
-    fn scale(&self, key: u16) -> Option<Vec3> {
-        interpolate(self.scale_min, self.scale_max, key)
+    fn scale(&self, keys: &[u16], key_index: &mut usize) -> Option<Vec3> {
+        interpolate_vec3(self.scale_min, self.scale_max, keys, key_index)
     }
 }
 
-fn interpolate(min: Option<Vec3>, max: Option<Vec3>, key: u16) -> Option<Vec3> {
-    let f = (key as f32) / 65535.0;
+fn interpolate_vec3(
+    min: Option<Vec3>,
+    max: Option<Vec3>,
+    keys: &[u16],
+    key_index: &mut usize,
+) -> Option<Vec3> {
     let min = min?;
     if let Some(max) = max {
+        let f = vec3(
+            keys[*key_index] as f32,
+            keys[*key_index + 1] as f32,
+            keys[*key_index + 2] as f32,
+        ) / 65535.0;
+        *key_index += 3;
         Some(min + f * max)
     } else {
         Some(min)
     }
 }
 
-fn interpolate_quat(min: Option<Quat>, max: Option<Quat>, key: u16) -> Option<Quat> {
-    let f = (key as f32) / 65535.0;
-    let min = min?;
-    if let Some(max) = max {
-        let xyz = min.xyz() + f * max.xyz();
-        Some(quat_from_xyz(xyz))
-    } else {
-        Some(Quat::from_array(min.to_array()))
-    }
-}
-
-fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> Transform {
-    let mut data = Cursor::new(inter_data);
+fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> TransformData {
+    let mut data = Cursor::new(&inter_data[node.inter_offset as usize..]);
 
     let mut translation_min = None;
     let mut translation_max = None;
@@ -171,19 +205,19 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> Transform {
             RotationType::Inter => {
                 // TODO: Store euler angles?
                 let v: [f32; 3] = data.read_be().unwrap();
-                rotation_min = Some(Quat::from_euler(EulerRot::XYZEx, v[0], v[1], v[2]));
+                rotation_min = Some(v.into());
 
                 let v: [f32; 3] = data.read_be().unwrap();
-                rotation_max = Some(Quat::from_euler(EulerRot::XYZEx, v[0], v[1], v[2]));
+                rotation_max = Some(v.into());
             }
             RotationType::FConst => {
                 // TODO: Is this actually a quaternion?
                 let v: [f32; 4] = data.read_be().unwrap();
-                rotation_min = Some(Quat::from_array(v));
+                // rotation_min = Some(Quat::from_array(v));
             }
             RotationType::Const => {
                 let v: [f32; 3] = data.read_be().unwrap();
-                rotation_min = Some(Quat::from_euler(EulerRot::XYZEx, v[0], v[1], v[2]));
+                rotation_min = Some(v.into());
             }
             RotationType::Frame => {
                 // TODO: what does "frame" mean?
@@ -209,7 +243,7 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> Transform {
         }
     }
 
-    Transform {
+    TransformData {
         translation_min,
         translation_max,
         rotation_min,
@@ -217,12 +251,4 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> Transform {
         scale_min,
         scale_max,
     }
-}
-
-fn quat_from_xyz(xyz: Vec3) -> Quat {
-    // Assume normalized quaternions to infer the missing component.
-    // TODO: Are these vectors always normalized?
-    let [x, y, z] = xyz.to_array();
-    let w = (1.0 - x * x - y * y - z * z).abs().sqrt();
-    Quat::from_xyzw(x, y, z, w)
 }

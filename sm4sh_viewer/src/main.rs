@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::Instant};
 
 use anyhow::Context;
 use clap::Parser;
@@ -38,6 +38,9 @@ struct State<'a> {
 
     animations: Vec<(String, Animation)>,
     animation_index: usize,
+
+    current_time_seconds: f32,
+    previous_frame_start: std::time::Instant,
 
     input_state: InputState,
 }
@@ -131,6 +134,8 @@ impl<'a> State<'a> {
             animations,
             animation_index: 0,
             input_state: Default::default(),
+            current_time_seconds: 0.0,
+            previous_frame_start: Instant::now(),
         })
     }
 
@@ -155,8 +160,17 @@ impl<'a> State<'a> {
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         if let Some((_, animation)) = self.animations.get(self.animation_index) {
+            // Framerate independent animation timing.
+            // This relies on interpolation or frame skipping.
+            let current_frame_start = Instant::now();
+            let delta_t = current_frame_start
+                .duration_since(self.previous_frame_start)
+                .as_secs_f64() as f32;
+            self.current_time_seconds += delta_t;
+            self.previous_frame_start = current_frame_start;
+
             self.model
-                .update_bone_transforms(&self.queue, animation, 0.0);
+                .update_bone_transforms(&self.queue, animation, self.current_time_seconds);
         }
 
         let output = self.surface.get_current_texture()?;
@@ -189,6 +203,12 @@ impl<'a> State<'a> {
                         NamedKey::ArrowRight => self.translation.x -= 0.1,
                         NamedKey::ArrowUp => self.translation.y -= 0.1,
                         NamedKey::ArrowDown => self.translation.y += 0.1,
+                        // Animation playback.
+                        NamedKey::Space => {
+                            if event.state == ElementState::Released {
+                                self.current_time_seconds = 0.0;
+                            }
+                        }
                         _ => (),
                     },
                     winit::keyboard::Key::Character(c) => {
@@ -196,12 +216,15 @@ impl<'a> State<'a> {
                             // Animation playback.
                             "." => {
                                 if event.state == ElementState::Released {
+                                    self.current_time_seconds = 0.0;
+
                                     self.animation_index += 1;
                                     self.set_window_title(window);
                                 }
                             }
                             "," => {
                                 if event.state == ElementState::Released {
+                                    self.current_time_seconds = 0.0;
                                     self.animation_index = self.animation_index.saturating_sub(1);
                                     self.set_window_title(window);
                                 }
