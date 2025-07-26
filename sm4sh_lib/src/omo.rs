@@ -1,10 +1,14 @@
 use bilge::prelude::*;
-use binrw::{args, binrw, BinRead, BinWrite, FilePtr32};
+use binrw::{args, binread, BinRead, BinWrite, FilePtr32};
+use xc3_write::{Xc3Write, Xc3WriteOffsets};
+
+use crate::xc3_write_binwrite_impl;
 
 // TODO: Better type and variable names.
-#[binrw]
-#[derive(Debug)]
-#[brw(magic(b"OMO "))]
+#[binread]
+#[derive(Debug, Xc3Write, Xc3WriteOffsets)]
+#[br(magic(b"OMO "))]
+#[xc3(magic(b"OMO "))]
 pub struct Omo {
     pub version: (u16, u16),
     pub flags: u32,
@@ -15,24 +19,25 @@ pub struct Omo {
 
     #[br(parse_with = FilePtr32::parse)]
     #[br(args { inner: args! { count: node_count as usize }})]
+    #[xc3(offset(u32))]
     pub nodes: Vec<OmoNode>,
 
     #[br(temp, restore_position)]
     #[bw(ignore)]
     offsets: [u32; 2],
 
-    // TODO: data for nodes?
-    // TODO: Does this always go until the start of keys?
     #[br(parse_with = FilePtr32::parse)]
     #[br(args { inner: args! { count: (offsets[1] - offsets[0]) as usize }})]
+    #[xc3(offset(u32))]
     pub inter_data: Vec<u8>,
 
     #[br(parse_with = FilePtr32::parse)]
     #[br(args { inner: args! { count: frame_count as usize, inner: frame_size } })]
+    #[xc3(offset(u32))]
     pub frames: Vec<Frame>,
 }
 
-#[derive(Debug, BinRead, BinWrite)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
 #[br(import_raw(frame_size_bytes: u16))]
 pub struct Frame {
     /// Coefficients for linear interpolation for [OmoNode] values.
@@ -40,7 +45,7 @@ pub struct Frame {
     pub keys: Vec<u16>,
 }
 
-#[derive(Debug, BinRead, BinWrite)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
 pub struct OmoNode {
     pub flags: OmoFlags,
     pub hash: u32,
@@ -89,3 +94,5 @@ pub enum PositionType {
     Interpolate = 0x08,
     Constant = 0x20,
 }
+
+xc3_write_binwrite_impl!(OmoFlags);

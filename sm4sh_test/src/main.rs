@@ -4,7 +4,7 @@ use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
 use sm4sh_lib::{mta::Mta, nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
-use sm4sh_model::nud::NudModel;
+use sm4sh_model::{animation::Animation, nud::NudModel};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -109,7 +109,7 @@ fn check_nud(nud: Nud, path: &Path, original_bytes: &[u8]) {
     }
 }
 
-fn check_nud_model(nud: Nud, path: &Path, original_bytes: &[u8]) {
+fn check_nud_model(nud: Nud, path: &Path, _original_bytes: &[u8]) {
     let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
 
     let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
@@ -175,12 +175,16 @@ fn check_pack(pack: Pack, path: &Path, original_bytes: &[u8]) {
 }
 
 fn check_omo(omo: Omo, path: &Path, original_bytes: &[u8]) {
-    if !write_be_bytes_equals(&omo, original_bytes) {
+    let mut writer = Cursor::new(Vec::new());
+    omo.write(&mut writer).unwrap();
+    if writer.into_inner() != original_bytes {
         println!("Omo read/write not 1:1 for {path:?}");
     }
+
+    Animation::from_omo(&omo);
 }
 
-fn check_mta(mta: Mta, path: &Path, original_bytes: &[u8]) {}
+fn check_mta(_mta: Mta, _path: &Path, _original_bytes: &[u8]) {}
 
 fn write_be_bytes_equals<T>(value: &T, original_bytes: &[u8]) -> bool
 where
