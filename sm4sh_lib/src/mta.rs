@@ -1,14 +1,19 @@
 use binrw::{args, binread, BinRead, FilePtr32};
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
-use crate::{parse_opt_ptr32, parse_string_opt_ptr32, parse_string_ptr32};
+use crate::{parse_string_opt_ptr32, parse_string_ptr32};
+
+// TODO: different types for MTA2, MTA3, and MTA4
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+pub enum Mta {
+    Mta4(Mta4),
+}
 
 #[binread]
 #[derive(Debug, Xc3Write)]
-#[br(magic(b"MTA"))]
-#[xc3(magic(b"MTA"))]
-pub struct Mta {
-    pub version: u8, // TODO: difference between MTA3 and MTA4?
+#[br(magic(b"MTA4"))]
+#[xc3(magic(b"MTA4"))]
+pub struct Mta4 {
     pub unk1: u32,
     pub frame_count: u32,
     pub start_frame: u32,
@@ -52,17 +57,17 @@ pub struct MatEntry {
     #[xc3(offset(u32))]
     pub properties: Vec<MatDataOffset>,
 
-    pub has_pat: u8, // TODO: flags?
+    pub pattern_count: u8,
     pub unk1: u8,
     pub unk2: u8,
     pub unk3: u8,
 
     #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: has_pat != 0})]
+    #[br(args { inner: args! { count: pattern_count as usize } })]
     #[xc3(offset(u32))]
-    pub pattern: PatternEntryOffset,
+    pub pattern_entries: Vec<PatternEntryOffset>,
 
-    // TODO: Different for mta3 vs mta4?
+    // TODO: not present for v3
     #[br(parse_with = parse_string_opt_ptr32)]
     #[xc3(offset(u32), align(4))]
     pub second_name_offset: Option<String>,
@@ -118,7 +123,7 @@ pub struct VisEntry {
     pub unk1: u32,
 
     #[br(parse_with = FilePtr32::parse)]
-    #[xc3(offset(u32), align(64))]
+    #[xc3(offset(u32), align(32))]
     pub data: VisEntryData,
 }
 
@@ -142,18 +147,23 @@ pub struct VisKeyFrame {
 }
 
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
-#[br(import_raw(has_pat: bool))]
 pub struct PatternEntryOffset {
-    #[br(if(has_pat), parse_with = FilePtr32::parse)]
+    #[br(parse_with = FilePtr32::parse)]
     #[xc3(offset(u32), align(32))]
-    pub entry: Option<PatternEntry>,
+    pub entry: PatternEntry,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[binread]
+#[derive(Debug, Xc3Write, Xc3WriteOffsets)]
+#[br(stream = r)]
 pub struct PatternEntry {
     pub default_tex_id: u32,
 
     pub key_frame_count: u32,
+
+    #[br(temp, restore_position)]
+    key_frames_offset: u32,
+
     #[br(parse_with = FilePtr32::parse)]
     #[br(args { inner: args! { count: key_frame_count as usize }})]
     #[xc3(offset(u32))]
@@ -161,8 +171,12 @@ pub struct PatternEntry {
 
     pub frame_count: u32,
 
-    // TODO: padding?
-    pub unks: [u32; 3],
+    // TODO: variable padding?
+    #[br(temp, try_calc = r.stream_position())]
+    end_offset: u64,
+
+    #[br(count = key_frames_offset as usize - end_offset as usize)]
+    pub unks: Vec<u8>,
 }
 
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
@@ -171,7 +185,7 @@ pub struct PatternKeyFrame {
     pub frame_num: u32,
 }
 
-impl Xc3WriteOffsets for MtaOffsets<'_> {
+impl Xc3WriteOffsets for Mta4Offsets<'_> {
     type Args = ();
 
     fn write_offsets<W: std::io::Write + std::io::Seek>(
@@ -182,11 +196,11 @@ impl Xc3WriteOffsets for MtaOffsets<'_> {
         endian: xc3_write::Endian,
         _args: Self::Args,
     ) -> xc3_write::Xc3Result<()> {
-        if self.material_entries.data.len() > 0 {
+        if !self.material_entries.data.is_empty() {
             self.material_entries
                 .write_full(writer, base_offset, data_ptr, endian, ())?;
         }
-        if self.visibility_entries.data.len() > 0 {
+        if !self.visibility_entries.data.is_empty() {
             self.visibility_entries
                 .write_full(writer, base_offset, data_ptr, endian, ())?;
         }
@@ -212,7 +226,7 @@ impl Xc3WriteOffsets for MatEntryOffsets<'_> {
             .write_full(writer, base_offset, data_ptr, endian, ())?;
         self.properties
             .write_full(writer, base_offset, data_ptr, endian, ())?;
-        self.pattern
+        self.pattern_entries
             .write_full(writer, base_offset, data_ptr, endian, ())?;
         Ok(())
     }
