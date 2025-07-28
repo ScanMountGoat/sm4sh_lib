@@ -1,13 +1,31 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Cursor,
+    path::Path,
 };
 
-use binrw::BinReaderExt;
+use binrw::{BinReaderExt, BinResult};
 use glam::{vec3, EulerRot, Mat4, Quat, Vec3};
-use sm4sh_lib::omo::{Omo, OmoNode, PositionType, RotationType, ScaleType};
+use sm4sh_lib::{
+    omo::{Omo, OmoNode, PositionType, RotationType, ScaleType},
+    pack::Pack,
+};
 
 use crate::nud::VbnSkeleton;
+
+/// Load animations from a `path` like `"main.pac"`.
+pub fn load_animations<P: AsRef<Path>>(path: P) -> BinResult<Vec<(String, Animation)>> {
+    let mut animations = Vec::new();
+    let pac = Pack::from_file(path).unwrap();
+    for item in pac.items {
+        if item.name.ends_with(".omo") {
+            let omo = Omo::from_bytes(&item.data).unwrap();
+            let animation = Animation::from_omo(&omo);
+            animations.push((item.name, animation));
+        }
+    }
+    Ok(animations)
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Animation {

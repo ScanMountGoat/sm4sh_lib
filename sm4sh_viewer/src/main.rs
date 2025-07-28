@@ -5,8 +5,11 @@ use clap::Parser;
 use futures::executor::block_on;
 use glam::{vec3, Vec3};
 use log::{error, info};
-use sm4sh_lib::{nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
-use sm4sh_model::{animation::Animation, nud::NudModel};
+use sm4sh_lib::{nud::Nud, nut::Nut, vbn::Vbn};
+use sm4sh_model::{
+    animation::{load_animations, Animation},
+    nud::NudModel,
+};
 use sm4sh_wgpu::{load_model, CameraData, Model, Renderer, SharedData};
 use winit::{
     dpi::PhysicalPosition,
@@ -107,18 +110,11 @@ impl<'a> State<'a> {
         let nud_model = NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref())?;
         let model = load_model(&device, &queue, &nud_model, config.format, &shared_data);
 
-        // TODO: proper animation playback.
-        let mut animations = Vec::new();
-        if let Some(anim) = &cli.anim {
-            let pac = Pack::from_file(anim).unwrap();
-            for item in pac.items {
-                if item.name.ends_with(".omo") {
-                    let omo = Omo::from_bytes(&item.data).unwrap();
-                    let animation = Animation::from_omo(&omo);
-                    animations.push((item.name, animation));
-                }
-            }
-        }
+        let animations = cli
+            .anim
+            .as_ref()
+            .map(|anim| load_animations(anim).unwrap())
+            .unwrap_or_default();
 
         Ok(Self {
             surface,
