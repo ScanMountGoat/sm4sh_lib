@@ -42,7 +42,7 @@ fn image_format_data(texture: &ImageTexture) -> (wgpu::TextureFormat, Cow<'_, [u
             let rgba8 = texture
                 .to_surface()
                 .decode_layers_mipmaps_rgba8(0..1, 0..1)
-                .expect(&format!("{:?}", texture.image_format));
+                .unwrap_or_else(|_| panic!("{:?}", texture.image_format));
             (wgpu::TextureFormat::Rgba8Unorm, Cow::Owned(rgba8.data))
         }
     }

@@ -245,7 +245,7 @@ fn set_bones(bones: &Bones, vertices: &mut [crate::shader::model::VertexInput0])
             v.indices = (*i).into();
         });
         set_attribute(vertices, &weights, |v, i| {
-            v.weights = (*i).into();
+            v.weights = *i;
         });
     }
 }
