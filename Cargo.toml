@@ -13,3 +13,4 @@ glam = "0.30.4"
 log = "0.4.22"
 simple_logger = "5.0.0"
 image_dds = { version = "0.7.2", default-features = false }
+approx = "0.5.1"

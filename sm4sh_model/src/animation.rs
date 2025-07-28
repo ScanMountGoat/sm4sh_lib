@@ -1,4 +1,7 @@
-use std::io::Cursor;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io::Cursor,
+};
 
 use binrw::BinReaderExt;
 use glam::{vec3, EulerRot, Mat4, Quat, Vec3};
@@ -9,14 +12,27 @@ use crate::nud::VbnSkeleton;
 #[derive(Debug, PartialEq, Clone)]
 pub struct Animation {
     pub nodes: Vec<AnimationNode>,
+    pub frame_count: usize,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AnimationNode {
     pub hash: u32,
-    pub translations: Vec<Option<Vec3>>,
-    pub rotations: Vec<Option<Quat>>,
-    pub scales: Vec<Option<Vec3>>,
+    pub translation_keyframes: Vec<Option<Vec3>>,
+    pub rotation_keyframes: Vec<Option<Quat>>,
+    pub scale_keyframes: Vec<Option<Vec3>>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct FCurves {
+    // TODO: also store keyframes?
+    // TODO: methods to return values per channel to work efficiently in Blender?
+    /// Translation keyframes for each bone hash.
+    pub translation: BTreeMap<u32, Vec<Vec3>>,
+    /// Rotation keyframes for each bone hash.
+    pub rotation: BTreeMap<u32, Vec<Quat>>,
+    /// Scale keyframes for each bone hash.
+    pub scale: BTreeMap<u32, Vec<Vec3>>,
 }
 
 impl Animation {
@@ -26,30 +42,36 @@ impl Animation {
             let data = omo_node_data(node, &omo.inter_data);
 
             // TODO: Find a nicer way to select key data for each frame.
-            let mut translations = Vec::new();
-            let mut rotations = Vec::new();
-            let mut scales = Vec::new();
+            let mut translation_keyframes = Vec::new();
+            let mut rotation_keyframes = Vec::new();
+            let mut scale_keyframes = Vec::new();
 
             for frame in &omo.frames {
                 // Convert a byte offset to an index for u16s.
                 let mut key_index = node.key_offset as usize / 2;
-                translations.push(data.translation(&frame.keys, &mut key_index));
-                rotations.push(data.rotation(&frame.keys, &mut key_index));
-                scales.push(data.scale(&frame.keys, &mut key_index));
+                translation_keyframes.push(data.translation(&frame.keys, &mut key_index));
+                rotation_keyframes.push(data.rotation(&frame.keys, &mut key_index));
+                scale_keyframes.push(data.scale(&frame.keys, &mut key_index));
             }
 
             let animation_node = AnimationNode {
                 hash: node.hash,
-                translations,
-                rotations,
-                scales,
+                translation_keyframes,
+                rotation_keyframes,
+                scale_keyframes,
             };
             nodes.push(animation_node);
         }
 
-        Self { nodes }
+        Self {
+            nodes,
+            frame_count: omo.frame_count as usize,
+        }
     }
 
+    /// Compute the the animated transform in model space for each bone in `skeleton`.
+    ///
+    /// See [VbnSkeleton::model_space_transforms] for the transforms without animations applied.
     pub fn model_space_transforms(
         &self,
         skeleton: &VbnSkeleton,
@@ -64,14 +86,14 @@ impl Animation {
             .map(|b| {
                 if let Some(node) = self.nodes.iter().find(|n| n.hash == b.hash) {
                     let translation = node
-                        .translations
+                        .translation_keyframes
                         .get(frame_index)
                         .copied()
                         .flatten()
                         .unwrap_or(b.translation);
 
                     let rotation = node
-                        .rotations
+                        .rotation_keyframes
                         .get(frame_index)
                         .copied()
                         .flatten()
@@ -86,7 +108,7 @@ impl Animation {
                         });
 
                     let scale = node
-                        .scales
+                        .scale_keyframes
                         .get(frame_index)
                         .copied()
                         .flatten()
@@ -109,6 +131,25 @@ impl Animation {
         final_transforms
     }
 
+    /// Identical to [Self::model_space_transforms] but each transform is relative to the parent bone's transform.
+    pub fn local_space_transforms(&self, skeleton: &VbnSkeleton, frame: f32) -> Vec<Mat4> {
+        let transforms = self.model_space_transforms(skeleton, frame);
+        transforms
+            .iter()
+            .zip(skeleton.bones.iter())
+            .map(|(transform, bone)| match bone.parent_bone_index {
+                Some(p) => transforms[p].inverse() * transform,
+                None => *transform,
+            })
+            .collect()
+    }
+
+    /// Compute the matrix for each bone in `skeleton`
+    /// that transforms a vertex in model space to its animated position in model space.
+    ///
+    /// This can be used in a vertex shader to apply linear blend skinning
+    /// by transforming the vertex by up to 4 skinning matrices
+    /// and blending with vertex skin weights.
     pub fn skinning_transforms(
         &self,
         skeleton: &VbnSkeleton,
@@ -124,6 +165,82 @@ impl Animation {
         }
 
         animated_transforms
+    }
+
+    /// Calculate animation values relative to the bone's parent and "rest pose" or "bind pose".
+    ///
+    /// If `use_blender_coordinates` is `true`, the resulting values will match Blender's conventions.
+    /// Bones will point along the y-axis instead of the x-axis and with z-axis for up instead of the y-axis.
+    pub fn fcurves(&self, skeleton: &VbnSkeleton, use_blender_coordinates: bool) -> FCurves {
+        let bind_transforms: Vec<_> = skeleton
+            .model_space_transforms()
+            .into_iter()
+            .map(|t| {
+                if use_blender_coordinates {
+                    sm4sh_to_blender(t)
+                } else {
+                    t
+                }
+            })
+            .collect();
+
+        let animated_bone_names: BTreeSet<_> = self.nodes.iter().map(|n| n.hash).collect();
+
+        let mut translation_points = BTreeMap::new();
+        let mut rotation_points = BTreeMap::new();
+        let mut scale_points = BTreeMap::new();
+
+        for frame in 0..self.frame_count {
+            let transforms = self.local_space_transforms(skeleton, frame as f32);
+
+            let mut animated_transforms = bind_transforms.clone();
+
+            for i in 0..animated_transforms.len() {
+                let bone = &skeleton.bones[i];
+                if animated_bone_names.contains(&bone.hash) {
+                    let matrix = transforms[i];
+                    if let Some(parent_index) = bone.parent_bone_index {
+                        let transform = if use_blender_coordinates {
+                            blender_transform(matrix)
+                        } else {
+                            matrix
+                        };
+                        animated_transforms[i] = animated_transforms[parent_index] * transform;
+                    } else {
+                        animated_transforms[i] = if use_blender_coordinates {
+                            sm4sh_to_blender(matrix)
+                        } else {
+                            matrix
+                        };
+                    }
+
+                    // Find the transform relative to the parent and "rest pose" or "bind pose".
+                    // This matches the UI values used in Blender for posing bones.
+                    // TODO: Add tests for calculating this.
+                    let basis_transform = if let Some(parent_index) = bone.parent_bone_index {
+                        let rest_local =
+                            bind_transforms[parent_index].inverse() * bind_transforms[i];
+                        let local =
+                            animated_transforms[parent_index].inverse() * animated_transforms[i];
+                        rest_local.inverse() * local
+                    } else {
+                        // Equivalent to above with parent transform set to identity.
+                        bind_transforms[i].inverse() * animated_transforms[i]
+                    };
+
+                    let (s, r, t) = basis_transform.to_scale_rotation_translation();
+                    insert_fcurve_point(&mut translation_points, bone.hash, t);
+                    insert_fcurve_point(&mut rotation_points, bone.hash, r);
+                    insert_fcurve_point(&mut scale_points, bone.hash, s);
+                }
+            }
+        }
+
+        FCurves {
+            translation: translation_points,
+            rotation: rotation_points,
+            scale: scale_points,
+        }
     }
 }
 
@@ -250,5 +367,347 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> TransformData {
         rotation_max,
         scale_min,
         scale_max,
+    }
+}
+
+fn sm4sh_to_blender(m: Mat4) -> Mat4 {
+    // Hard code these matrices for better precision.
+    // rotate x -90 degrees
+    let y_up_to_z_up = Mat4::from_cols_array_2d(&[
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, -1.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]);
+
+    // rotate z -90 degrees.
+    let x_major_to_y_major = Mat4::from_cols_array_2d(&[
+        [0.0, -1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]);
+
+    y_up_to_z_up * m * x_major_to_y_major
+}
+
+fn blender_transform(m: Mat4) -> Mat4 {
+    // In game, the bone's x-axis points from parent to child.
+    // In Blender, the bone's y-axis points from parent to child.
+    // https://en.wikipedia.org/wiki/Matrix_similarity
+    // Perform the transformation m in Sm4sh's basis and convert back to Blender.
+    let p = Mat4::from_cols_array_2d(&[
+        [0.0, -1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ])
+    .transpose();
+    p * m * p.inverse()
+}
+
+fn insert_fcurve_point<T: Copy>(points: &mut BTreeMap<u32, Vec<T>>, hash: u32, t: T) {
+    points
+        .entry(hash)
+        .and_modify(|f| {
+            f.push(t);
+        })
+        .or_insert(vec![t]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::nud::VbnBone;
+    use glam::quat;
+    use sm4sh_lib::vbn::BoneType;
+
+    macro_rules! assert_matrix_relative_eq {
+        ($a:expr, $b:expr) => {
+            assert!(
+                $a.to_cols_array()
+                    .iter()
+                    .zip($b.to_cols_array().iter())
+                    .all(|(a, b)| approx::relative_eq!(a, b, epsilon = 0.0001f32)),
+                "Matrices not equal to within 0.0001.\nleft = {:?}\nright = {:?}",
+                $a,
+                $b
+            )
+        };
+    }
+
+    #[test]
+    fn model_space_transforms_empty() {
+        let animation = Animation {
+            frame_count: 1,
+            nodes: Vec::new(),
+        };
+
+        assert!(animation
+            .model_space_transforms(&VbnSkeleton { bones: Vec::new() }, 0.0)
+            .is_empty());
+    }
+
+    #[test]
+    fn model_space_transforms() {
+        let animation = Animation {
+            frame_count: 1,
+            nodes: vec![
+                AnimationNode {
+                    translation_keyframes: vec![Some(vec3(1.0, 2.0, 3.0))],
+                    rotation_keyframes: vec![Some(quat(0.0, 0.0, 0.0, 1.0))],
+                    scale_keyframes: vec![Some(vec3(1.0, 1.0, 1.0))],
+                    hash: 1,
+                },
+                AnimationNode {
+                    translation_keyframes: vec![Some(vec3(1.0, 2.0, 3.0))],
+                    rotation_keyframes: vec![Some(quat(0.0, 0.0, 0.0, 1.0))],
+                    scale_keyframes: vec![Some(vec3(1.0, 1.0, 1.0))],
+                    hash: 2,
+                },
+            ],
+        };
+
+        let skeleton = VbnSkeleton {
+            bones: vec![
+                VbnBone {
+                    name: "a".to_string(),
+                    hash: 1,
+                    parent_bone_index: None,
+                    bone_type: BoneType::Normal,
+                    translation: Vec3::ZERO,
+                    rotation: Vec3::ZERO,
+                    scale: Vec3::ONE,
+                },
+                VbnBone {
+                    name: "b".to_string(),
+                    hash: 2,
+                    parent_bone_index: Some(0),
+                    bone_type: BoneType::Normal,
+                    translation: Vec3::ZERO,
+                    rotation: Vec3::ZERO,
+                    scale: Vec3::ONE,
+                },
+            ],
+        };
+
+        let transforms = animation.model_space_transforms(&skeleton, 0.0);
+        assert_eq!(2, transforms.len());
+        assert_matrix_relative_eq!(
+            Mat4::from_cols_array_2d(&[
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [1.0, 2.0, 3.0, 1.0],
+            ]),
+            transforms[0]
+        );
+        assert_matrix_relative_eq!(
+            Mat4::from_cols_array_2d(&[
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [2.0, 4.0, 6.0, 1.0],
+            ]),
+            transforms[1]
+        );
+    }
+
+    #[test]
+    fn local_space_transforms() {
+        let animation = Animation {
+            frame_count: 1,
+            nodes: vec![
+                AnimationNode {
+                    translation_keyframes: vec![Some(vec3(1.0, 2.0, 3.0))],
+                    rotation_keyframes: vec![Some(quat(0.0, 0.0, 0.0, 1.0))],
+                    scale_keyframes: vec![Some(vec3(1.0, 1.0, 1.0))],
+                    hash: 1,
+                },
+                AnimationNode {
+                    translation_keyframes: vec![Some(vec3(10.0, 20.0, 30.0))],
+                    rotation_keyframes: vec![Some(quat(0.0, 0.0, 0.0, 1.0))],
+                    scale_keyframes: vec![Some(vec3(1.0, 1.0, 1.0))],
+                    hash: 2,
+                },
+            ],
+        };
+
+        let skeleton = VbnSkeleton {
+            bones: vec![
+                VbnBone {
+                    name: "a".to_string(),
+                    hash: 1,
+                    parent_bone_index: None,
+                    bone_type: BoneType::Normal,
+                    translation: Vec3::ZERO,
+                    rotation: Vec3::ZERO,
+                    scale: Vec3::ONE,
+                },
+                VbnBone {
+                    name: "b".to_string(),
+                    hash: 2,
+                    parent_bone_index: Some(0),
+                    bone_type: BoneType::Normal,
+                    translation: Vec3::ZERO,
+                    rotation: Vec3::ZERO,
+                    scale: Vec3::ONE,
+                },
+            ],
+        };
+
+        let transforms = animation.local_space_transforms(&skeleton, 0.0);
+        assert_eq!(2, transforms.len());
+        assert_matrix_relative_eq!(
+            Mat4::from_cols_array_2d(&[
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [1.0, 2.0, 3.0, 1.0],
+            ]),
+            transforms[0]
+        );
+        assert_matrix_relative_eq!(
+            Mat4::from_cols_array_2d(&[
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [10.0, 20.0, 30.0, 1.0],
+            ]),
+            transforms[1]
+        );
+    }
+
+    #[test]
+    fn fcurves_sm4sh() {
+        let animation = Animation {
+            frame_count: 1,
+            nodes: vec![
+                AnimationNode {
+                    translation_keyframes: vec![Some(vec3(1.0, 2.0, 3.0))],
+                    rotation_keyframes: vec![Some(quat(1.0, 0.0, 0.0, 0.0))],
+                    scale_keyframes: vec![Some(vec3(1.0, 1.0, 1.0))],
+                    hash: 1,
+                },
+                AnimationNode {
+                    translation_keyframes: vec![Some(vec3(10.0, 20.0, 30.0))],
+                    rotation_keyframes: vec![Some(quat(0.0, 1.0, 0.0, 0.0))],
+                    scale_keyframes: vec![Some(vec3(1.0, 1.0, 1.0))],
+                    hash: 2,
+                },
+            ],
+        };
+
+        let skeleton = VbnSkeleton {
+            bones: vec![
+                VbnBone {
+                    name: "a".to_string(),
+                    hash: 1,
+                    parent_bone_index: None,
+                    bone_type: BoneType::Normal,
+                    translation: Vec3::ZERO,
+                    rotation: Vec3::ZERO,
+                    scale: Vec3::ONE,
+                },
+                VbnBone {
+                    name: "b".to_string(),
+                    hash: 2,
+                    parent_bone_index: Some(0),
+                    bone_type: BoneType::Normal,
+                    translation: Vec3::ZERO,
+                    rotation: Vec3::ZERO,
+                    scale: Vec3::ONE,
+                },
+            ],
+        };
+
+        let fcurves = animation.fcurves(&skeleton, false);
+        assert_eq!(
+            FCurves {
+                translation: [
+                    (1, vec![vec3(1.0, 2.0, 3.0)]),
+                    (2, vec![vec3(10.0, 20.0, 30.0)])
+                ]
+                .into(),
+                rotation: [
+                    (1, vec![quat(1.0, 0.0, 0.0, 0.0)]),
+                    (2, vec![quat(0.0, 1.0, 0.0, 0.0)])
+                ]
+                .into(),
+                scale: [
+                    (1, vec![vec3(1.0, 1.0, 1.0)]),
+                    (2, vec![vec3(1.0, 1.0, 1.0)])
+                ]
+                .into()
+            },
+            fcurves
+        );
+    }
+
+    #[test]
+    fn fcurves_blender() {
+        let animation = Animation {
+            frame_count: 1,
+            nodes: vec![
+                AnimationNode {
+                    translation_keyframes: vec![Some(vec3(1.0, 2.0, 3.0))].into(),
+                    rotation_keyframes: vec![Some(quat(1.0, 0.0, 0.0, 0.0))].into(),
+                    scale_keyframes: vec![Some(vec3(1.0, 1.0, 1.0))].into(),
+                    hash: 1,
+                },
+                AnimationNode {
+                    translation_keyframes: vec![Some(vec3(10.0, 20.0, 30.0))].into(),
+                    rotation_keyframes: vec![Some(quat(0.0, 1.0, 0.0, 0.0))].into(),
+                    scale_keyframes: vec![Some(vec3(1.0, 1.0, 1.0))].into(),
+                    hash: 2,
+                },
+            ],
+        };
+
+        let skeleton = VbnSkeleton {
+            bones: vec![
+                VbnBone {
+                    name: "a".to_string(),
+                    hash: 1,
+                    parent_bone_index: None,
+                    bone_type: BoneType::Normal,
+                    translation: Vec3::ZERO,
+                    rotation: Vec3::ZERO,
+                    scale: Vec3::ONE,
+                },
+                VbnBone {
+                    name: "b".to_string(),
+                    hash: 2,
+                    parent_bone_index: Some(0),
+                    bone_type: BoneType::Normal,
+                    translation: Vec3::ZERO,
+                    rotation: Vec3::ZERO,
+                    scale: Vec3::ONE,
+                },
+            ],
+        };
+
+        let fcurves = animation.fcurves(&skeleton, true);
+        assert_eq!(
+            FCurves {
+                translation: [
+                    (1, vec![vec3(-2.0, 1.0, 3.0)]),
+                    (2, vec![vec3(-20.0, 10.0, 30.0)])
+                ]
+                .into(),
+                rotation: [
+                    (1, vec![quat(0.0, 1.0, 0.0, 0.0)]),
+                    (2, vec![quat(1.0, 0.0, 0.0, 0.0)])
+                ]
+                .into(),
+                scale: [
+                    (1, vec![vec3(1.0, 1.0, 1.0)]),
+                    (2, vec![vec3(1.0, 1.0, 1.0)])
+                ]
+                .into()
+            },
+            fcurves
+        );
     }
 }

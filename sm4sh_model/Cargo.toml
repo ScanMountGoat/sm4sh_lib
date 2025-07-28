@@ -10,6 +10,7 @@ bilge.workspace = true
 half.workspace = true
 image_dds = { workspace = true, default-features = false, features = ["ddsfile"] }
 glam.workspace = true
+approx.workspace = true
 
 [dev-dependencies]
 hexlit = "0.5.5"

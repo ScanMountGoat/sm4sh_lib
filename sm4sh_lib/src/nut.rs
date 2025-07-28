@@ -277,7 +277,7 @@ impl From<image_dds::ImageFormat> for NutFormat {
     }
 }
 
-fn swap_red_blue_bgr5a1(data: &mut Vec<u8>) {
+fn swap_red_blue_bgr5a1(data: &mut [u8]) {
     // TODO: Move this logic to image_dds?
     data.chunks_exact_mut(2).for_each(|c| {
         // Most significant bit -> GGGBBBBBARRRRRGG -> least significant bit.
