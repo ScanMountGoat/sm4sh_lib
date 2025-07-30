@@ -10,7 +10,7 @@ pub enum Mta {
 }
 
 #[binread]
-#[derive(Debug, Xc3Write)]
+#[derive(Debug, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"MTA4"))]
 #[xc3(magic(b"MTA4"))]
 pub struct Mta4 {
@@ -36,14 +36,14 @@ pub struct Mta4 {
     pub unks: [u32; 4],
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct MatEntryOffset {
     #[br(parse_with = FilePtr32::parse)]
     #[xc3(offset(u32), align(32))]
     pub entry: MatEntry,
 }
 
-#[derive(Debug, BinRead, Xc3Write)]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 pub struct MatEntry {
     #[br(parse_with = parse_string_ptr32)]
     #[xc3(offset(u32), align(4))]
@@ -75,14 +75,14 @@ pub struct MatEntry {
 }
 
 // TODO: make this generic since the alignment is always 32
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct MatDataOffset {
     #[br(parse_with = FilePtr32::parse)]
     #[xc3(offset(u32), align(32))]
     pub data: MatData,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct MatData {
     #[br(parse_with = parse_string_ptr32)]
     #[xc3(offset(u32), align(16))]
@@ -100,21 +100,21 @@ pub struct MatData {
     pub data: Vec<MatDataValue>,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(import_raw(value_count: u32))]
 pub struct MatDataValue {
     #[br(count = value_count)]
     pub values: Vec<f32>,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct VisEntryOffset {
     #[br(parse_with = FilePtr32::parse)]
     #[xc3(offset(u32), align(32))]
     pub entry: VisEntry,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct VisEntry {
     #[br(parse_with = parse_string_ptr32)]
     #[xc3(offset(u32), align(32))]
@@ -127,7 +127,7 @@ pub struct VisEntry {
     pub data: VisEntryData,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct VisEntryData {
     pub frame_count: u32,
     pub unk1: u16,
@@ -139,14 +139,14 @@ pub struct VisEntryData {
     pub keyframes: Vec<VisKeyFrame>,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct VisKeyFrame {
     pub frame_num: u16,
     pub state: u8,
     pub unk1: u8,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct PatternEntryOffset {
     #[br(parse_with = FilePtr32::parse)]
     #[xc3(offset(u32), align(32))]
@@ -154,7 +154,7 @@ pub struct PatternEntryOffset {
 }
 
 #[binread]
-#[derive(Debug, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(stream = r)]
 pub struct PatternEntry {
     pub default_tex_id: u32,
@@ -179,7 +179,7 @@ pub struct PatternEntry {
     pub unks: Vec<u8>,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct PatternKeyFrame {
     pub tex_id: u32,
     pub frame_num: u32,

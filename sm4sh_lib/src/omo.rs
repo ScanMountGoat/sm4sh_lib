@@ -6,7 +6,7 @@ use crate::xc3_write_binwrite_impl;
 
 // TODO: Better type and variable names.
 #[binread]
-#[derive(Debug, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(magic(b"OMO "))]
 #[xc3(magic(b"OMO "))]
 pub struct Omo {
@@ -37,7 +37,7 @@ pub struct Omo {
     pub frames: Vec<Frame>,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(import_raw(frame_size_bytes: u16))]
 pub struct Frame {
     /// Coefficients for linear interpolation for [OmoNode] values.
@@ -45,7 +45,7 @@ pub struct Frame {
     pub keys: Vec<u16>,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct OmoNode {
     pub flags: OmoFlags,
     pub hash: u32,
@@ -71,7 +71,7 @@ pub struct OmoFlags {
 
 // TODO: interpolate -> Linear?
 #[bitsize(8)]
-#[derive(TryFromBits, Debug, PartialEq)]
+#[derive(TryFromBits, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ScaleType {
     Constant = 0x20,
     Constant2 = 0x30,
@@ -79,7 +79,7 @@ pub enum ScaleType {
 }
 
 #[bitsize(4)]
-#[derive(TryFromBits, Debug, PartialEq)]
+#[derive(TryFromBits, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum RotationType {
     Interpolate = 0x5,
     FConst = 0x6,
@@ -88,7 +88,7 @@ pub enum RotationType {
 }
 
 #[bitsize(8)]
-#[derive(TryFromBits, Debug, PartialEq)]
+#[derive(TryFromBits, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PositionType {
     Frame = 0x04, // TODO: "keys"?
     Interpolate = 0x08,

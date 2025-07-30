@@ -17,7 +17,7 @@ use crate::{parse_opt_ptr32, parse_string_ptr32, xc3_write_binwrite_impl};
 // TODO: Better naming
 // TODO: binwrite + xc3write?
 #[binread]
-#[derive(Debug, Xc3Write)]
+#[derive(Debug, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"NDP3"))]
 #[xc3(magic(b"NDP3"))]
 pub struct Nud {
@@ -66,7 +66,7 @@ pub struct Nud {
     pub vertex_buffer1: Vec<u8>,
 }
 
-#[derive(Debug, BinRead, Xc3Write)]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(import_raw(strings_offset: u32))]
 pub struct MeshGroup {
     pub bounding_sphere: BoundingSphere,
@@ -95,7 +95,7 @@ pub enum BoneFlags {
 }
 
 /// The data for a single mesh draw call.
-#[derive(Debug, BinRead, Xc3Write)]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(import_raw(strings_offset: u32))]
 pub struct Mesh {
     pub vertex_indices_offset: u32,
@@ -199,13 +199,13 @@ pub enum UvType {
     Float32 = 1, // TODO: wangan midnight?
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct BoundingSphere {
     pub center: [f32; 3],
     pub radius: f32,
 }
 
-#[derive(Debug, BinRead, Xc3Write)]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(import_raw(strings_offset: u32))]
 pub struct Material {
     pub flags: MaterialFlags,
@@ -328,7 +328,7 @@ pub enum CullMode {
     Outside2 = 3,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct MaterialTexture {
     pub hash: u32, // TODO: matches nut gidx hash?
     pub unk1: [u16; 3],
@@ -395,7 +395,7 @@ pub enum WrapMode {
     ClampToEdge = 3,
 }
 
-#[derive(Debug, BinRead, Xc3Write)]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(import_raw(strings_offset: u32))]
 pub struct MaterialProperty {
     pub size: u32, // TODO:  size in bytes?

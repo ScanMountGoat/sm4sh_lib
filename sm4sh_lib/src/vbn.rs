@@ -2,7 +2,7 @@ use binrw::{BinRead, BinWrite, NullString};
 
 // TODO: Better naming
 // TODO: Find a better way to detect endianness.
-#[derive(Debug, BinRead, BinWrite)]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub enum Vbn {
     #[brw(magic(b" NBV"))]
     Le(#[brw(little)] VbnInner),
@@ -11,7 +11,7 @@ pub enum Vbn {
     Be(#[brw(big)] VbnInner),
 }
 
-#[derive(Debug, BinRead, BinWrite)]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct VbnInner {
     pub version: u32,
     pub total_bone_count: u32,
@@ -23,7 +23,7 @@ pub struct VbnInner {
     pub transforms: Vec<BoneTransform>,
 }
 
-#[derive(Debug, BinRead, BinWrite)]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct Bone {
     #[br(map = |x: NullString| x.to_string())]
     #[bw(map = |x| NullString::from(x.as_str()))]
@@ -34,7 +34,7 @@ pub struct Bone {
     pub bone_id: u32,           // TODO: hash?
 }
 
-#[derive(Debug, BinRead, BinWrite)]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct BoneTransform {
     pub translation: [f32; 3],
     pub rotation: [f32; 3], // TODO: xyz_euler?

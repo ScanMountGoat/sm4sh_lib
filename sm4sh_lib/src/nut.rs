@@ -5,14 +5,14 @@ use xc3_write::{Xc3Write, Xc3WriteOffsets};
 use crate::{parse_opt_ptr32, xc3_write_binwrite_impl};
 
 // TODO: Same inner type for all variants?
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub enum Nut {
     Ntwu(Ntwu),
     Ntp3(Ntp3),
 }
 
 // TODO: Identical to ntwu other than magic?
-#[derive(Debug, BinRead, Xc3Write)]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"NTP3"))]
 #[xc3(magic(b"NTP3"))]
 pub struct Ntp3 {
@@ -25,7 +25,7 @@ pub struct Ntp3 {
     pub textures: Vec<Texture>,
 }
 
-#[derive(Debug, BinRead, Xc3Write)]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"NTWU"))]
 #[xc3(magic(b"NTWU"))]
 pub struct Ntwu {
@@ -39,7 +39,7 @@ pub struct Ntwu {
 
 // TODO: Is caps2 like dds?
 #[binread]
-#[derive(Debug, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(stream = r)]
 #[xc3(base_offset)]
 pub struct Texture {
@@ -106,7 +106,7 @@ pub enum NutFormat {
     BC5Unorm = 22,
 }
 
-#[derive(Debug, BinRead, BinWrite)]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"GIDX"))]
 pub struct Gidx {
     pub unk1: u32,
@@ -114,7 +114,7 @@ pub struct Gidx {
     pub unk3: u32,
 }
 
-#[derive(Debug, BinRead, BinWrite)]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"eXt\x00"))]
 pub struct Ext {
     pub unk1: u32,
@@ -122,7 +122,7 @@ pub struct Ext {
     pub unk3: u32,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct GtxHeader {
     pub dim: u32,
     pub width: u32,
@@ -144,7 +144,7 @@ pub struct GtxHeader {
 }
 
 // TODO: Just use the wiiu_swizzle gx2 values directly?
-#[derive(Debug, BinRead, BinWrite, Clone, Copy)]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[brw(repr(u32))]
 pub enum SurfaceFormat {
     R5G5B5A1Unorm = 10,
@@ -157,7 +157,7 @@ pub enum SurfaceFormat {
 }
 
 // TODO: Just use the wiiu_swizzle gx2 values directly?
-#[derive(Debug, BinRead, BinWrite, Clone, Copy)]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[brw(repr(u32))]
 pub enum TileMode {
     D1TiledThin1 = 2,
