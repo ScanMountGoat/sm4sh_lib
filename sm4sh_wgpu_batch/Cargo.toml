@@ -9,7 +9,7 @@ sm4sh_lib = { path = "../sm4sh_lib" }
 sm4sh_model = { path = "../sm4sh_model" }
 futures = "0.3"
 wgpu.workspace = true
-log = "0.4.17"
+log.workspace = true
 simple_logger = "2.1.0"
 globwalk = "0.8.0"
 image = "0.25.1"

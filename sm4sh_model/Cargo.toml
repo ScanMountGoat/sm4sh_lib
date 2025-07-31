@@ -11,6 +11,8 @@ half.workspace = true
 image_dds = { workspace = true, default-features = false, features = ["ddsfile"] }
 glam.workspace = true
 approx.workspace = true
+log.workspace = true
+ordered-float.workspace = true
 
 [dev-dependencies]
 hexlit = "0.5.5"

@@ -9,7 +9,7 @@ encase = { version = "=0.11.0", features = ["glam"] }
 sm4sh_model = { path = "../sm4sh_model" }
 wgpu.workspace = true
 glam = { workspace = true, features = ["bytemuck"] }
-ordered-float = "5.0.0"
+ordered-float.workspace = true
 
 [build-dependencies]
 wgsl_to_wgpu = "0.15.0"
