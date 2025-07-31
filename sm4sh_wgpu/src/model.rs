@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use glam::{vec4, Mat4, UVec4, Vec4, Vec4Swizzles};
-use sm4sh_model::nud::{
+use sm4sh_model::{
     vertex::{Bones, Colors, Normals, Uvs},
     DstFactor, NudMesh, NudModel, SrcFactor, VbnSkeleton,
 };
@@ -135,7 +135,7 @@ pub fn load_model(
 
 fn create_mesh(
     device: &wgpu::Device,
-    m: &sm4sh_model::nud::NudMesh,
+    m: &sm4sh_model::NudMesh,
     hash_to_texture: &BTreeMap<u32, wgpu::TextureView>,
     default_texture: &wgpu::TextureView,
     output_format: wgpu::TextureFormat,
@@ -390,8 +390,8 @@ fn model_pipeline(
     mesh: &NudMesh,
 ) -> wgpu::RenderPipeline {
     let topology = match mesh.primitive_type {
-        sm4sh_model::nud::PrimitiveType::TriangleList => wgpu::PrimitiveTopology::TriangleList,
-        sm4sh_model::nud::PrimitiveType::TriangleStrip => wgpu::PrimitiveTopology::TriangleStrip,
+        sm4sh_model::PrimitiveType::TriangleList => wgpu::PrimitiveTopology::TriangleList,
+        sm4sh_model::PrimitiveType::TriangleStrip => wgpu::PrimitiveTopology::TriangleStrip,
     };
 
     // TODO: Add unit tests for returning state structs.
@@ -400,12 +400,12 @@ fn model_pipeline(
     let strip_index_format = topology.is_strip().then_some(wgpu::IndexFormat::Uint16);
 
     let cull_mode = mesh.material1.as_ref().and_then(|m| match m.cull_mode {
-        sm4sh_model::nud::CullMode::Disabled => None,
-        sm4sh_model::nud::CullMode::Outside => Some(wgpu::Face::Front),
-        sm4sh_model::nud::CullMode::Inside => Some(wgpu::Face::Back),
-        sm4sh_model::nud::CullMode::Disabled2 => None,
-        sm4sh_model::nud::CullMode::Inside2 => Some(wgpu::Face::Front),
-        sm4sh_model::nud::CullMode::Outside2 => Some(wgpu::Face::Back),
+        sm4sh_model::CullMode::Disabled => None,
+        sm4sh_model::CullMode::Outside => Some(wgpu::Face::Front),
+        sm4sh_model::CullMode::Inside => Some(wgpu::Face::Back),
+        sm4sh_model::CullMode::Disabled2 => None,
+        sm4sh_model::CullMode::Inside2 => Some(wgpu::Face::Front),
+        sm4sh_model::CullMode::Outside2 => Some(wgpu::Face::Back),
     });
 
     // TODO: alpha testing.
@@ -443,7 +443,7 @@ fn model_pipeline(
     })
 }
 
-fn blend_state(m: &sm4sh_model::nud::NudMaterial) -> wgpu::BlendState {
+fn blend_state(m: &sm4sh_model::NudMaterial) -> wgpu::BlendState {
     wgpu::BlendState {
         color: wgpu::BlendComponent {
             src_factor: match m.src_factor {

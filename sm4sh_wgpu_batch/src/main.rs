@@ -4,7 +4,7 @@ use futures::executor::block_on;
 use log::error;
 use rayon::prelude::*;
 use sm4sh_lib::{nud::Nud, nut::Nut, vbn::Vbn};
-use sm4sh_model::nud::NudModel;
+use sm4sh_model::NudModel;
 use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData, load_model};
 use wgpu::{
     DeviceDescriptor, Extent3d, PowerPreference, RequestAdapterOptions, TextureDescriptor,

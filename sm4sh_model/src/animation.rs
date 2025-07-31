@@ -11,7 +11,7 @@ use sm4sh_lib::{
     pack::Pack,
 };
 
-use crate::nud::VbnSkeleton;
+use crate::VbnSkeleton;
 
 /// Load animations from a `path` like `"main.pac"`.
 pub fn load_animations<P: AsRef<Path>>(path: P) -> BinResult<Vec<(String, Animation)>> {
@@ -437,7 +437,7 @@ fn insert_fcurve_point<T: Copy>(points: &mut BTreeMap<u32, Vec<T>>, hash: u32, t
 mod tests {
     use super::*;
 
-    use crate::nud::VbnBone;
+    use crate::VbnBone;
     use glam::quat;
     use sm4sh_lib::vbn::BoneType;
 

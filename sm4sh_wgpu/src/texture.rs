@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use sm4sh_model::nud::{ImageTexture, NutFormat};
+use sm4sh_model::{ImageTexture, NutFormat};
 use wgpu::util::DeviceExt;
 
 pub fn create_texture(

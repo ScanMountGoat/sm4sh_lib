@@ -4,7 +4,7 @@ use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
 use sm4sh_lib::{mta::Mta, nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
-use sm4sh_model::{animation::Animation, nud::NudModel};
+use sm4sh_model::{animation::Animation, NudModel};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

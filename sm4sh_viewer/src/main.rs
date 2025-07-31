@@ -1,15 +1,11 @@
-use std::{path::Path, time::Instant};
+use std::time::Instant;
 
 use anyhow::Context;
 use clap::Parser;
 use futures::executor::block_on;
 use glam::{vec3, Vec3};
 use log::{error, info};
-use sm4sh_lib::{nud::Nud, nut::Nut, vbn::Vbn};
-use sm4sh_model::{
-    animation::{load_animations, Animation},
-    nud::NudModel,
-};
+use sm4sh_model::animation::{load_animations, Animation};
 use sm4sh_wgpu::{load_model, CameraData, Model, Renderer, SharedData};
 use winit::{
     dpi::PhysicalPosition,
@@ -103,11 +99,7 @@ impl<'a> State<'a> {
 
         let shared_data = SharedData::new(&device);
 
-        let path = Path::new(&cli.file);
-        let nud = Nud::from_file(path)?;
-        let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
-        let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
-        let nud_model = NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref())?;
+        let nud_model = sm4sh_model::load_model(&cli.file)?;
         let model = load_model(&device, &queue, &nud_model, config.format, &shared_data);
 
         let animations = cli
