@@ -272,15 +272,13 @@ fn set_normals(normals: &Normals, vertices: &mut [crate::shader::model::VertexIn
     }
 }
 
-fn set_uvs(uvs: &[Uvs], vertices: &mut [crate::shader::model::VertexInput0]) {
-    if let Some(uvs) = uvs.first() {
-        match uvs {
-            Uvs::Float16(items) => set_attribute(vertices, items, |v, i| {
-                v.uv0 = vec4(i.u.to_f32(), i.v.to_f32(), 0.0, 0.0)
-            }),
-            Uvs::Float32(items) => {
-                set_attribute(vertices, items, |v, i| v.uv0 = vec4(i.u, i.v, 0.0, 0.0))
-            }
+fn set_uvs(uvs: &Uvs, vertices: &mut [crate::shader::model::VertexInput0]) {
+    match uvs {
+        Uvs::Float16(items) => set_attribute(vertices, &items[0], |v, i| {
+            v.uv0 = vec4(i.u.to_f32(), i.v.to_f32(), 0.0, 0.0)
+        }),
+        Uvs::Float32(items) => {
+            set_attribute(vertices, &items[0], |v, i| v.uv0 = vec4(i.u, i.v, 0.0, 0.0))
         }
     }
 }

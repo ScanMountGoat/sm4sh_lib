@@ -15,8 +15,7 @@ pub struct Vertices {
     pub normals: Normals,
     pub bones: Bones,
     pub colors: Colors,
-    // TODO: Move the vec inside the enum to guarantee the same type?
-    pub uvs: Vec<Uvs>,
+    pub uvs: Uvs,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -183,8 +182,8 @@ pub struct BonesByte {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Uvs {
-    Float16(Vec<UvsFloat16>),
-    Float32(Vec<UvsFloat32>),
+    Float16(Vec<Vec<UvFloat16>>),
+    Float32(Vec<Vec<UvFloat32>>),
 }
 
 impl Uvs {
@@ -195,20 +194,29 @@ impl Uvs {
         }
     }
 
-    pub fn uvs(&self) -> Vec<Vec2> {
+    fn len(&self) -> usize {
+        match self {
+            Uvs::Float16(items) => items.len(),
+            Uvs::Float32(items) => items.len(),
+        }
+    }
+
+    pub fn uvs(&self) -> Vec<Vec<Vec2>> {
         match self {
             Uvs::Float16(items) => items
                 .iter()
-                .map(|i| vec2(i.u.to_f32(), i.v.to_f32()))
+                .map(|i| i.iter().map(|i| vec2(i.u.to_f32(), i.v.to_f32())).collect())
                 .collect(),
-
-            Uvs::Float32(items) => items.iter().map(|i| vec2(i.u, i.v)).collect(),
+            Uvs::Float32(items) => items
+                .iter()
+                .map(|i| i.iter().map(|i| vec2(i.u, i.v)).collect())
+                .collect(),
         }
     }
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
-pub struct UvsFloat16 {
+pub struct UvFloat16 {
     #[br(map = f16::from_bits)]
     #[bw(map = |x| x.to_bits())]
     pub u: f16,
@@ -219,7 +227,7 @@ pub struct UvsFloat16 {
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
-pub struct UvsFloat32 {
+pub struct UvFloat32 {
     pub u: f32,
     pub v: f32,
 }
@@ -300,12 +308,7 @@ pub fn read_vertices(
         let colors = read_colors(buffer0, uv_color_flags, offset0, stride0, count)?;
         offset0 += color_size(uv_color_flags);
 
-        let mut uvs = Vec::new();
-        for _ in 0..uv_color_flags.uv_count().value() {
-            let uv = read_uvs(buffer0, uv_color_flags, offset0, stride0, count)?;
-            offset0 += uvs_size(uv_color_flags);
-            uvs.push(uv);
-        }
+        let uvs = read_uvs(buffer0, uv_color_flags, &mut offset0, stride0, count)?;
 
         // buffer1: positions, vectors, bones,
         let mut offset1 = 0;
@@ -342,12 +345,7 @@ pub fn read_vertices(
         let colors = read_colors(buffer0, uv_color_flags, offset0, stride0, count)?;
         offset0 += color_size(uv_color_flags);
 
-        let mut uvs = Vec::new();
-        for _ in 0..uv_color_flags.uv_count().value() {
-            let uv = read_uvs(buffer0, uv_color_flags, offset0, stride0, count)?;
-            offset0 += uvs_size(uv_color_flags);
-            uvs.push(uv);
-        }
+        let uvs = read_uvs(buffer0, uv_color_flags, &mut offset0, stride0, count)?;
 
         Ok(Vertices {
             positions,
@@ -366,7 +364,7 @@ pub fn write_vertices(
 ) -> BinResult<(VertexFlags, UvColorFlags)> {
     let vertex_flags = VertexFlags::new(vertices.normals.normal_type(), vertices.bones.bone_type());
     let uv_color_flags = UvColorFlags::new(
-        vertices.uvs[0].uv_type(), // TODO: what type if no uvs?
+        vertices.uvs.uv_type(),
         vertices.colors.color_type(),
         u4::new(vertices.uvs.len().try_into().unwrap()),
     );
@@ -381,10 +379,7 @@ pub fn write_vertices(
         write_colors(buffer0, &vertices.colors, offset0, stride0)?;
         offset0 += color_size(uv_color_flags);
 
-        for uv in &vertices.uvs {
-            write_uvs(buffer0, uv, offset0, stride0)?;
-            offset0 += uvs_size(uv_color_flags);
-        }
+        write_uvs(buffer0, &vertices.uvs, &mut offset0, stride0)?;
 
         // buffer1: positions, vectors, bones,
         let mut offset1 = buffer1.position();
@@ -413,10 +408,7 @@ pub fn write_vertices(
         write_colors(buffer0, &vertices.colors, offset0, stride0)?;
         offset0 += color_size(uv_color_flags);
 
-        for uv in &vertices.uvs {
-            write_uvs(buffer0, uv, offset0, stride0)?;
-            offset0 += uvs_size(uv_color_flags);
-        }
+        write_uvs(buffer0, &vertices.uvs, &mut offset0, stride0)?;
     }
 
     Ok((vertex_flags, uv_color_flags))
@@ -522,21 +514,55 @@ fn write_colors(
 fn read_uvs(
     buffer: &[u8],
     flags: UvColorFlags,
-    offset: u64,
+    offset: &mut u64,
     stride: u64,
     count: u16,
 ) -> BinResult<Uvs> {
     match flags.uvs() {
-        UvType::Float16 => read_elements(buffer, stride, offset, count).map(Uvs::Float16),
-        UvType::Float32 => read_elements(buffer, stride, offset, count).map(Uvs::Float32),
+        UvType::Float16 => {
+            let mut layers = Vec::new();
+            for _ in 0..flags.uv_count().value() {
+                let layer = read_elements(buffer, stride, *offset, count)?;
+                *offset += uvs_size(flags.uvs());
+
+                layers.push(layer);
+            }
+            Ok(Uvs::Float16(layers))
+        }
+        UvType::Float32 => {
+            let mut layers = Vec::new();
+            for _ in 0..flags.uv_count().value() {
+                let layer = read_elements(buffer, stride, *offset, count)?;
+                *offset += uvs_size(flags.uvs());
+
+                layers.push(layer);
+            }
+            Ok(Uvs::Float32(layers))
+        }
     }
 }
 
-fn write_uvs(buffer: &mut Cursor<Vec<u8>>, uvs: &Uvs, offset: u64, stride: u64) -> BinResult<()> {
+fn write_uvs(
+    buffer: &mut Cursor<Vec<u8>>,
+    uvs: &Uvs,
+    offset: &mut u64,
+    stride: u64,
+) -> BinResult<()> {
     match uvs {
-        Uvs::Float16(elements) => write_elements(buffer, elements, stride, offset),
-        Uvs::Float32(elements) => write_elements(buffer, elements, stride, offset),
+        Uvs::Float16(elements) => {
+            for layer in elements {
+                write_elements(buffer, layer, stride, *offset)?;
+                *offset += uvs_size(uvs.uv_type());
+            }
+        }
+        Uvs::Float32(elements) => {
+            for layer in elements {
+                write_elements(buffer, layer, stride, *offset)?;
+                *offset += uvs_size(uvs.uv_type());
+            }
+        }
     }
+    Ok(())
 }
 
 fn read_positions(buffer: &[u8], offset: u64, stride: u64, count: u16) -> BinResult<Vec<[f32; 3]>> {
@@ -627,11 +653,11 @@ fn bones_size(flags: VertexFlags) -> u64 {
 }
 
 fn uvs_color_size(flags: UvColorFlags) -> u64 {
-    uvs_size(flags) * flags.uv_count().value() as u64 + color_size(flags)
+    uvs_size(flags.uvs()) * flags.uv_count().value() as u64 + color_size(flags)
 }
 
-fn uvs_size(flags: UvColorFlags) -> u64 {
-    match flags.uvs() {
+fn uvs_size(flags: UvType) -> u64 {
+    match flags {
         UvType::Float16 => 2 * 2,
         UvType::Float32 => 2 * 4,
     }
@@ -757,28 +783,28 @@ mod tests {
                         rgba: [127, 127, 127, 127]
                     }
                 ]),
-                uvs: vec![
-                    Uvs::Float16(vec![
-                        UvsFloat16 {
+                uvs: Uvs::Float16(vec![
+                    vec![
+                        UvFloat16 {
                             u: f16::from_f32(0.68359375),
                             v: f16::from_f32(0.8857422)
                         },
-                        UvsFloat16 {
+                        UvFloat16 {
                             u: f16::from_f32(0.80859375),
                             v: f16::from_f32(0.8173828)
                         }
-                    ]),
-                    Uvs::Float16(vec![
-                        UvsFloat16 {
+                    ],
+                    vec![
+                        UvFloat16 {
                             u: f16::from_f32(0.59277344),
                             v: f16::from_f32(0.8339844),
                         },
-                        UvsFloat16 {
+                        UvFloat16 {
                             u: f16::from_f32(0.6928711),
                             v: f16::from_f32(0.7651367)
                         }
-                    ])
-                ]
+                    ]
+                ])
             },
             vertices
         );
