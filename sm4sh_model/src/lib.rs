@@ -63,7 +63,6 @@ pub struct NudMesh {
     // Assume meshes have unique vertex data.
     pub vertices: Vertices,
     pub vertex_indices: Vec<u16>,
-    pub unk3: bool,
     pub primitive_type: PrimitiveType,
     pub material1: Option<NudMaterial>,
     pub material2: Option<NudMaterial>,
@@ -162,7 +161,6 @@ impl NudModel {
                 meshes.push(NudMesh {
                     vertices,
                     vertex_indices,
-                    unk3: mesh.vertex_index_flags.unk3(),
                     primitive_type,
                     material1: mesh.material1.as_ref().map(nud_material),
                     material2: mesh.material2.as_ref().map(nud_material),
@@ -257,7 +255,7 @@ impl NudModel {
                     vertex_index_flags: VertexIndexFlags::new(
                         false,
                         false,
-                        mesh.unk3,
+                        vertex_flags.bones() != sm4sh_lib::nud::BoneType::None,
                         0u8.into(),
                         mesh.primitive_type == PrimitiveType::TriangleList,
                         false,

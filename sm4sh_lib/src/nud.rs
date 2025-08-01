@@ -149,8 +149,9 @@ pub struct VertexFlags {
 pub struct VertexIndexFlags {
     pub unk1: bool, // false
     pub unk2: bool, // false
-    pub unk3: bool, // TODO: affects vertex attributes?
-    pub unk4: u11,  // 0
+    /// `true` when not using [BoneType::None].
+    pub has_bone_indices_weights: bool,
+    pub unk4: u11, // 0
     pub is_triangle_list: bool,
     pub unk5: bool, // false
 }
