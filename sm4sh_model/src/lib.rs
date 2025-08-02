@@ -143,7 +143,6 @@ impl NudModel {
                     &nud.vertex_buffer0[mesh.vertex_buffer0_offset as usize..],
                     &nud.vertex_buffer1[mesh.vertex_buffer1_offset as usize..],
                     mesh.vertex_flags,
-                    mesh.uv_color_flags,
                     mesh.vertex_count,
                 )?;
 
@@ -213,8 +212,7 @@ impl NudModel {
                 let vertex_buffer1_offset = buffer1.position() as u32;
                 let vertex_indices_offset = index_buffer.position() as u32;
 
-                let (vertex_flags, uv_color_flags) =
-                    write_vertices(&mesh.vertices, &mut buffer0, &mut buffer1)?;
+                let vertex_flags = write_vertices(&mesh.vertices, &mut buffer0, &mut buffer1)?;
                 // TODO: Why is this not always aligned?
                 align(&mut buffer0, 16, 0u8)?;
                 align(&mut buffer1, 16, 0u8)?;
@@ -222,7 +220,7 @@ impl NudModel {
                 write_vertex_indices(&mut index_buffer, &mesh.vertex_indices)?;
 
                 // TODO: Is there a nicer way of setting offsets to 0?
-                let stride0 = buffer0_stride(vertex_flags, uv_color_flags);
+                let stride0 = buffer0_stride(vertex_flags);
                 let stride1 = buffer1_stride(vertex_flags);
 
                 let vertex_buffer0_offset = if stride0 == 0 {
@@ -246,7 +244,6 @@ impl NudModel {
                     vertex_buffer1_offset,
                     vertex_count: mesh.vertices.positions.len() as u16,
                     vertex_flags,
-                    uv_color_flags,
                     material1: mesh.material1.as_ref().map(material),
                     material2: mesh.material2.as_ref().map(material),
                     material3: mesh.material3.as_ref().map(material),

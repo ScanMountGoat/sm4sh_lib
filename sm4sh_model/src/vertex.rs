@@ -5,7 +5,7 @@ use binrw::{BinRead, BinReaderExt, BinResult, BinWrite, BinWriterExt, VecArgs};
 use glam::{vec2, Vec2, Vec3, Vec4};
 use half::f16;
 
-use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvColorFlags, UvType, VertexFlags};
+use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvType, VertexFlags};
 
 // TODO: Is it possible to rebuild the vertex buffers from this?
 // TODO: Find a simpler representation after looking at more game data like pokken.
@@ -265,22 +265,21 @@ pub fn write_vertex_indices(buffer: &mut Cursor<Vec<u8>>, indices: &[u16]) -> Bi
 pub fn read_vertices(
     buffer0: &[u8],
     buffer1: &[u8],
-    vertex_flags: VertexFlags,
-    uv_color_flags: UvColorFlags,
+    flags: VertexFlags,
     count: u16,
 ) -> BinResult<Vertices> {
-    let stride0 = buffer0_stride(vertex_flags, uv_color_flags);
-    let stride1 = buffer1_stride(vertex_flags);
+    let stride0 = buffer0_stride(flags);
+    let stride1 = buffer1_stride(flags);
 
     // TODO: Is it better to do flags -> vec<Attribute> instead?
-    if vertex_flags.bones() != BoneType::None {
+    if flags.bones() != BoneType::None {
         // buffer0: colors, uvs
         let mut offset0 = 0;
 
-        let colors = read_colors(buffer0, uv_color_flags, offset0, stride0, count)?;
-        offset0 += color_size(uv_color_flags);
+        let colors = read_colors(buffer0, flags, offset0, stride0, count)?;
+        offset0 += color_size(flags);
 
-        let uvs = read_uvs(buffer0, uv_color_flags, &mut offset0, stride0, count)?;
+        let uvs = read_uvs(buffer0, flags, &mut offset0, stride0, count)?;
 
         // buffer1: positions, vectors, bones,
         let mut offset1 = 0;
@@ -288,11 +287,11 @@ pub fn read_vertices(
         let positions = read_positions(buffer1, offset1, stride1, count)?;
         offset1 += 12;
 
-        let normals = read_normals(buffer1, vertex_flags, offset1, stride1, count)?;
-        offset1 += normals_size(vertex_flags);
+        let normals = read_normals(buffer1, flags, offset1, stride1, count)?;
+        offset1 += normals_size(flags);
 
-        let bones = read_bones(buffer1, vertex_flags, offset1, stride1, count)?;
-        offset1 += bones_size(vertex_flags);
+        let bones = read_bones(buffer1, flags, offset1, stride1, count)?;
+        offset1 += bones_size(flags);
 
         Ok(Vertices {
             positions,
@@ -308,16 +307,16 @@ pub fn read_vertices(
         let positions = read_positions(buffer0, offset0, stride0, count)?;
         offset0 += 12;
 
-        let normals = read_normals(buffer0, vertex_flags, offset0, stride0, count)?;
-        offset0 += normals_size(vertex_flags);
+        let normals = read_normals(buffer0, flags, offset0, stride0, count)?;
+        offset0 += normals_size(flags);
 
-        let bones = read_bones(buffer0, vertex_flags, offset0, stride0, count)?;
-        offset0 += bones_size(vertex_flags);
+        let bones = read_bones(buffer0, flags, offset0, stride0, count)?;
+        offset0 += bones_size(flags);
 
-        let colors = read_colors(buffer0, uv_color_flags, offset0, stride0, count)?;
-        offset0 += color_size(uv_color_flags);
+        let colors = read_colors(buffer0, flags, offset0, stride0, count)?;
+        offset0 += color_size(flags);
 
-        let uvs = read_uvs(buffer0, uv_color_flags, &mut offset0, stride0, count)?;
+        let uvs = read_uvs(buffer0, flags, &mut offset0, stride0, count)?;
 
         Ok(Vertices {
             positions,
@@ -333,23 +332,24 @@ pub fn write_vertices(
     vertices: &Vertices,
     buffer0: &mut Cursor<Vec<u8>>,
     buffer1: &mut Cursor<Vec<u8>>,
-) -> BinResult<(VertexFlags, UvColorFlags)> {
-    let vertex_flags = VertexFlags::new(vertices.normals.normal_type(), vertices.bone_type());
-    let uv_color_flags = UvColorFlags::new(
+) -> BinResult<VertexFlags> {
+    let flags = VertexFlags::new(
         vertices.uvs.uv_type(),
         vertices.colors.color_type(),
         u4::new(vertices.uvs.len().try_into().unwrap()),
+        vertices.normals.normal_type(),
+        vertices.bone_type(),
     );
 
-    let stride0 = buffer0_stride(vertex_flags, uv_color_flags);
-    let stride1 = buffer1_stride(vertex_flags);
+    let stride0 = buffer0_stride(flags);
+    let stride1 = buffer1_stride(flags);
 
     if vertices.bones.is_some() {
         // buffer0: colors, uvs
         let mut offset0 = buffer0.position();
 
         write_colors(buffer0, &vertices.colors, offset0, stride0)?;
-        offset0 += color_size(uv_color_flags);
+        offset0 += color_size(flags);
 
         write_uvs(buffer0, &vertices.uvs, &mut offset0, stride0)?;
 
@@ -360,11 +360,11 @@ pub fn write_vertices(
         offset1 += 12;
 
         write_normals(buffer1, &vertices.normals, offset1, stride1)?;
-        offset1 += normals_size(vertex_flags);
+        offset1 += normals_size(flags);
 
         if let Some(bones) = &vertices.bones {
             write_bones(buffer1, bones, offset1, stride1)?;
-            offset1 += bones_size(vertex_flags);
+            offset1 += bones_size(flags);
         }
     } else {
         // buffer0: positions, vectors, bones, colors, uvs
@@ -374,21 +374,21 @@ pub fn write_vertices(
         offset0 += 12;
 
         write_normals(buffer0, &vertices.normals, offset0, stride0)?;
-        offset0 += normals_size(vertex_flags);
+        offset0 += normals_size(flags);
 
         if let Some(bones) = &vertices.bones {
             // TODO: Is this code ever reached?
             write_bones(buffer0, bones, offset0, stride0)?;
-            offset0 += bones_size(vertex_flags);
+            offset0 += bones_size(flags);
         }
 
         write_colors(buffer0, &vertices.colors, offset0, stride0)?;
-        offset0 += color_size(uv_color_flags);
+        offset0 += color_size(flags);
 
         write_uvs(buffer0, &vertices.uvs, &mut offset0, stride0)?;
     }
 
-    Ok((vertex_flags, uv_color_flags))
+    Ok(flags)
 }
 
 fn read_bones(
@@ -531,7 +531,7 @@ fn write_normals(
 
 fn read_colors(
     buffer: &[u8],
-    flags: UvColorFlags,
+    flags: VertexFlags,
     offset: u64,
     stride: u64,
     count: u16,
@@ -558,7 +558,7 @@ fn write_colors(
 
 fn read_uvs(
     buffer: &[u8],
-    flags: UvColorFlags,
+    flags: VertexFlags,
     offset: &mut u64,
     stride: u64,
     count: u16,
@@ -661,11 +661,11 @@ where
 }
 
 // TODO: Is it better to just create attributes instead?
-pub fn buffer0_stride(vertex: VertexFlags, uv_color: UvColorFlags) -> u64 {
-    if vertex.bones() != BoneType::None {
-        uvs_color_size(uv_color)
+pub fn buffer0_stride(flags: VertexFlags) -> u64 {
+    if flags.bones() != BoneType::None {
+        uvs_color_size(flags)
     } else {
-        vertex_size(vertex) + uvs_color_size(uv_color)
+        vertex_size(flags) + uvs_color_size(flags)
     }
 }
 
@@ -701,7 +701,7 @@ fn bones_size(flags: VertexFlags) -> u64 {
     }
 }
 
-fn uvs_color_size(flags: UvColorFlags) -> u64 {
+fn uvs_color_size(flags: VertexFlags) -> u64 {
     uvs_size(flags.uvs()) * flags.uv_count().value() as u64 + color_size(flags)
 }
 
@@ -712,7 +712,7 @@ fn uvs_size(flags: UvType) -> u64 {
     }
 }
 
-fn color_size(flags: UvColorFlags) -> u64 {
+fn color_size(flags: VertexFlags) -> u64 {
     match flags.colors() {
         ColorType::None => 0,
         ColorType::Byte => 4,
@@ -794,10 +794,14 @@ mod tests {
             398b3a1f                   // uv1
         );
 
-        let vertex_flags = VertexFlags::new(NormalType::NormalsFloat16, BoneType::None);
-        let uv_color_flags = UvColorFlags::new(UvType::Float16, ColorType::Byte, u4::new(2));
-
-        let vertices = read_vertices(&buffer0, &[], vertex_flags, uv_color_flags, 2).unwrap();
+        let vertex_flags = VertexFlags::new(
+            UvType::Float16,
+            ColorType::Byte,
+            u4::new(2),
+            NormalType::NormalsFloat16,
+            BoneType::None,
+        );
+        let vertices = read_vertices(&buffer0, &[], vertex_flags, 2).unwrap();
 
         // Check read.
         assert_eq!(
@@ -863,7 +867,7 @@ mod tests {
         let mut new_buffer0 = Cursor::new(Vec::new());
         let mut new_buffer1 = Cursor::new(Vec::new());
         assert_eq!(
-            (vertex_flags, uv_color_flags),
+            vertex_flags,
             write_vertices(&vertices, &mut new_buffer0, &mut new_buffer1).unwrap()
         );
         assert_eq!(buffer0, &new_buffer0.into_inner()[..]);
@@ -887,11 +891,15 @@ mod tests {
             0x3ED52310 411D504A BF671058 342B39D2 B9133C00 B507397B 39413C00 BB4DA737 B6843C00 0C150202 B24D0000
         );
 
-        let vertex_flags =
-            VertexFlags::new(NormalType::NormalsTangentBitangentFloat16, BoneType::Byte);
-        let uv_color_flags = UvColorFlags::new(UvType::Float16, ColorType::Byte, u4::new(1));
+        let flags = VertexFlags::new(
+            UvType::Float16,
+            ColorType::Byte,
+            u4::new(1),
+            NormalType::NormalsTangentBitangentFloat16,
+            BoneType::Byte,
+        );
 
-        let vertices = read_vertices(&buffer0, &buffer1, vertex_flags, uv_color_flags, 2).unwrap();
+        let vertices = read_vertices(&buffer0, &buffer1, flags, 2).unwrap();
 
         // Check read.
         assert_eq!(
@@ -976,7 +984,7 @@ mod tests {
         let mut new_buffer0 = Cursor::new(Vec::new());
         let mut new_buffer1 = Cursor::new(Vec::new());
         assert_eq!(
-            (vertex_flags, uv_color_flags),
+            flags,
             write_vertices(&vertices, &mut new_buffer0, &mut new_buffer1).unwrap()
         );
         assert_eq!(buffer0, &new_buffer0.into_inner()[..]);

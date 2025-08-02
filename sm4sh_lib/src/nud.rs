@@ -100,10 +100,9 @@ pub struct Mesh {
     pub vertex_indices_offset: u32,
     pub vertex_buffer0_offset: u32,
     pub vertex_buffer1_offset: u32,
+
     pub vertex_count: u16,
-    // TODO: Better names for these flags.
     pub vertex_flags: VertexFlags,
-    pub uv_color_flags: UvColorFlags,
 
     #[br(parse_with = parse_opt_ptr32)]
     #[br(args { inner: strings_offset })]
@@ -132,11 +131,14 @@ pub struct Mesh {
     pub unk: [u32; 3],
 }
 
-#[bitsize(8)]
+#[bitsize(16)]
 #[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
-#[br(try_map = |x: u8| x.try_into().map_err(|e| format!("{e:?}")))]
-#[bw(map = |&x| u8::from(x))]
+#[br(try_map = |x: u16| x.try_into().map_err(|e| format!("{e:?}")))]
+#[bw(map = |&x| u16::from(x))]
 pub struct VertexFlags {
+    pub uvs: UvType,
+    pub colors: ColorType,
+    pub uv_count: u4,
     pub normals: NormalType,
     pub bones: BoneType,
 }
@@ -172,16 +174,6 @@ pub enum BoneType {
     Float32 = 1,
     Float16 = 2,
     Byte = 4,
-}
-
-#[bitsize(8)]
-#[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
-#[br(try_map = |x: u8| x.try_into().map_err(|e| format!("{e:?}")))]
-#[bw(map = |&x| u8::from(x))]
-pub struct UvColorFlags {
-    pub uvs: UvType,
-    pub colors: ColorType,
-    pub uv_count: u4,
 }
 
 #[bitsize(3)]
@@ -421,7 +413,6 @@ xc3_write_binwrite_impl!(
     MipDetail,
     VertexFlags,
     VertexIndexFlags,
-    UvColorFlags,
     CullMode,
     WrapMode,
     MaterialFlags,
