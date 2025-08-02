@@ -146,7 +146,7 @@ fn create_mesh(
         .positions
         .iter()
         .map(|p| crate::shader::model::VertexInput0 {
-            position: vec4(p[0], p[1], p[2], 1.0),
+            position: p.extend(1.0),
             normal: Vec4::ZERO,
             tangent: Vec4::ZERO,
             bitangent: Vec4::ZERO,
@@ -157,7 +157,9 @@ fn create_mesh(
         })
         .collect();
 
-    set_bones(&m.vertices.bones, &mut vertices);
+    if let Some(bones) = &m.vertices.bones {
+        set_bones(bones, &mut vertices);
+    }
     set_normals(&m.vertices.normals, &mut vertices);
     set_uvs(&m.vertices.uvs, &mut vertices);
     set_colors(&m.vertices.colors, &mut vertices);
@@ -240,14 +242,12 @@ fn create_mesh(
 }
 
 fn set_bones(bones: &Bones, vertices: &mut [crate::shader::model::VertexInput0]) {
-    if let Some((indices, weights)) = bones.bone_indices_weights() {
-        set_attribute(vertices, &indices, |v, i| {
-            v.indices = (*i).into();
-        });
-        set_attribute(vertices, &weights, |v, i| {
-            v.weights = *i;
-        });
-    }
+    set_attribute(vertices, &bones.bone_indices, |v, i| {
+        v.indices = (*i).into();
+    });
+    set_attribute(vertices, &bones.weights, |v, i| {
+        v.weights = *i;
+    });
 }
 
 fn set_normals(normals: &Normals, vertices: &mut [crate::shader::model::VertexInput0]) {

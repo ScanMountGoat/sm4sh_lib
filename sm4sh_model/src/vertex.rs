@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use bilge::prelude::*;
 use binrw::{BinRead, BinReaderExt, BinResult, BinWrite, BinWriterExt, VecArgs};
-use glam::{vec2, Vec2, Vec4};
+use glam::{vec2, Vec2, Vec3, Vec4};
 use half::f16;
 
 use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvColorFlags, UvType, VertexFlags};
@@ -11,11 +11,22 @@ use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvColorFlags, UvType, Vert
 // TODO: Find a simpler representation after looking at more game data like pokken.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Vertices {
-    pub positions: Vec<[f32; 3]>,
+    pub positions: Vec<Vec3>,
     pub normals: Normals,
-    pub bones: Bones,
+    pub bones: Option<Bones>,
     pub colors: Colors,
     pub uvs: Uvs,
+}
+
+impl Vertices {
+    fn bone_type(&self) -> BoneType {
+        match self.bones.as_ref().map(|b| b.element_type) {
+            None => BoneType::None,
+            Some(BoneElementType::Float32) => BoneType::Float32,
+            Some(BoneElementType::Float16) => BoneType::Float16,
+            Some(BoneElementType::Byte) => BoneType::Byte,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -107,56 +118,17 @@ pub struct NormalsTangentBitangentFloat16 {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Bones {
-    None,
-    Float32(Vec<BonesFloat32>),
-    Float16(Vec<BonesFloat16>),
-    Byte(Vec<BonesByte>),
+pub struct Bones {
+    pub bone_indices: Vec<[u32; 4]>,
+    pub weights: Vec<Vec4>,
+    pub element_type: BoneElementType,
 }
 
-impl Bones {
-    fn bone_type(&self) -> BoneType {
-        match self {
-            Bones::None => BoneType::None,
-            Bones::Float32(_) => BoneType::Float32,
-            Bones::Float16(_) => BoneType::Float16,
-            Bones::Byte(_) => BoneType::Byte,
-        }
-    }
-
-    pub fn bone_indices_weights(&self) -> Option<(Vec<[u32; 4]>, Vec<Vec4>)> {
-        match self {
-            Bones::None => None,
-            Bones::Float32(items) => Some(
-                items
-                    .iter()
-                    .map(|i| (i.bone_indices, Vec4::from(i.bone_weights)))
-                    .unzip(),
-            ),
-            Bones::Float16(items) => Some(
-                items
-                    .iter()
-                    .map(|i| {
-                        (
-                            i.bone_indices.map(Into::into),
-                            Vec4::from(i.bone_weights.map(f16::to_f32)),
-                        )
-                    })
-                    .unzip(),
-            ),
-            Bones::Byte(items) => Some(
-                items
-                    .iter()
-                    .map(|i| {
-                        (
-                            i.bone_indices.map(Into::into),
-                            Vec4::from(i.bone_weights.map(|u| u as f32 / 255.0)),
-                        )
-                    })
-                    .unzip(),
-            ),
-        }
-    }
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum BoneElementType {
+    Float32,
+    Float16,
+    Byte,
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
@@ -362,7 +334,7 @@ pub fn write_vertices(
     buffer0: &mut Cursor<Vec<u8>>,
     buffer1: &mut Cursor<Vec<u8>>,
 ) -> BinResult<(VertexFlags, UvColorFlags)> {
-    let vertex_flags = VertexFlags::new(vertices.normals.normal_type(), vertices.bones.bone_type());
+    let vertex_flags = VertexFlags::new(vertices.normals.normal_type(), vertices.bone_type());
     let uv_color_flags = UvColorFlags::new(
         vertices.uvs.uv_type(),
         vertices.colors.color_type(),
@@ -372,7 +344,7 @@ pub fn write_vertices(
     let stride0 = buffer0_stride(vertex_flags, uv_color_flags);
     let stride1 = buffer1_stride(vertex_flags);
 
-    if vertices.bones != Bones::None {
+    if vertices.bones.is_some() {
         // buffer0: colors, uvs
         let mut offset0 = buffer0.position();
 
@@ -390,8 +362,10 @@ pub fn write_vertices(
         write_normals(buffer1, &vertices.normals, offset1, stride1)?;
         offset1 += normals_size(vertex_flags);
 
-        write_bones(buffer1, &vertices.bones, offset1, stride1)?;
-        offset1 += bones_size(vertex_flags);
+        if let Some(bones) = &vertices.bones {
+            write_bones(buffer1, bones, offset1, stride1)?;
+            offset1 += bones_size(vertex_flags);
+        }
     } else {
         // buffer0: positions, vectors, bones, colors, uvs
         let mut offset0 = buffer0.position();
@@ -402,8 +376,11 @@ pub fn write_vertices(
         write_normals(buffer0, &vertices.normals, offset0, stride0)?;
         offset0 += normals_size(vertex_flags);
 
-        write_bones(buffer0, &vertices.bones, offset0, stride0)?;
-        offset0 += bones_size(vertex_flags);
+        if let Some(bones) = &vertices.bones {
+            // TODO: Is this code ever reached?
+            write_bones(buffer0, bones, offset0, stride0)?;
+            offset0 += bones_size(vertex_flags);
+        }
 
         write_colors(buffer0, &vertices.colors, offset0, stride0)?;
         offset0 += color_size(uv_color_flags);
@@ -420,12 +397,45 @@ fn read_bones(
     offset: u64,
     stride: u64,
     count: u16,
-) -> BinResult<Bones> {
+) -> BinResult<Option<Bones>> {
     match flags.bones() {
-        BoneType::None => Ok(Bones::None),
-        BoneType::Float32 => read_elements(buffer, stride, offset, count).map(Bones::Float32),
-        BoneType::Float16 => read_elements(buffer, stride, offset, count).map(Bones::Float16),
-        BoneType::Byte => read_elements(buffer, stride, offset, count).map(Bones::Byte),
+        BoneType::None => Ok(None),
+        BoneType::Float32 => {
+            let elements: Vec<BonesFloat32> = read_elements(buffer, stride, offset, count)?;
+            Ok(Some(Bones {
+                bone_indices: elements.iter().map(|i| i.bone_indices).collect(),
+                weights: elements.iter().map(|i| i.bone_weights.into()).collect(),
+                element_type: BoneElementType::Float32,
+            }))
+        }
+        BoneType::Float16 => {
+            let elements: Vec<BonesFloat16> = read_elements(buffer, stride, offset, count)?;
+            Ok(Some(Bones {
+                bone_indices: elements
+                    .iter()
+                    .map(|i| i.bone_indices.map(Into::into))
+                    .collect(),
+                weights: elements
+                    .iter()
+                    .map(|i| i.bone_weights.map(f16::to_f32).into())
+                    .collect(),
+                element_type: BoneElementType::Float16,
+            }))
+        }
+        BoneType::Byte => {
+            let elements: Vec<BonesByte> = read_elements(buffer, stride, offset, count)?;
+            Ok(Some(Bones {
+                bone_indices: elements
+                    .iter()
+                    .map(|i| i.bone_indices.map(Into::into))
+                    .collect(),
+                weights: elements
+                    .iter()
+                    .map(|i| i.bone_weights.map(|u| (u as f32) / 255.0).into())
+                    .collect(),
+                element_type: BoneElementType::Byte,
+            }))
+        }
     }
 }
 
@@ -435,11 +445,46 @@ fn write_bones(
     offset: u64,
     stride: u64,
 ) -> BinResult<()> {
-    match bones {
-        Bones::None => Ok(()),
-        Bones::Float32(elements) => write_elements(buffer, elements, stride, offset),
-        Bones::Float16(elements) => write_elements(buffer, elements, stride, offset),
-        Bones::Byte(elements) => write_elements(buffer, elements, stride, offset),
+    match bones.element_type {
+        BoneElementType::Float32 => {
+            let elements: Vec<_> = bones
+                .bone_indices
+                .iter()
+                .zip(&bones.weights)
+                .map(|(i, w)| BonesFloat32 {
+                    bone_indices: *i,
+                    bone_weights: w.to_array(),
+                })
+                .collect();
+
+            write_elements(buffer, &elements, stride, offset)
+        }
+        BoneElementType::Float16 => {
+            let elements: Vec<_> = bones
+                .bone_indices
+                .iter()
+                .zip(&bones.weights)
+                .map(|(i, w)| BonesFloat16 {
+                    bone_indices: i.map(|u| u as u16),
+                    bone_weights: w.to_array().map(f16::from_f32),
+                })
+                .collect();
+
+            write_elements(buffer, &elements, stride, offset)
+        }
+        BoneElementType::Byte => {
+            let elements: Vec<_> = bones
+                .bone_indices
+                .iter()
+                .zip(&bones.weights)
+                .map(|(i, w)| BonesByte {
+                    bone_indices: i.map(|u| u as u8),
+                    bone_weights: w.to_array().map(|f| (f * 255.0) as u8),
+                })
+                .collect();
+
+            write_elements(buffer, &elements, stride, offset)
+        }
     }
 }
 
@@ -565,17 +610,21 @@ fn write_uvs(
     Ok(())
 }
 
-fn read_positions(buffer: &[u8], offset: u64, stride: u64, count: u16) -> BinResult<Vec<[f32; 3]>> {
-    read_elements(buffer, stride, offset, count)
+fn read_positions(buffer: &[u8], offset: u64, stride: u64, count: u16) -> BinResult<Vec<Vec3>> {
+    Ok(read_elements::<[f32; 3]>(buffer, stride, offset, count)?
+        .into_iter()
+        .map(Into::into)
+        .collect())
 }
 
 fn write_positions(
     buffer: &mut Cursor<Vec<u8>>,
-    positions: &[[f32; 3]],
+    positions: &[Vec3],
     offset: u64,
     stride: u64,
 ) -> BinResult<()> {
-    write_elements(buffer, positions, stride, offset)
+    let elements: Vec<_> = positions.iter().map(|v| v.to_array()).collect();
+    write_elements(buffer, &elements, stride, offset)
 }
 
 fn read_elements<T>(buffer: &[u8], stride: u64, offset: u64, count: u16) -> BinResult<Vec<T>>
@@ -708,6 +757,7 @@ pub fn triangle_strip_to_list(indices: &[u16]) -> Vec<u16> {
 mod tests {
     use super::*;
 
+    use glam::{vec3, vec4};
     use hexlit::hex;
 
     // TODO: Verify each type in game with renderdoc.
@@ -753,8 +803,8 @@ mod tests {
         assert_eq!(
             Vertices {
                 positions: vec![
-                    [0.9634427, 11.351391, 1.9046955],
-                    [1.1407516, 11.469169, 1.8017474]
+                    vec3(0.9634427, 11.351391, 1.9046955),
+                    vec3(1.1407516, 11.469169, 1.8017474)
                 ],
                 normals: Normals::NormalsFloat16(vec![
                     NormalsFloat16 {
@@ -774,7 +824,7 @@ mod tests {
                         ]
                     }
                 ]),
-                bones: Bones::None,
+                bones: None,
                 colors: Colors::Byte(vec![
                     ColorByte {
                         rgba: [127, 127, 127, 127]
@@ -818,6 +868,119 @@ mod tests {
         );
         assert_eq!(buffer0, &new_buffer0.into_inner()[..]);
         assert!(new_buffer1.into_inner().is_empty())
+    }
+
+    #[test]
+    fn read_write_vertices_mario_body() {
+        // data/fighter/mario/model/body/c00/model.nud, Gamemodel, 2
+        let buffer0 = hex!(
+            // vertex 0
+            7F7F7F7F 389F356B
+            // vertex 1
+            7F7F7F7F 38D13588
+        );
+
+        let buffer1 = hex!(
+            // vertex 0
+            3F064FA1 411D7004 BF398361 30FC3BD2 B0843C00 B9E632BA 39223C00 B9429C2D BA073C00 0C150202 B24D0000
+            // vertex 1
+            0x3ED52310 411D504A BF671058 342B39D2 B9133C00 B507397B 39413C00 BB4DA737 B6843C00 0C150202 B24D0000
+        );
+
+        let vertex_flags =
+            VertexFlags::new(NormalType::NormalsTangentBitangentFloat16, BoneType::Byte);
+        let uv_color_flags = UvColorFlags::new(UvType::Float16, ColorType::Byte, u4::new(1));
+
+        let vertices = read_vertices(&buffer0, &buffer1, vertex_flags, uv_color_flags, 2).unwrap();
+
+        // Check read.
+        assert_eq!(
+            Vertices {
+                positions: vec![
+                    vec3(0.52465254, 9.839848, -0.72466093),
+                    vec3(0.41628313, 9.832102, -0.90259314)
+                ],
+                normals: Normals::NormalsTangentBitangentFloat16(vec![
+                    NormalsTangentBitangentFloat16 {
+                        normal: [
+                            f16::from_f32(0.15576172),
+                            f16::from_f32(0.97753906),
+                            f16::from_f32(-0.14111328),
+                            f16::from_f32(1.0)
+                        ],
+                        bitangent: [
+                            f16::from_f32(-0.7373047),
+                            f16::from_f32(0.21020508),
+                            f16::from_f32(0.64160156),
+                            f16::from_f32(1.0)
+                        ],
+                        tangent: [
+                            f16::from_f32(-0.65722656),
+                            f16::from_f32(-0.0040779114),
+                            f16::from_f32(-0.75341797),
+                            f16::from_f32(1.0)
+                        ]
+                    },
+                    NormalsTangentBitangentFloat16 {
+                        normal: [
+                            f16::from_f32(0.26049805),
+                            f16::from_f32(0.72753906),
+                            f16::from_f32(-0.63427734),
+                            f16::from_f32(1.0)
+                        ],
+                        bitangent: [
+                            f16::from_f32(-0.31420898),
+                            f16::from_f32(0.6850586),
+                            f16::from_f32(0.6567383),
+                            f16::from_f32(1.0)
+                        ],
+                        tangent: [
+                            f16::from_f32(-0.91259766),
+                            f16::from_f32(-0.028182983),
+                            f16::from_f32(-0.40722656),
+                            f16::from_f32(1.0)
+                        ]
+                    }
+                ]),
+                bones: Some(Bones {
+                    bone_indices: vec![[12, 21, 2, 2], [12, 21, 2, 2]],
+                    weights: vec![
+                        vec4(0.69803923, 0.3019608, 0.0, 0.0),
+                        vec4(0.69803923, 0.3019608, 0.0, 0.0)
+                    ],
+                    element_type: BoneElementType::Byte
+                }),
+                colors: Colors::Byte(vec![
+                    ColorByte {
+                        rgba: [127, 127, 127, 127]
+                    },
+                    ColorByte {
+                        rgba: [127, 127, 127, 127]
+                    }
+                ]),
+                uvs: Uvs::Float16(vec![vec![
+                    UvFloat16 {
+                        u: f16::from_f32(0.5776367),
+                        v: f16::from_f32(0.33862305)
+                    },
+                    UvFloat16 {
+                        u: f16::from_f32(0.6020508),
+                        v: f16::from_f32(0.34570313)
+                    }
+                ]])
+            },
+            vertices
+        );
+
+        // Check write.
+        let mut new_buffer0 = Cursor::new(Vec::new());
+        let mut new_buffer1 = Cursor::new(Vec::new());
+        assert_eq!(
+            (vertex_flags, uv_color_flags),
+            write_vertices(&vertices, &mut new_buffer0, &mut new_buffer1).unwrap()
+        );
+        assert_eq!(buffer0, &new_buffer0.into_inner()[..]);
+        assert_eq!(buffer1, &new_buffer1.into_inner()[..]);
     }
 
     #[test]

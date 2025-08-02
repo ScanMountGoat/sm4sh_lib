@@ -236,7 +236,7 @@ impl NudModel {
                     vertex_buffer1_offset
                 };
 
-                if let Some((indices, _)) = mesh.vertices.bones.bone_indices_weights() {
+                if let Some(indices) = mesh.vertices.bones.as_ref().map(|b| &b.bone_indices) {
                     used_bone_indices.extend(indices.iter().flatten());
                 }
 

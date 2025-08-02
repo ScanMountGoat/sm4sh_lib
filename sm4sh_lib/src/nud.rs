@@ -15,7 +15,6 @@ use crate::{parse_opt_ptr32, parse_string_ptr32, xc3_write_binwrite_impl};
 
 // TODO: little endian for NDWD?
 // TODO: Better naming
-// TODO: binwrite + xc3write?
 #[binread]
 #[derive(Debug, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"NDP3"))]
