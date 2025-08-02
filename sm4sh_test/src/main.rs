@@ -124,6 +124,12 @@ fn check_nud_model(nud: Nud, path: &Path, _original_bytes: &[u8]) {
                 println!("Bone index range not 1:1 for {path:?}",);
             }
 
+            for (group_old, group_new) in nud.mesh_groups.iter().zip(&new_nud.mesh_groups) {
+                if group_old.bone_flags != group_new.bone_flags {
+                    println!("Group bone flags not 1:1 for {path:?}",);
+                }
+            }
+
             if new_nud.vertex_buffer0 != nud.vertex_buffer0 {
                 println!("Vertex buffer0 read/write not 1:1 for {path:?}");
             }
@@ -181,7 +187,9 @@ fn check_omo(omo: Omo, path: &Path, original_bytes: &[u8]) {
         println!("Omo read/write not 1:1 for {path:?}");
     }
 
-    Animation::from_omo(&omo);
+    if let Err(e) = Animation::from_omo(&omo) {
+        println!("Error loading animation for {path:?}: {e}")
+    }
 }
 
 fn check_mta(mta: Mta, path: &Path, original_bytes: &[u8]) {

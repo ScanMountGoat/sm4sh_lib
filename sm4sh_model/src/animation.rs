@@ -16,11 +16,11 @@ use crate::VbnSkeleton;
 /// Load animations from a `path` like `"main.pac"`.
 pub fn load_animations<P: AsRef<Path>>(path: P) -> BinResult<Vec<(String, Animation)>> {
     let mut animations = Vec::new();
-    let pac = Pack::from_file(path).unwrap();
+    let pac = Pack::from_file(path)?;
     for item in pac.items {
         if item.name.ends_with(".omo") {
-            let omo = Omo::from_bytes(&item.data).unwrap();
-            let animation = Animation::from_omo(&omo);
+            let omo = Omo::from_bytes(&item.data)?;
+            let animation = Animation::from_omo(&omo)?;
             animations.push((item.name, animation));
         }
     }
@@ -54,10 +54,10 @@ pub struct FCurves {
 }
 
 impl Animation {
-    pub fn from_omo(omo: &Omo) -> Self {
+    pub fn from_omo(omo: &Omo) -> BinResult<Self> {
         let mut nodes = Vec::new();
         for node in &omo.nodes {
-            let data = omo_node_data(node, &omo.inter_data);
+            let data = omo_node_data(node, &omo.inter_data)?;
 
             // TODO: Find a nicer way to select key data for each frame.
             let mut translation_keyframes = Vec::new();
@@ -81,10 +81,10 @@ impl Animation {
             nodes.push(animation_node);
         }
 
-        Self {
+        Ok(Self {
             nodes,
             frame_count: omo.frame_count as usize,
-        }
+        })
     }
 
     /// Compute the the animated transform in model space for each bone in `skeleton`.
@@ -312,7 +312,7 @@ fn interpolate_vec3(
     }
 }
 
-fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> TransformData {
+fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> BinResult<TransformData> {
     let mut data = Cursor::new(&inter_data[node.inter_offset as usize..]);
 
     let mut translation_min = None;
@@ -321,14 +321,14 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> TransformData {
         match node.flags.position_type() {
             PositionType::Frame => {}
             PositionType::Interpolate => {
-                let v: [f32; 3] = data.read_be().unwrap();
+                let v: [f32; 3] = data.read_be()?;
                 translation_min = Some(v.into());
 
-                let v: [f32; 3] = data.read_be().unwrap();
+                let v: [f32; 3] = data.read_be()?;
                 translation_max = Some(v.into());
             }
             PositionType::Constant => {
-                let v: [f32; 3] = data.read_be().unwrap();
+                let v: [f32; 3] = data.read_be()?;
                 translation_min = Some(v.into());
             }
         }
@@ -339,19 +339,19 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> TransformData {
     if node.flags.rotation() {
         match node.flags.rotation_type() {
             RotationType::Interpolate => {
-                let v: [f32; 3] = data.read_be().unwrap();
+                let v: [f32; 3] = data.read_be()?;
                 rotation_min = Some(v.into());
 
-                let v: [f32; 3] = data.read_be().unwrap();
+                let v: [f32; 3] = data.read_be()?;
                 rotation_max = Some(v.into());
             }
             RotationType::FConst => {
                 // TODO: Is this actually a full quaternion?
-                let v: [f32; 4] = data.read_be().unwrap();
+                let v: [f32; 4] = data.read_be()?;
                 rotation_min = Some([v[0], v[1], v[2]].into());
             }
             RotationType::Constant => {
-                let v: [f32; 3] = data.read_be().unwrap();
+                let v: [f32; 3] = data.read_be()?;
                 rotation_min = Some(v.into());
             }
             RotationType::Frame => {
@@ -365,27 +365,27 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> TransformData {
     if node.flags.scale() {
         match node.flags.scale_type() {
             ScaleType::Constant | ScaleType::Constant2 => {
-                let v: [f32; 3] = data.read_be().unwrap();
+                let v: [f32; 3] = data.read_be()?;
                 scale_min = Some(v.into());
             }
             ScaleType::Interpolate => {
-                let v: [f32; 3] = data.read_be().unwrap();
+                let v: [f32; 3] = data.read_be()?;
                 scale_min = Some(v.into());
 
-                let v: [f32; 3] = data.read_be().unwrap();
+                let v: [f32; 3] = data.read_be()?;
                 scale_max = Some(v.into());
             }
         }
     }
 
-    TransformData {
+    Ok(TransformData {
         translation_min,
         translation_max,
         rotation_min,
         rotation_max,
         scale_min,
         scale_max,
-    }
+    })
 }
 
 fn sm4sh_to_blender(m: Mat4) -> Mat4 {

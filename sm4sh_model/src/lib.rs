@@ -54,7 +54,6 @@ pub struct NudMeshGroup {
     pub meshes: Vec<NudMesh>,
     pub sort_bias: f32,
     pub bounding_sphere: Vec4,
-    pub bone_flags: BoneFlags,
     pub parent_bone_index: Option<usize>,
 }
 
@@ -174,7 +173,6 @@ impl NudModel {
                 sort_bias: g.sort_bias,
                 bounding_sphere: Vec3::from(g.bounding_sphere.center)
                     .extend(g.bounding_sphere.radius),
-                bone_flags: g.bone_flags,
                 parent_bone_index: usize::try_from(g.parent_bone_index).ok(),
             });
         }
@@ -261,13 +259,21 @@ impl NudModel {
                 });
             }
 
+            let bone_flags = if group.parent_bone_index.is_some() {
+                BoneFlags::ParentBone
+            } else if group.meshes.iter().any(|m| m.vertices.bones.is_some()) {
+                BoneFlags::Skinning
+            } else {
+                BoneFlags::Disabled
+            };
+
             mesh_groups.push(MeshGroup {
                 bounding_sphere: bounding_sphere(group.bounding_sphere),
                 center: group.bounding_sphere.xyz().to_array(),
                 sort_bias: group.sort_bias,
                 name: group.name.clone(),
                 unk1: 0,
-                bone_flags: group.bone_flags,
+                bone_flags,
                 parent_bone_index: group.parent_bone_index.map(|i| i as i16).unwrap_or(-1),
                 mesh_count: meshes.len() as u16,
                 meshes,
