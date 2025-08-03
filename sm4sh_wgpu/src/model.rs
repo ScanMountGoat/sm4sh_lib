@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use glam::{vec4, Mat4, UVec4, Vec4, Vec4Swizzles};
+use glam::{ivec4, vec4, Mat4, UVec4, Vec4, Vec4Swizzles};
 use sm4sh_model::{
     vertex::{Bones, Colors, Normals, Uvs},
     DstFactor, NudMesh, NudModel, SrcFactor, VbnSkeleton,
@@ -39,6 +39,7 @@ pub struct Mesh {
     pipeline: wgpu::RenderPipeline,
 
     bind_group2: crate::shader::model::bind_groups::BindGroup2,
+    bind_group3: crate::shader::model::bind_groups::BindGroup3,
 }
 
 pub fn load_model(
@@ -112,6 +113,7 @@ pub fn load_model(
                     .map(|m| {
                         create_mesh(
                             device,
+                            g,
                             m,
                             &textures,
                             &default_texture,
@@ -135,13 +137,14 @@ pub fn load_model(
 
 fn create_mesh(
     device: &wgpu::Device,
-    m: &sm4sh_model::NudMesh,
+    group: &sm4sh_model::NudMeshGroup,
+    mesh: &sm4sh_model::NudMesh,
     hash_to_texture: &BTreeMap<u32, wgpu::TextureView>,
     default_texture: &wgpu::TextureView,
     output_format: wgpu::TextureFormat,
     shared_data: &SharedData,
 ) -> Mesh {
-    let mut vertices: Vec<_> = m
+    let mut vertices: Vec<_> = mesh
         .vertices
         .positions
         .iter()
@@ -157,12 +160,12 @@ fn create_mesh(
         })
         .collect();
 
-    if let Some(bones) = &m.vertices.bones {
+    if let Some(bones) = &mesh.vertices.bones {
         set_bones(bones, &mut vertices);
     }
-    set_normals(&m.vertices.normals, &mut vertices);
-    set_uvs(&m.vertices.uvs, &mut vertices);
-    set_colors(&m.vertices.colors, &mut vertices);
+    set_normals(&mesh.vertices.normals, &mut vertices);
+    set_uvs(&mesh.vertices.uvs, &mut vertices);
+    set_colors(&mesh.vertices.colors, &mut vertices);
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("vertex buffer"),
@@ -172,7 +175,7 @@ fn create_mesh(
 
     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("index buffer"),
-        contents: bytemuck::cast_slice(&m.vertex_indices),
+        contents: bytemuck::cast_slice(&mesh.vertex_indices),
         usage: wgpu::BufferUsages::INDEX,
     });
 
@@ -180,7 +183,7 @@ fn create_mesh(
     let mut color_texture = None;
     let mut normal_texture = None;
 
-    if let Some(material) = &m.material1 {
+    if let Some(material) = &mesh.material1 {
         // TODO: Is this the "correct" way to detect texture types?
         // TODO: Cross reference this with shader uniforms?
         // TODO: Unit tests for all known 4th bytes?
@@ -230,13 +233,33 @@ fn create_mesh(
         },
     );
 
-    let pipeline = model_pipeline(device, output_format, shared_data, m);
+    let per_mesh = device.create_uniform_buffer(
+        "PerMesh",
+        &crate::shader::model::PerMesh {
+            parent_bone: ivec4(
+                group.parent_bone_index.map(|i| i as i32).unwrap_or(-1),
+                0,
+                0,
+                0,
+            ),
+        },
+    );
+
+    let bind_group3 = crate::shader::model::bind_groups::BindGroup3::from_bindings(
+        device,
+        crate::shader::model::bind_groups::BindGroupLayout3 {
+            per_mesh: per_mesh.as_entire_buffer_binding(),
+        },
+    );
+
+    let pipeline = model_pipeline(device, output_format, shared_data, mesh);
 
     Mesh {
         vertex_buffer,
         index_buffer,
-        vertex_index_count: m.vertex_indices.len() as u32,
+        vertex_index_count: mesh.vertex_indices.len() as u32,
         bind_group2,
+        bind_group3,
         pipeline,
     }
 }
@@ -325,6 +348,7 @@ impl Model {
             for mesh in &group.meshes {
                 render_pass.set_pipeline(&mesh.pipeline);
                 mesh.bind_group2.set(render_pass);
+                mesh.bind_group3.set(render_pass);
 
                 render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 render_pass

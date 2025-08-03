@@ -45,6 +45,13 @@ struct VertexOutput {
     @location(5) uv0: vec2<f32>,
 }
 
+struct PerMesh {
+    parent_bone: vec4<i32>
+}
+
+@group(3) @binding(0)
+var<uniform> per_mesh: PerMesh;
+
 struct FragmentOutput {
     @location(0) color: vec4<f32>,
 }
@@ -70,14 +77,23 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
     var tangent = vec3(0.0);
     var normal = vec3(0.0);
     var bitangent = vec3(0.0);
-    for (var i = 0u; i < 4u; i += 1u) {
-        let bone_index = in0.indices[i];
-        let skin_weight = in0.weights[i];
+    if per_mesh.parent_bone.x != -1 {
+        let bone_index = per_mesh.parent_bone.x;
 
-        position += skin_weight * (skinning_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
-        tangent += skin_weight * (skinning_transforms_inv_transpose[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
-        bitangent += skin_weight * (skinning_transforms_inv_transpose[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
-        normal += skin_weight * (skinning_transforms_inv_transpose[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
+        position = (skinning_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
+        tangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
+        bitangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
+        normal = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
+    } else {
+        for (var i = 0u; i < 4u; i += 1u) {
+            let bone_index = in0.indices[i];
+            let skin_weight = in0.weights[i];
+
+            position += skin_weight * (skinning_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
+            tangent += skin_weight * (skinning_transforms_inv_transpose[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
+            bitangent += skin_weight * (skinning_transforms_inv_transpose[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
+            normal += skin_weight * (skinning_transforms_inv_transpose[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
+        }
     }
 
     out.clip_position = camera.view_projection * vec4(position, 1.0);
