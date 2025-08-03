@@ -14,11 +14,19 @@ pub struct Vertices {
     pub positions: Vec<Vec3>,
     pub normals: Normals,
     pub bones: Option<Bones>,
-    pub colors: Colors,
+    pub colors: Option<Colors>,
     pub uvs: Uvs,
 }
 
 impl Vertices {
+    fn color_type(&self) -> ColorType {
+        match self.colors.as_ref().map(|c| c.element_type) {
+            None => ColorType::None,
+            Some(ColorElementType::Byte) => ColorType::Byte,
+            Some(ColorElementType::Float16) => ColorType::Float16,
+        }
+    }
+
     fn bone_type(&self) -> BoneType {
         match self.bones.as_ref().map(|b| b.element_type) {
             None => BoneType::None,
@@ -205,38 +213,15 @@ pub struct UvFloat32 {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Colors {
-    None,
-    Byte(Vec<ColorByte>),
-    Float16(Vec<ColorFloat16>),
+pub struct Colors {
+    pub colors: Vec<Vec4>,
+    pub element_type: ColorElementType,
 }
 
-impl Colors {
-    fn color_type(&self) -> ColorType {
-        match self {
-            Colors::None => ColorType::None,
-            Colors::Byte(_) => ColorType::Byte,
-            Colors::Float16(_) => ColorType::Float16,
-        }
-    }
-
-    pub fn colors(&self) -> Option<Vec<Vec4>> {
-        match self {
-            Colors::None => None,
-            Colors::Byte(items) => Some(
-                items
-                    .iter()
-                    .map(|i| i.rgba.map(|u| u as f32 / 255.0).into())
-                    .collect(),
-            ),
-            Colors::Float16(items) => Some(
-                items
-                    .iter()
-                    .map(|i| i.rgba.map(|f| f.to_f32()).into())
-                    .collect(),
-            ),
-        }
-    }
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ColorElementType {
+    Byte,
+    Float16,
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
@@ -335,7 +320,7 @@ pub fn write_vertices(
 ) -> BinResult<VertexFlags> {
     let flags = VertexFlags::new(
         vertices.uvs.uv_type(),
-        vertices.colors.color_type(),
+        vertices.color_type(),
         u4::new(vertices.uvs.len().try_into().unwrap()),
         vertices.normals.normal_type(),
         vertices.bone_type(),
@@ -348,8 +333,10 @@ pub fn write_vertices(
         // buffer0: colors, uvs
         let mut offset0 = buffer0.position();
 
-        write_colors(buffer0, &vertices.colors, offset0, stride0)?;
-        offset0 += color_size(flags);
+        if let Some(colors) = &vertices.colors {
+            write_colors(buffer0, colors, offset0, stride0)?;
+            offset0 += color_size(flags);
+        }
 
         write_uvs(buffer0, &vertices.uvs, &mut offset0, stride0)?;
 
@@ -381,9 +368,10 @@ pub fn write_vertices(
             write_bones(buffer0, bones, offset0, stride0)?;
             offset0 += bones_size(flags);
         }
-
-        write_colors(buffer0, &vertices.colors, offset0, stride0)?;
-        offset0 += color_size(flags);
+        if let Some(colors) = &vertices.colors {
+            write_colors(buffer0, colors, offset0, stride0)?;
+            offset0 += color_size(flags);
+        }
 
         write_uvs(buffer0, &vertices.uvs, &mut offset0, stride0)?;
     }
@@ -535,11 +523,29 @@ fn read_colors(
     offset: u64,
     stride: u64,
     count: u16,
-) -> BinResult<Colors> {
+) -> BinResult<Option<Colors>> {
     match flags.colors() {
-        ColorType::None => Ok(Colors::None),
-        ColorType::Byte => read_elements(buffer, stride, offset, count).map(Colors::Byte),
-        ColorType::Float16 => read_elements(buffer, stride, offset, count).map(Colors::Float16),
+        ColorType::None => Ok(None),
+        ColorType::Byte => {
+            let elements: Vec<ColorByte> = read_elements(buffer, stride, offset, count)?;
+            Ok(Some(Colors {
+                colors: elements
+                    .iter()
+                    .map(|c| c.rgba.map(|u| u as f32 / 255.0).into())
+                    .collect(),
+                element_type: ColorElementType::Byte,
+            }))
+        }
+        ColorType::Float16 => {
+            let elements: Vec<ColorFloat16> = read_elements(buffer, stride, offset, count)?;
+            Ok(Some(Colors {
+                colors: elements
+                    .iter()
+                    .map(|c| c.rgba.map(f16::to_f32).into())
+                    .collect(),
+                element_type: ColorElementType::Byte,
+            }))
+        }
     }
 }
 
@@ -549,10 +555,27 @@ fn write_colors(
     offset: u64,
     stride: u64,
 ) -> BinResult<()> {
-    match colors {
-        Colors::None => Ok(()),
-        Colors::Byte(elements) => write_elements(buffer, elements, stride, offset),
-        Colors::Float16(elements) => write_elements(buffer, elements, stride, offset),
+    match colors.element_type {
+        ColorElementType::Byte => {
+            let elements: Vec<_> = colors
+                .colors
+                .iter()
+                .map(|c| ColorByte {
+                    rgba: c.to_array().map(|f| (f * 255.0) as u8),
+                })
+                .collect();
+            write_elements(buffer, &elements, stride, offset)
+        }
+        ColorElementType::Float16 => {
+            let elements: Vec<_> = colors
+                .colors
+                .iter()
+                .map(|c| ColorFloat16 {
+                    rgba: c.to_array().map(f16::from_f32),
+                })
+                .collect();
+            write_elements(buffer, &elements, stride, offset)
+        }
     }
 }
 
@@ -829,14 +852,13 @@ mod tests {
                     }
                 ]),
                 bones: None,
-                colors: Colors::Byte(vec![
-                    ColorByte {
-                        rgba: [127, 127, 127, 127]
-                    },
-                    ColorByte {
-                        rgba: [127, 127, 127, 127]
-                    }
-                ]),
+                colors: Some(Colors {
+                    colors: vec![
+                        vec4(127.0 / 255.0, 127.0 / 255.0, 127.0 / 255.0, 127.0 / 255.0),
+                        vec4(127.0 / 255.0, 127.0 / 255.0, 127.0 / 255.0, 127.0 / 255.0)
+                    ],
+                    element_type: ColorElementType::Byte
+                }),
                 uvs: Uvs::Float16(vec![
                     vec![
                         UvFloat16 {
@@ -958,14 +980,13 @@ mod tests {
                     ],
                     element_type: BoneElementType::Byte
                 }),
-                colors: Colors::Byte(vec![
-                    ColorByte {
-                        rgba: [127, 127, 127, 127]
-                    },
-                    ColorByte {
-                        rgba: [127, 127, 127, 127]
-                    }
-                ]),
+                colors: Some(Colors {
+                    colors: vec![
+                        vec4(127.0 / 255.0, 127.0 / 255.0, 127.0 / 255.0, 127.0 / 255.0),
+                        vec4(127.0 / 255.0, 127.0 / 255.0, 127.0 / 255.0, 127.0 / 255.0)
+                    ],
+                    element_type: ColorElementType::Byte
+                }),
                 uvs: Uvs::Float16(vec![vec![
                     UvFloat16 {
                         u: f16::from_f32(0.5776367),

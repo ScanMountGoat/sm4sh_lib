@@ -165,7 +165,9 @@ fn create_mesh(
     }
     set_normals(&mesh.vertices.normals, &mut vertices);
     set_uvs(&mesh.vertices.uvs, &mut vertices);
-    set_colors(&mesh.vertices.colors, &mut vertices);
+    if let Some(colors) = &mesh.vertices.colors {
+        set_colors(colors, &mut vertices);
+    }
 
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("vertex buffer"),
@@ -298,24 +300,18 @@ fn set_normals(normals: &Normals, vertices: &mut [crate::shader::model::VertexIn
 fn set_uvs(uvs: &Uvs, vertices: &mut [crate::shader::model::VertexInput0]) {
     match uvs {
         Uvs::Float16(items) => set_attribute(vertices, &items[0], |v, i| {
-            v.uv0 = vec4(i.u.to_f32(), i.v.to_f32(), 0.0, 0.0)
+            v.uv0 = vec4(i.u.to_f32(), i.v.to_f32(), 0.0, 0.0);
         }),
         Uvs::Float32(items) => {
-            set_attribute(vertices, &items[0], |v, i| v.uv0 = vec4(i.u, i.v, 0.0, 0.0))
+            set_attribute(vertices, &items[0], |v, i| v.uv0 = vec4(i.u, i.v, 0.0, 0.0));
         }
     }
 }
 
 fn set_colors(colors: &Colors, vertices: &mut [crate::shader::model::VertexInput0]) {
-    match colors {
-        Colors::None => (),
-        Colors::Byte(items) => set_attribute(vertices, items, |v, i| {
-            v.color = i.rgba.map(|u| u as f32 / 255.0).into()
-        }),
-        Colors::Float16(items) => set_attribute(vertices, items, |v, i| {
-            v.color = i.rgba.map(|f| f.to_f32()).into()
-        }),
-    }
+    set_attribute(vertices, &colors.colors, |v, i| {
+        v.color = *i;
+    });
 }
 
 fn set_attribute<T, F>(
