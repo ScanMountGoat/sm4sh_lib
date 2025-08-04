@@ -90,13 +90,9 @@ impl Animation {
     /// Compute the the animated transform in model space for each bone in `skeleton`.
     ///
     /// See [VbnSkeleton::model_space_transforms] for the transforms without animations applied.
-    pub fn model_space_transforms(
-        &self,
-        skeleton: &VbnSkeleton,
-        current_time_seconds: f32,
-    ) -> Vec<Mat4> {
+    pub fn model_space_transforms(&self, skeleton: &VbnSkeleton, frame: f32) -> Vec<Mat4> {
         // TODO: interpolation and looping.
-        let frame_index = (current_time_seconds * 60.0) as usize;
+        let frame_index = frame as usize;
 
         let mut final_transforms: Vec<_> = skeleton
             .bones
@@ -168,12 +164,8 @@ impl Animation {
     /// This can be used in a vertex shader to apply linear blend skinning
     /// by transforming the vertex by up to 4 skinning matrices
     /// and blending with vertex skin weights.
-    pub fn skinning_transforms(
-        &self,
-        skeleton: &VbnSkeleton,
-        current_time_seconds: f32,
-    ) -> Vec<Mat4> {
-        let anim_transforms = self.model_space_transforms(skeleton, current_time_seconds);
+    pub fn skinning_transforms(&self, skeleton: &VbnSkeleton, frame: f32) -> Vec<Mat4> {
+        let anim_transforms = self.model_space_transforms(skeleton, frame);
         let bind_transforms = skeleton.model_space_transforms();
 
         let mut animated_transforms = vec![Mat4::IDENTITY; skeleton.bones.len()];
@@ -202,7 +194,7 @@ impl Animation {
             })
             .collect();
 
-        let animated_bone_names: BTreeSet<_> = self.nodes.iter().map(|n| n.hash).collect();
+        let animated_bone_hashes: BTreeSet<_> = self.nodes.iter().map(|n| n.hash).collect();
 
         let mut translation_points = BTreeMap::new();
         let mut rotation_points = BTreeMap::new();
@@ -215,7 +207,7 @@ impl Animation {
 
             for i in 0..animated_transforms.len() {
                 let bone = &skeleton.bones[i];
-                if animated_bone_names.contains(&bone.hash) {
+                if animated_bone_hashes.contains(&bone.hash) {
                     let matrix = transforms[i];
                     if let Some(parent_index) = bone.parent_bone_index {
                         let transform = if use_blender_coordinates {

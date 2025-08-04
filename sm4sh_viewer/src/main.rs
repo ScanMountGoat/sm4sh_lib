@@ -157,8 +157,10 @@ impl<'a> State<'a> {
             self.current_time_seconds += delta_t;
             self.previous_frame_start = current_frame_start;
 
+            let current_frame = self.current_time_seconds * 60.0;
+
             self.model
-                .update_bone_transforms(&self.queue, animation, self.current_time_seconds);
+                .update_bone_transforms(&self.queue, animation, current_frame);
         }
 
         let output = self.surface.get_current_texture()?;
