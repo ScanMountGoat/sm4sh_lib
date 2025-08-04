@@ -2,14 +2,14 @@ use std::io::{Read, Seek, SeekFrom};
 
 use binrw::{file_ptr::FilePtrArgs, BinRead, BinReaderExt, BinResult, Endian, NullString};
 
+pub mod mta;
+pub mod nhb;
 pub mod nsh;
 pub mod nud;
 pub mod nut;
-pub mod vbn;
-// TODO: Add sb?
-pub mod mta;
 pub mod omo;
 pub mod pack;
+pub mod vbn;
 
 fn parse_opt_ptr32<T, R, Args>(
     reader: &mut R,
@@ -152,3 +152,5 @@ file_read_impl!(
     omo::Omo,
     mta::Mta
 );
+
+file_read_impl!(Endian::Little, nhb::Nhb);

@@ -3,7 +3,7 @@ use std::{io::Cursor, path::Path};
 use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
-use sm4sh_lib::{mta::Mta, nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
+use sm4sh_lib::{mta::Mta, nhb::Nhb, nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
 use sm4sh_model::{animation::Animation, NudModel};
 
 #[derive(Parser)]
@@ -27,6 +27,9 @@ struct Cli {
 
     #[arg(long)]
     mta: bool,
+
+    #[arg(long)]
+    nhb: bool,
 
     #[arg(long)]
     nud_model: bool,
@@ -65,6 +68,11 @@ fn main() {
     if cli.mta || cli.all {
         println!("Checking Mta files...");
         check_all(root, &["*.mta"], check_mta);
+    }
+
+    if cli.nhb || cli.all {
+        println!("Checking Nhb files...");
+        check_all(root, &["*.nhb"], check_nhb);
     }
 
     if cli.nud_model || cli.all {
@@ -199,6 +207,8 @@ fn check_mta(mta: Mta, path: &Path, original_bytes: &[u8]) {
         println!("Mta read/write not 1:1 for {path:?}");
     }
 }
+
+fn check_nhb(nhb: Nhb, path: &Path, original_bytes: &[u8]) {}
 
 fn write_be_bytes_equals<T>(value: &T, original_bytes: &[u8]) -> bool
 where
