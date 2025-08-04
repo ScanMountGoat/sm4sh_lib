@@ -208,7 +208,13 @@ fn check_mta(mta: Mta, path: &Path, original_bytes: &[u8]) {
     }
 }
 
-fn check_nhb(nhb: Nhb, path: &Path, original_bytes: &[u8]) {}
+fn check_nhb(nhb: Nhb, path: &Path, original_bytes: &[u8]) {
+    let mut writer = Cursor::new(Vec::new());
+    nhb.write(&mut writer).unwrap();
+    if writer.into_inner() != original_bytes {
+        println!("Nhb read/write not 1:1 for {path:?}");
+    }
+}
 
 fn write_be_bytes_equals<T>(value: &T, original_bytes: &[u8]) -> bool
 where
