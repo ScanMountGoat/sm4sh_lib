@@ -1,6 +1,8 @@
 use std::io::{Read, Seek, SeekFrom};
 
-use binrw::{file_ptr::FilePtrArgs, BinRead, BinReaderExt, BinResult, Endian, NullString};
+use binrw::{
+    file_ptr::FilePtrArgs, BinRead, BinReaderExt, BinResult, Endian, FilePtr32, NullString,
+};
 
 pub mod jtb;
 pub mod mta;
@@ -64,6 +66,29 @@ fn parse_string_opt_ptr32<R: Read + Seek>(
 ) -> BinResult<Option<String>> {
     let value: Option<NullString> = parse_opt_ptr32(reader, endian, args)?;
     Ok(value.map(|value| value.to_string()))
+}
+
+fn parse_ptr32_count<R, T, Args>(
+    n: usize,
+) -> impl Fn(&mut R, Endian, FilePtrArgs<Args>) -> BinResult<Vec<T>>
+where
+    R: Read + Seek,
+    for<'a> T: BinRead<Args<'a> = Args> + 'static,
+    Args: Clone,
+{
+    move |reader, endian, args| {
+        FilePtr32::parse(
+            reader,
+            endian,
+            FilePtrArgs {
+                offset: args.offset,
+                inner: binrw::VecArgs {
+                    count: n,
+                    inner: args.inner.clone(),
+                },
+            },
+        )
+    }
 }
 
 macro_rules! file_write_full_impl {

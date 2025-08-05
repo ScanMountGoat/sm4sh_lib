@@ -1,8 +1,8 @@
-use binrw::{args, binread, BinRead, BinWrite, FilePtr32};
+use binrw::{binread, BinRead, BinWrite};
 use image_dds::{ddsfile::Dds, Surface};
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
-use crate::{parse_opt_ptr32, xc3_write_binwrite_impl};
+use crate::{parse_opt_ptr32, parse_ptr32_count, xc3_write_binwrite_impl};
 
 // TODO: Same inner type for all variants?
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
@@ -65,8 +65,7 @@ pub struct Texture {
 
     // TODO: all mipmaps?
     // TODO: Some are aligned to 8192?
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { offset: base_offset, inner: args! { count: data_size as usize}})]
+    #[br(parse_with = parse_ptr32_count(data_size as usize), offset = base_offset)]
     #[xc3(offset(u32), align(4096))]
     pub data: Vec<u8>,
 

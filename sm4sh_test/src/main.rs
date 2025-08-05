@@ -1,18 +1,10 @@
-use std::{collections::BTreeSet, io::Cursor, path::Path};
+use std::{io::Cursor, path::Path};
 
 use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
 use sm4sh_lib::{
-    jtb::Jtb,
-    mta::Mta,
-    nhb::{DataItemInner, Nhb},
-    nud::Nud,
-    nut::Nut,
-    omo::Omo,
-    pack::Pack,
-    sb::Sb,
-    vbn::Vbn,
+    jtb::Jtb, mta::Mta, nhb::Nhb, nud::Nud, nut::Nut, omo::Omo, pack::Pack, sb::Sb, vbn::Vbn,
 };
 use sm4sh_model::{animation::Animation, NudModel};
 

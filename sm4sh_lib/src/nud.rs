@@ -5,13 +5,13 @@ use std::{
 };
 
 use bilge::prelude::*;
-use binrw::{args, binread, helpers::until, BinRead, BinWrite, FilePtr32};
+use binrw::{binread, helpers::until, BinRead, BinWrite};
 use xc3_write::{
     strings::{StringSection, WriteOptions},
     Xc3Write, Xc3WriteOffsets,
 };
 
-use crate::{parse_opt_ptr32, parse_string_ptr32, xc3_write_binwrite_impl};
+use crate::{parse_opt_ptr32, parse_ptr32_count, parse_string_ptr32, xc3_write_binwrite_impl};
 
 // TODO: little endian for NDWD?
 // TODO: Better naming
@@ -79,8 +79,8 @@ pub struct MeshGroup {
     pub parent_bone_index: i16,
     pub mesh_count: u16,
 
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { inner: strings_offset, count: mesh_count as usize }})]
+    #[br(parse_with = parse_ptr32_count(mesh_count as usize))]
+    #[br(args { inner: strings_offset })]
     #[xc3(offset(u32))]
     pub meshes: Vec<Mesh>,
 }

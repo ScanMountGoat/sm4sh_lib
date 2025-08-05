@@ -1,9 +1,9 @@
 use std::io::SeekFrom;
 
-use binrw::{args, binread, helpers::until_eof, io::TakeSeekExt, BinRead, BinWrite, FilePtr32};
+use binrw::{binread, helpers::until_eof, io::TakeSeekExt, BinRead, BinWrite};
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
-use crate::xc3_write_binwrite_impl;
+use crate::{parse_ptr32_count, xc3_write_binwrite_impl};
 
 // TODO: namco helper bones?
 // TODO: NHB for big endian?
@@ -21,8 +21,7 @@ pub struct Nhb {
     pub helper_bone_count: u32,
 
     pub hash_count: u32,
-    #[br(parse_with = FilePtr32::parse, offset = 40)]
-    #[br(args { inner: args! { count: hash_count as usize }})]
+    #[br(parse_with = parse_ptr32_count(hash_count as usize), offset = 40)]
     #[xc3(offset(u32))]
     pub hashes: Vec<u32>,
 

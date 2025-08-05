@@ -1,8 +1,8 @@
 use bilge::prelude::*;
-use binrw::{args, binread, BinRead, BinWrite, FilePtr32};
+use binrw::{binread, BinRead, BinWrite};
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
-use crate::xc3_write_binwrite_impl;
+use crate::{parse_ptr32_count, xc3_write_binwrite_impl};
 
 // TODO: Better type and variable names.
 #[binread]
@@ -17,8 +17,7 @@ pub struct Omo {
     pub frame_count: u16,
     pub frame_size: u16,
 
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: node_count as usize }})]
+    #[br(parse_with = parse_ptr32_count(node_count as usize))]
     #[xc3(offset(u32))]
     pub nodes: Vec<OmoNode>,
 
@@ -26,13 +25,12 @@ pub struct Omo {
     #[bw(ignore)]
     offsets: [u32; 2],
 
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: (offsets[1] - offsets[0]) as usize }})]
+    #[br(parse_with = parse_ptr32_count((offsets[1] - offsets[0]) as usize))]
     #[xc3(offset(u32))]
     pub inter_data: Vec<u8>,
 
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: frame_count as usize, inner: frame_size } })]
+    #[br(parse_with = parse_ptr32_count(frame_count as usize))]
+    #[br(args { inner: frame_size })]
     #[xc3(offset(u32))]
     pub frames: Vec<Frame>,
 }

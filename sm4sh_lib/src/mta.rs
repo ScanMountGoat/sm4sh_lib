@@ -1,7 +1,7 @@
-use binrw::{args, binread, BinRead, FilePtr32};
+use binrw::{binread, BinRead, FilePtr32};
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
-use crate::{parse_string_opt_ptr32, parse_string_ptr32};
+use crate::{parse_ptr32_count, parse_string_opt_ptr32, parse_string_ptr32};
 
 // TODO: different types for MTA2, MTA3, and MTA4
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
@@ -21,14 +21,12 @@ pub struct Mta4 {
     pub frame_rate: u32,
 
     pub mat_count: u32,
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: mat_count as usize }})]
+    #[br(parse_with = parse_ptr32_count(mat_count as usize))]
     #[xc3(offset(u32))]
     pub material_entries: Vec<MatEntryOffset>,
 
     pub vis_count: u32,
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: vis_count as usize }})]
+    #[br(parse_with = parse_ptr32_count(vis_count as usize))]
     #[xc3(offset(u32))]
     pub visibility_entries: Vec<VisEntryOffset>,
 
@@ -52,8 +50,7 @@ pub struct MatEntry {
     pub mat_hash: u32,
 
     pub property_count: u32,
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: property_count as usize }})]
+    #[br(parse_with = parse_ptr32_count(property_count as usize))]
     #[xc3(offset(u32))]
     pub properties: Vec<MatDataOffset>,
 
@@ -62,8 +59,7 @@ pub struct MatEntry {
     pub unk2: u8,
     pub unk3: u8,
 
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: pattern_count as usize } })]
+    #[br(parse_with = parse_ptr32_count(pattern_count as usize))]
     #[xc3(offset(u32))]
     pub pattern_entries: Vec<PatternEntryOffset>,
 
@@ -94,8 +90,8 @@ pub struct MatData {
     pub unk2: u16,
     pub anim_type: u16,
 
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { inner: value_count, count: frame_count as usize }})]
+    #[br(parse_with = parse_ptr32_count(frame_count as usize))]
+    #[br(args { inner: value_count })]
     #[xc3(offset(u32), align(32))]
     pub data: Vec<MatDataValue>,
 }
@@ -133,8 +129,7 @@ pub struct VisEntryData {
     pub unk1: u16,
 
     pub key_frame_count: u16,
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: key_frame_count as usize }})]
+    #[br(parse_with = parse_ptr32_count(key_frame_count as usize))]
     #[xc3(offset(u32), align(32))]
     pub keyframes: Vec<VisKeyFrame>,
 }
@@ -164,8 +159,7 @@ pub struct PatternEntry {
     #[br(temp, restore_position)]
     key_frames_offset: u32,
 
-    #[br(parse_with = FilePtr32::parse)]
-    #[br(args { inner: args! { count: key_frame_count as usize }})]
+    #[br(parse_with = parse_ptr32_count(key_frame_count as usize))]
     #[xc3(offset(u32))]
     pub key_frames: Vec<PatternKeyFrame>,
 
