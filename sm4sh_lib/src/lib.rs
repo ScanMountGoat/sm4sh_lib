@@ -2,6 +2,7 @@ use std::io::{Read, Seek, SeekFrom};
 
 use binrw::{file_ptr::FilePtrArgs, BinRead, BinReaderExt, BinResult, Endian, NullString};
 
+pub mod jtb;
 pub mod mta;
 pub mod nhb;
 pub mod nsh;
@@ -9,6 +10,7 @@ pub mod nud;
 pub mod nut;
 pub mod omo;
 pub mod pack;
+pub mod sb;
 pub mod vbn;
 
 fn parse_opt_ptr32<T, R, Args>(
@@ -89,6 +91,8 @@ file_write_full_impl!(
     mta::Mta
 );
 
+file_write_full_impl!(xc3_write::Endian::Little, nhb::Nhb);
+
 macro_rules! xc3_write_binwrite_impl {
     ($($ty:ty),*) => {
         $(
@@ -142,6 +146,7 @@ macro_rules! file_read_impl {
     };
 }
 
+// TODO: Detect endianness by trying both for u32 magic?
 file_read_impl!(
     Endian::Big,
     nud::Nud,
@@ -150,7 +155,8 @@ file_read_impl!(
     vbn::Vbn,
     pack::Pack,
     omo::Omo,
-    mta::Mta
+    mta::Mta,
+    jtb::Jtb
 );
 
-file_read_impl!(Endian::Little, nhb::Nhb);
+file_read_impl!(Endian::Little, nhb::Nhb, sb::Sb);

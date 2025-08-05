@@ -1,9 +1,19 @@
-use std::{io::Cursor, path::Path};
+use std::{collections::BTreeSet, io::Cursor, path::Path};
 
 use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
-use sm4sh_lib::{mta::Mta, nhb::Nhb, nud::Nud, nut::Nut, omo::Omo, pack::Pack, vbn::Vbn};
+use sm4sh_lib::{
+    jtb::Jtb,
+    mta::Mta,
+    nhb::{DataItemInner, Nhb},
+    nud::Nud,
+    nut::Nut,
+    omo::Omo,
+    pack::Pack,
+    sb::Sb,
+    vbn::Vbn,
+};
 use sm4sh_model::{animation::Animation, NudModel};
 
 #[derive(Parser)]
@@ -30,6 +40,12 @@ struct Cli {
 
     #[arg(long)]
     nhb: bool,
+
+    #[arg(long)]
+    jtb: bool,
+
+    #[arg(long)]
+    sb: bool,
 
     #[arg(long)]
     nud_model: bool,
@@ -73,6 +89,16 @@ fn main() {
     if cli.nhb || cli.all {
         println!("Checking Nhb files...");
         check_all(root, &["*.nhb"], check_nhb);
+    }
+
+    if cli.jtb || cli.all {
+        println!("Checking Jtb files...");
+        check_all(root, &["*.jtb"], check_jtb);
+    }
+
+    if cli.sb || cli.all {
+        println!("Checking Sb files...");
+        check_all(root, &["*.sb"], check_sb);
     }
 
     if cli.nud_model || cli.all {
@@ -213,6 +239,18 @@ fn check_nhb(nhb: Nhb, path: &Path, original_bytes: &[u8]) {
     nhb.write(&mut writer).unwrap();
     if writer.into_inner() != original_bytes {
         println!("Nhb read/write not 1:1 for {path:?}");
+    }
+}
+
+fn check_jtb(jtb: Jtb, path: &Path, original_bytes: &[u8]) {
+    if !write_be_bytes_equals(&jtb, original_bytes) {
+        println!("Jtb read/write not 1:1 for {path:?}");
+    }
+}
+
+fn check_sb(sb: Sb, path: &Path, original_bytes: &[u8]) {
+    if !write_le_bytes_equals(&sb, original_bytes) {
+        println!("Sb read/write not 1:1 for {path:?}");
     }
 }
 

@@ -6,6 +6,7 @@ Python bindings for sm4sh_model are available with [sm4sh_model_py](https://gith
 ## Formats
 | Format | Magic | Extension | Description |
 | --- | --- | --- | --- |
+| [Jtb](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/jtb.rs) | | jtb | joint tables |
 | [Mta](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/mta.rs) | MTA2, MTA3, MTA4 | mta | material animations | 
 | [Nhb](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/nhb.rs) | NHB, BHN | nhb | helper bones |
 | [Nsh](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/nsh.rs) | NSP3 | nsh | shaders | 
@@ -13,6 +14,7 @@ Python bindings for sm4sh_model are available with [sm4sh_model_py](https://gith
 | [Nut](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/nut.rs) | NTP3, NTWU | nut | textures | 
 | [Omo](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/omo.rs) | OMO | omo | animations | 
 | [Pack](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/pack.rs) | PACK, KCAP | pac | file archives |
+| [Sb](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/sb.rs) | SWB, BWS | sb | swing bones |
 | [Vbn](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/vbn.rs) | VBN, NVB | vbn | skeletons |
 
 ## Credits

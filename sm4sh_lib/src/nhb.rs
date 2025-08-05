@@ -29,7 +29,7 @@ pub struct Nhb {
     pub unk5: u32,
 
     #[br(count = data_count)]
-    pub unk6: Vec<Data>,
+    pub items: Vec<Data>,
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
@@ -80,7 +80,7 @@ pub enum DataItemInner {
     #[brw(magic(5u32))]
     Unk5 {
         #[br(parse_with = until_eof)]
-        items: Vec<u16>,
+        items: Vec<(i16, i16)>,
     },
 
     #[brw(magic(6u32))]
@@ -94,7 +94,7 @@ pub enum DataItemInner {
     #[brw(magic(7u32))]
     Unk7 {
         #[br(parse_with = until_eof)]
-        items: Vec<f32>,
+        items: Vec<u32>,
     },
 
     // TODO: always empty?
