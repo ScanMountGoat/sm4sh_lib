@@ -3,14 +3,62 @@ use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
 use crate::{parse_ptr32_count, parse_string_opt_ptr32, parse_string_ptr32};
 
-// TODO: different types for MTA2, MTA3, and MTA4
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
 pub enum Mta {
+    Mta2(Mta2),
+    Mta3(Mta3),
     Mta4(Mta4),
 }
 
-#[binread]
-#[derive(Debug, Xc3Write, PartialEq, Clone)]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
+#[br(magic(b"MTA2"))]
+#[xc3(magic(b"MTA2"))]
+pub struct Mta2 {
+    pub unk1: u32,
+    pub frame_count: u32,
+    pub start_frame: u32,
+    pub end_frame: u32,
+    pub frame_rate: u32,
+
+    pub mat_count: u32,
+    #[br(parse_with = parse_ptr32_count(mat_count as usize))]
+    #[xc3(offset(u32))]
+    pub material_entries: Vec<EntryOffset<MatEntry2>>,
+
+    pub vis_count: u32,
+    #[br(parse_with = parse_ptr32_count(vis_count as usize))]
+    #[xc3(offset(u32))]
+    pub visibility_entries: Vec<EntryOffset<VisEntry>>,
+
+    // TODO: padding?
+    pub unks: [u32; 4],
+}
+
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
+#[br(magic(b"MTA3"))]
+#[xc3(magic(b"MTA3"))]
+pub struct Mta3 {
+    pub unk1: u32,
+    pub frame_count: u32,
+    pub start_frame: u32,
+    pub end_frame: u32,
+    pub frame_rate: u32,
+
+    pub mat_count: u32,
+    #[br(parse_with = parse_ptr32_count(mat_count as usize))]
+    #[xc3(offset(u32))]
+    pub material_entries: Vec<EntryOffset<MatEntry2>>,
+
+    pub vis_count: u32,
+    #[br(parse_with = parse_ptr32_count(vis_count as usize))]
+    #[xc3(offset(u32))]
+    pub visibility_entries: Vec<EntryOffset<VisEntry>>,
+
+    // TODO: padding?
+    pub unks: [u32; 4],
+}
+
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"MTA4"))]
 #[xc3(magic(b"MTA4"))]
 pub struct Mta4 {
@@ -23,26 +71,19 @@ pub struct Mta4 {
     pub mat_count: u32,
     #[br(parse_with = parse_ptr32_count(mat_count as usize))]
     #[xc3(offset(u32))]
-    pub material_entries: Vec<MatEntryOffset>,
+    pub material_entries: Vec<EntryOffset<MatEntry4>>,
 
     pub vis_count: u32,
     #[br(parse_with = parse_ptr32_count(vis_count as usize))]
     #[xc3(offset(u32))]
-    pub visibility_entries: Vec<VisEntryOffset>,
+    pub visibility_entries: Vec<EntryOffset<VisEntry>>,
 
     // TODO: padding?
     pub unks: [u32; 4],
 }
 
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
-pub struct MatEntryOffset {
-    #[br(parse_with = FilePtr32::parse)]
-    #[xc3(offset(u32), align(32))]
-    pub entry: MatEntry,
-}
-
-#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
-pub struct MatEntry {
+pub struct MatEntry2 {
     #[br(parse_with = parse_string_ptr32)]
     #[xc3(offset(u32), align(4))]
     pub name: String,
@@ -52,7 +93,7 @@ pub struct MatEntry {
     pub property_count: u32,
     #[br(parse_with = parse_ptr32_count(property_count as usize))]
     #[xc3(offset(u32))]
-    pub properties: Vec<MatDataOffset>,
+    pub properties: Vec<EntryOffset<MatData>>,
 
     pub pattern_count: u8,
     pub unk1: u8,
@@ -61,21 +102,36 @@ pub struct MatEntry {
 
     #[br(parse_with = parse_ptr32_count(pattern_count as usize))]
     #[xc3(offset(u32))]
-    pub pattern_entries: Vec<PatternEntryOffset>,
+    pub pattern_entries: Vec<EntryOffset<PatternEntry>>,
+}
+
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
+pub struct MatEntry4 {
+    #[br(parse_with = parse_string_ptr32)]
+    #[xc3(offset(u32), align(4))]
+    pub name: String,
+
+    pub mat_hash: u32,
+
+    pub property_count: u32,
+    #[br(parse_with = parse_ptr32_count(property_count as usize))]
+    #[xc3(offset(u32))]
+    pub properties: Vec<EntryOffset<MatData>>,
+
+    pub pattern_count: u8,
+    pub unk1: u8,
+    pub unk2: u8,
+    pub unk3: u8,
+
+    #[br(parse_with = parse_ptr32_count(pattern_count as usize))]
+    #[xc3(offset(u32))]
+    pub pattern_entries: Vec<EntryOffset<PatternEntry>>,
 
     // TODO: not present for v3
     #[br(parse_with = parse_string_opt_ptr32)]
     #[xc3(offset(u32), align(4))]
     pub second_name_offset: Option<String>,
     pub mat_hash2: u32,
-}
-
-// TODO: make this generic since the alignment is always 32
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
-pub struct MatDataOffset {
-    #[br(parse_with = FilePtr32::parse)]
-    #[xc3(offset(u32), align(32))]
-    pub data: MatData,
 }
 
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
@@ -101,13 +157,6 @@ pub struct MatData {
 pub struct MatDataValue {
     #[br(count = value_count)]
     pub values: Vec<f32>,
-}
-
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
-pub struct VisEntryOffset {
-    #[br(parse_with = FilePtr32::parse)]
-    #[xc3(offset(u32), align(32))]
-    pub entry: VisEntry,
 }
 
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
@@ -141,13 +190,6 @@ pub struct VisKeyFrame {
     pub unk1: u8,
 }
 
-#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
-pub struct PatternEntryOffset {
-    #[br(parse_with = FilePtr32::parse)]
-    #[xc3(offset(u32), align(32))]
-    pub entry: PatternEntry,
-}
-
 #[binread]
 #[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(stream = r)]
@@ -179,6 +221,65 @@ pub struct PatternKeyFrame {
     pub frame_num: u32,
 }
 
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
+pub struct EntryOffset<T>
+where
+    T: 'static,
+    T: Xc3Write,
+    for<'a> <T as Xc3Write>::Offsets<'a>: Xc3WriteOffsets<Args = ()>,
+    for<'a> T: BinRead<Args<'a> = ()>,
+{
+    #[br(parse_with = FilePtr32::parse)]
+    #[xc3(offset(u32), align(32))]
+    pub entry: T,
+}
+
+impl Xc3WriteOffsets for Mta2Offsets<'_> {
+    type Args = ();
+
+    fn write_offsets<W: std::io::Write + std::io::Seek>(
+        &self,
+        writer: &mut W,
+        base_offset: u64,
+        data_ptr: &mut u64,
+        endian: xc3_write::Endian,
+        _args: Self::Args,
+    ) -> xc3_write::Xc3Result<()> {
+        if !self.material_entries.data.is_empty() {
+            self.material_entries
+                .write_full(writer, base_offset, data_ptr, endian, ())?;
+        }
+        if !self.visibility_entries.data.is_empty() {
+            self.visibility_entries
+                .write_full(writer, base_offset, data_ptr, endian, ())?;
+        }
+        Ok(())
+    }
+}
+
+impl Xc3WriteOffsets for Mta3Offsets<'_> {
+    type Args = ();
+
+    fn write_offsets<W: std::io::Write + std::io::Seek>(
+        &self,
+        writer: &mut W,
+        base_offset: u64,
+        data_ptr: &mut u64,
+        endian: xc3_write::Endian,
+        _args: Self::Args,
+    ) -> xc3_write::Xc3Result<()> {
+        if !self.material_entries.data.is_empty() {
+            self.material_entries
+                .write_full(writer, base_offset, data_ptr, endian, ())?;
+        }
+        if !self.visibility_entries.data.is_empty() {
+            self.visibility_entries
+                .write_full(writer, base_offset, data_ptr, endian, ())?;
+        }
+        Ok(())
+    }
+}
+
 impl Xc3WriteOffsets for Mta4Offsets<'_> {
     type Args = ();
 
@@ -202,7 +303,7 @@ impl Xc3WriteOffsets for Mta4Offsets<'_> {
     }
 }
 
-impl Xc3WriteOffsets for MatEntryOffsets<'_> {
+impl Xc3WriteOffsets for MatEntry4Offsets<'_> {
     type Args = ();
 
     fn write_offsets<W: std::io::Write + std::io::Seek>(
