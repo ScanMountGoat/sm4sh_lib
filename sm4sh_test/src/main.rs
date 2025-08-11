@@ -4,7 +4,8 @@ use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
 use sm4sh_lib::{
-    jtb::Jtb, mta::Mta, nhb::Nhb, nud::Nud, nut::Nut, omo::Omo, pack::Pack, sb::Sb, vbn::Vbn,
+    jtb::Jtb, mta::Mta, nhb::Nhb, nsh::Nsh, nud::Nud, nut::Nut, omo::Omo, pack::Pack, sb::Sb,
+    vbn::Vbn,
 };
 use sm4sh_model::{animation::Animation, NudModel};
 
@@ -38,6 +39,9 @@ struct Cli {
 
     #[arg(long)]
     sb: bool,
+
+    #[arg(long)]
+    nsh: bool,
 
     #[arg(long)]
     nud_model: bool,
@@ -91,6 +95,11 @@ fn main() {
     if cli.sb || cli.all {
         println!("Checking Sb files...");
         check_all(root, &["*.sb"], check_sb);
+    }
+
+    if cli.nsh || cli.all {
+        println!("Checking Nsh files...");
+        check_all(root, &["*.nsh"], check_nsh);
     }
 
     if cli.nud_model || cli.all {
@@ -243,6 +252,12 @@ fn check_jtb(jtb: Jtb, path: &Path, original_bytes: &[u8]) {
 fn check_sb(sb: Sb, path: &Path, original_bytes: &[u8]) {
     if !write_le_bytes_equals(&sb, original_bytes) {
         println!("Sb read/write not 1:1 for {path:?}");
+    }
+}
+
+fn check_nsh(nsh: Nsh, path: &Path, original_bytes: &[u8]) {
+    if !write_be_bytes_equals(&nsh, original_bytes) {
+        println!("Nsh read/write not 1:1 for {path:?}");
     }
 }
 
