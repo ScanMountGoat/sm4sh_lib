@@ -358,10 +358,14 @@ impl Model {
         &self,
         queue: &wgpu::Queue,
         animation: &sm4sh_model::animation::Animation,
-        current_time_seconds: f32,
+        frame: f32,
     ) {
         if let Some(skeleton) = &self.skeleton {
-            let skinning_transforms = animation.skinning_transforms(skeleton, current_time_seconds);
+            // TODO: make looping optional?
+            let final_frame = animation.frame_count.saturating_sub(1) as f32;
+            let frame = frame.rem_euclid(final_frame);
+
+            let skinning_transforms = animation.skinning_transforms(skeleton, frame);
             queue.write_storage_data(&self.skinning_transforms, &skinning_transforms);
 
             let skinning_transforms_inv_transpose: Vec<_> = skinning_transforms
@@ -373,7 +377,7 @@ impl Model {
                 &skinning_transforms_inv_transpose,
             );
 
-            let transforms = animation.model_space_transforms(skeleton, current_time_seconds);
+            let transforms = animation.model_space_transforms(skeleton, frame);
             queue.write_storage_data(&self.bone_transforms, &transforms);
         }
     }

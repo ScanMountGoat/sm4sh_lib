@@ -91,26 +91,15 @@ impl Animation {
     ///
     /// See [VbnSkeleton::model_space_transforms] for the transforms without animations applied.
     pub fn model_space_transforms(&self, skeleton: &VbnSkeleton, frame: f32) -> Vec<Mat4> {
-        // TODO: interpolation and looping.
-        let frame_index = frame as usize;
-
         let mut final_transforms: Vec<_> = skeleton
             .bones
             .iter()
             .map(|b| {
                 if let Some(node) = self.nodes.iter().find(|n| n.hash == b.hash) {
-                    let translation = node
-                        .translation_keyframes
-                        .get(frame_index)
-                        .copied()
-                        .flatten()
-                        .unwrap_or(b.translation);
+                    let translation = node.sample_translation(frame).unwrap_or(b.translation);
 
                     let rotation = node
-                        .rotation_keyframes
-                        .get(frame_index)
-                        .copied()
-                        .flatten()
+                        .sample_rotation(frame)
                         .map(Mat4::from_quat)
                         .unwrap_or_else(|| {
                             Mat4::from_euler(
@@ -121,12 +110,7 @@ impl Animation {
                             )
                         });
 
-                    let scale = node
-                        .scale_keyframes
-                        .get(frame_index)
-                        .copied()
-                        .flatten()
-                        .unwrap_or(b.scale);
+                    let scale = node.sample_scale(frame).unwrap_or(b.scale);
 
                     Mat4::from_translation(translation) * rotation * Mat4::from_scale(scale)
                 } else {
@@ -252,6 +236,54 @@ impl Animation {
             scale: scale_points,
         }
     }
+}
+
+impl AnimationNode {
+    /// Sample the translation at `frame` using the appropriate interpolation between frames.
+    /// Returns `None` if the animation is empty.
+    pub fn sample_translation(&self, frame: f32) -> Option<Vec3> {
+        sample_vec3(&self.translation_keyframes, frame)
+    }
+
+    /// Sample the rotation at `frame` using the appropriate interpolation between frames.
+    /// Returns `None` if the animation is empty.
+    pub fn sample_rotation(&self, frame: f32) -> Option<Quat> {
+        sample_quat(&self.rotation_keyframes, frame)
+    }
+
+    /// Sample the scale at `frame` using the appropriate interpolation between frames.
+    /// Returns `None` if the animation is empty.
+    pub fn sample_scale(&self, frame: f32) -> Option<Vec3> {
+        sample_vec3(&self.scale_keyframes, frame)
+    }
+}
+
+fn sample_vec3(keyframes: &[Option<Vec3>], frame: f32) -> Option<Vec3> {
+    let (index, x) = frame_index_pos(frame, keyframes.len());
+    let current = keyframes.get(index).copied().flatten()?;
+    if let Some(next) = keyframes.get(index + 1).copied().flatten() {
+        Some(current.lerp(next, x))
+    } else {
+        Some(current)
+    }
+}
+
+fn sample_quat(keyframes: &[Option<Quat>], frame: f32) -> Option<Quat> {
+    let (index, x) = frame_index_pos(frame, keyframes.len());
+    let current = keyframes.get(index).copied().flatten()?;
+    if let Some(next) = keyframes.get(index + 1).copied().flatten() {
+        Some(current.lerp(next, x))
+    } else {
+        Some(current)
+    }
+}
+
+fn frame_index_pos(frame: f32, frame_count: usize) -> (usize, f32) {
+    // Animations are baked, so each "keyframe" lasts for exactly 1 frame at 60 fps.
+    // The final keyframe should persist for the rest of the animation.
+    let index = (frame as usize).min(frame_count.saturating_sub(1));
+    let x = frame.fract();
+    (index, x)
 }
 
 #[derive(Debug)]
