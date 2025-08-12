@@ -1,5 +1,5 @@
 [workspace]
-members = ["sm4sh_lib", "sm4sh_model", "sm4sh_test", "sm4sh_viewer", "sm4sh_wgpu", "sm4sh_wgpu_batch"]
+members = ["sm4sh_lib", "sm4sh_model", "sm4sh_shader", "sm4sh_test", "sm4sh_viewer", "sm4sh_wgpu", "sm4sh_wgpu_batch"]
 resolver = "2"
 
 [workspace.dependencies]

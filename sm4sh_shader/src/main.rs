@@ -1,0 +1,89 @@
+use clap::{Parser, Subcommand};
+use std::path::Path;
+
+mod gfx2;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+#[command(propagate_version = true)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Find the program in the nsh for each material flags value using shader dumps.
+    MatchShaders {
+        /// The path to a a text file with one flag like "92000161" per line.
+        flags: String,
+        /// The path to a text file with one RenderDoc Cemu shader name like "shader_8e2dda0cc310098f_0000000000000079" per line.
+        shader_names: String,
+        /// The folder containing nsh shader binaries from a shader file like texas_cross.nsh
+        nsh_shader_dump: String,
+        /// Cemu's dump/shaders folder to match with the nsh shaders and shader names.
+        cemu_shader_dump: String,
+    },
+}
+
+fn main() {
+    let cli = Cli::parse();
+    match cli.command {
+        Commands::MatchShaders {
+            flags,
+            shader_names,
+            nsh_shader_dump,
+            cemu_shader_dump,
+        } => {
+            map_shaders_to_nsh(&flags, &shader_names, &nsh_shader_dump, &cemu_shader_dump);
+        }
+    }
+}
+
+fn map_shaders_to_nsh(
+    flags: &str,
+    shader_names: &str,
+    nsh_shader_dump: &str,
+    cemu_shader_dump: &str,
+) {
+    let mut flags_values = Vec::new();
+    for line in std::fs::read_to_string(flags).unwrap().lines() {
+        flags_values.push(u32::from_str_radix(line, 16).unwrap());
+    }
+
+    // Read nsh binaries only once.
+    let mut sm4sh_shaders = Vec::new();
+    for entry in std::fs::read_dir(nsh_shader_dump).unwrap() {
+        let sm4sh_path = entry.unwrap().path();
+        if sm4sh_path.extension().and_then(|e| e.to_str()) == Some("bin") {
+            let sm4sh_bytes = std::fs::read(&sm4sh_path).unwrap();
+            sm4sh_shaders.push((sm4sh_path, sm4sh_bytes));
+        }
+    }
+
+    // Each flags like 92000161 has a pixel shader name like "shader_8e2dda0cc310098f_0000000000000079" from Cemu in RenderDoc.
+    // This matches a binary like 8e2dda0cc310098f_0000000000000079_ps.bin in the Cemu shader dump.
+    // This compiled WiiU shader binary can then be used to find the shader index in texas_cross.nsh.
+    // In practice, flags in order starting from 92000161 have increasing indices.
+    // The gap between indices varies, so this needs to be precomputed using shader dumps.
+    for (name, flags) in std::fs::read_to_string(shader_names)
+        .unwrap()
+        .lines()
+        .zip(flags_values)
+    {
+        let name = name.trim().strip_prefix("shader_").unwrap();
+        let path = Path::new(cemu_shader_dump).join(format!("{name}_ps.bin"));
+        if let Ok(cemu_bytes) = std::fs::read(path) {
+            for (sm4sh_path, sm4sh_bytes) in &sm4sh_shaders {
+                for i in 0..sm4sh_bytes.len() {
+                    if let Some(b2) = sm4sh_bytes.get(i..i + cemu_bytes.len()) {
+                        if b2 == cemu_bytes {
+                            println!("{flags:X?}, {name}, {sm4sh_path:?}");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
