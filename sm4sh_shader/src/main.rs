@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
-use std::path::Path;
+use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, path::Path};
 
 mod gfx2;
 
@@ -24,6 +25,14 @@ enum Commands {
         /// Cemu's dump/shaders folder to match with the nsh shaders and shader names.
         cemu_shader_dump: String,
     },
+    ShaderDatabase {
+        /// Path to a text file with the output of the match-shaders command.
+        flags_shaders: String,
+        /// The folder containing nsh shader binaries from a shader file like texas_cross.nsh
+        nsh_shader_dump: String,
+        /// Path for the output JSON database.
+        output: String,
+    },
 }
 
 fn main() {
@@ -37,6 +46,12 @@ fn main() {
         } => {
             map_shaders_to_nsh(&flags, &shader_names, &nsh_shader_dump, &cemu_shader_dump);
         }
+        Commands::ShaderDatabase {
+            flags_shaders,
+            nsh_shader_dump,
+
+            output,
+        } => create_shader_database(&flags_shaders, &nsh_shader_dump, &output),
     }
 }
 
@@ -78,7 +93,8 @@ fn map_shaders_to_nsh(
                 for i in 0..sm4sh_bytes.len() {
                     if let Some(b2) = sm4sh_bytes.get(i..i + cemu_bytes.len()) {
                         if b2 == cemu_bytes {
-                            println!("{flags:X?}, {name}, {sm4sh_path:?}");
+                            let sm4sh_name = sm4sh_path.file_stem().unwrap().to_string_lossy();
+                            println!("{flags:X?}, {name}, {sm4sh_name}");
                             break;
                         }
                     }
@@ -86,4 +102,61 @@ fn map_shaders_to_nsh(
             }
         }
     }
+}
+
+// TODO: Move JSON database to sm4sh_model?
+#[derive(Serialize, Deserialize)]
+struct ShaderDatabase {
+    programs: BTreeMap<String, ShaderProgram>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ShaderProgram {
+    pub samplers: BTreeMap<usize, String>,
+    pub parameters: BTreeMap<usize, String>,
+}
+
+fn create_shader_database(flags_shaders: &str, nsh_shader_dump: &str, output: &str) {
+    let mut programs = BTreeMap::new();
+    for line in std::fs::read_to_string(flags_shaders).unwrap().lines() {
+        let parts: Vec<_> = line.split(",").map(|s| s.trim()).collect();
+        let flags = parts[0].to_string();
+        let nsh_index: usize = parts[2]
+            .strip_prefix("texas_cross.")
+            .unwrap()
+            .parse()
+            .unwrap();
+
+        let txt_path = Path::new(nsh_shader_dump).join(format!("texas_cross.{nsh_index}.txt"));
+        let text = std::fs::read_to_string(txt_path).unwrap();
+        let header = gfx2::pixel_shader_header(&text).unwrap().1;
+
+        let samplers = header
+            .sampler_vars
+            .into_iter()
+            .map(|s| (s.location, s.name))
+            .collect();
+
+        // NU_ parameters are in the MC block.
+        let mut parameters = BTreeMap::new();
+        if let Some(block_index) = header.uniform_blocks.iter().position(|b| b.name == "MC") {
+            for var in header.uniform_vars.into_iter() {
+                if var.block == block_index {
+                    parameters.insert(var.offset, var.name);
+                }
+            }
+        }
+
+        programs.insert(
+            flags,
+            ShaderProgram {
+                samplers,
+                parameters,
+            },
+        );
+    }
+
+    let database = ShaderDatabase { programs };
+    let json = serde_json::to_string_pretty(&database).unwrap();
+    std::fs::write(output, &json).unwrap();
 }
