@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use glam::{ivec4, vec4, Mat4, UVec4, Vec4, Vec4Swizzles};
+use log::error;
 use sm4sh_model::{
     vertex::{Bones, Colors, Normals, Uvs},
     DstFactor, NudMesh, NudModel, SrcFactor, VbnSkeleton,
@@ -186,28 +187,21 @@ fn create_mesh(
     let mut normal_texture = None;
 
     if let Some(material) = &mesh.material1 {
-        // TODO: Is this the "correct" way to detect texture types?
-        // TODO: Cross reference this with shader uniforms?
-        // TODO: Unit tests for all known 4th bytes?
-        let mut texture_index = 0;
-        if material.flags.unk1().diffuse() {
-            color_texture = hash_to_texture.get(&material.textures[texture_index].hash);
-            texture_index += 1;
-        }
-        if material.flags.unk1().sphere() {
-            texture_index += 1;
-        }
-        // TODO: has stage cube?
-        // TODO: has cube = has ramp or cube and not dummy ramp and not sphere map
-        if material.flags.unk1().normal() {
-            normal_texture = hash_to_texture.get(&material.textures[texture_index].hash);
-            texture_index += 1;
-        }
-        if material.flags.unk1().ramp_or_cube() {
-            texture_index += 1;
-        }
-        if material.flags.unk1().dummy_ramp() {
-            texture_index += 1;
+        // TODO: Just use integers for keys in the database?
+        if let Some(program) = shared_data
+            .database
+            .programs
+            .get(&format!("{:X}", material.shader_id))
+        {
+            for ((_, s), texture) in program.samplers.iter().zip(&material.textures) {
+                match s.as_str() {
+                    "colorSampler" => color_texture = hash_to_texture.get(&texture.hash),
+                    "normalSampler" => normal_texture = hash_to_texture.get(&texture.hash),
+                    _ => (),
+                }
+            }
+        } else {
+            error!("Unable to find shader {:X} in database", material.shader_id);
         }
     }
 

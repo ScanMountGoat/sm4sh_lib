@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
+use sm4sh_model::shader_database::{ShaderDatabase, ShaderProgram};
 use std::{collections::BTreeMap, path::Path};
 
 mod gfx2;
@@ -102,18 +102,6 @@ fn map_shaders_to_nsh(
             }
         }
     }
-}
-
-// TODO: Move JSON database to sm4sh_model?
-#[derive(Serialize, Deserialize)]
-struct ShaderDatabase {
-    programs: BTreeMap<String, ShaderProgram>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct ShaderProgram {
-    pub samplers: BTreeMap<usize, String>,
-    pub parameters: BTreeMap<usize, String>,
 }
 
 fn create_shader_database(flags_shaders: &str, nsh_shader_dump: &str, output: &str) {

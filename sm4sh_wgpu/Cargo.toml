@@ -10,6 +10,7 @@ sm4sh_model = { path = "../sm4sh_model" }
 wgpu.workspace = true
 glam = { workspace = true, features = ["bytemuck"] }
 ordered-float.workspace = true
+log.workspace = true
 
 [build-dependencies]
 wgsl_to_wgpu = "0.15.0"

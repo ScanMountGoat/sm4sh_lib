@@ -1,5 +1,6 @@
 use encase::{internal::WriteInto, ShaderSize, ShaderType, StorageBuffer, UniformBuffer};
 use glam::{vec2, Mat4, Vec4};
+use sm4sh_model::shader_database::ShaderDatabase;
 use wgpu::util::DeviceExt;
 
 mod model;
@@ -122,13 +123,16 @@ impl CameraData {
 pub struct SharedData {
     model_layout: wgpu::PipelineLayout,
     model_shader: wgpu::ShaderModule,
+    database: ShaderDatabase,
 }
 
 impl SharedData {
     pub fn new(device: &wgpu::Device) -> Self {
+        // TODO: Include database in binary?
         Self {
             model_layout: crate::shader::model::create_pipeline_layout(device),
             model_shader: crate::shader::model::create_shader_module(device),
+            database: ShaderDatabase::from_file("shaders.json"),
         }
     }
 }

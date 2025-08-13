@@ -1,7 +1,3 @@
-pub mod animation;
-pub mod skinning;
-pub mod vertex;
-
 use std::{
     borrow::Cow,
     collections::BTreeSet,
@@ -17,8 +13,8 @@ use binrw::BinResult;
 use glam::{EulerRot, Mat4, Vec3, Vec4, Vec4Swizzles};
 use sm4sh_lib::{
     nud::{
-        BoundingSphere, Material, MaterialFlags, MaterialProperty, MaterialTexture, Mesh,
-        MeshGroup, Nud, VertexIndexFlags,
+        BoundingSphere, Material, MaterialProperty, MaterialTexture, Mesh, MeshGroup, Nud,
+        VertexIndexFlags,
     },
     nut::Nut,
     vbn::Vbn,
@@ -30,6 +26,11 @@ pub use sm4sh_lib::nud::{
 };
 pub use sm4sh_lib::nut::NutFormat;
 pub use sm4sh_lib::vbn::BoneType;
+
+pub mod animation;
+pub mod shader_database;
+pub mod skinning;
+pub mod vertex;
 
 /// Load a nud model from `path` and the corresponding `"model.nut"` and `"model.vbn"` if present.
 pub fn load_model<P: AsRef<Path>>(path: P) -> BinResult<NudModel> {
@@ -71,8 +72,7 @@ pub struct NudMesh {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudMaterial {
-    // TODO: Should this recreate flags or store them directly?
-    pub flags: MaterialFlags,
+    pub shader_id: u32,
     pub src_factor: SrcFactor,
     pub dst_factor: DstFactor,
     pub alpha_func: AlphaFunc,
@@ -379,7 +379,7 @@ fn vbn_skeleton(vbn: &Vbn) -> VbnSkeleton {
 
 fn material(m: &NudMaterial) -> Material {
     Material {
-        flags: m.flags,
+        shader_id: m.shader_id,
         unk1: 0,
         src_factor: m.src_factor,
         tex_count: m.textures.len() as u16,
@@ -461,7 +461,7 @@ fn align<W: Write + Seek>(writer: &mut W, align: u64, pad: u8) -> Result<(), std
 
 fn nud_material(material: &sm4sh_lib::nud::Material) -> NudMaterial {
     NudMaterial {
-        flags: material.flags,
+        shader_id: material.shader_id,
         src_factor: material.src_factor,
         dst_factor: material.dst_factor,
         alpha_func: material.alpha_func,
