@@ -1,11 +1,9 @@
-use std::path::Path;
+use std::{path::Path, sync::Mutex};
 
 use futures::executor::block_on;
 use log::error;
 use rayon::prelude::*;
-use sm4sh_lib::{nud::Nud, nut::Nut, vbn::Vbn};
-use sm4sh_model::NudModel;
-use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData, load_model};
+use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData};
 use wgpu::{
     DeviceDescriptor, Extent3d, PowerPreference, RequestAdapterOptions, TextureDescriptor,
     TextureDimension, TextureUsages,
@@ -109,6 +107,8 @@ fn main() {
     // Load and render folders individually to save on memory.
     let source_folder = Path::new(source_folder);
 
+    let lock = Mutex::new(());
+
     // Render each model folder.
     let start = std::time::Instant::now();
     globwalk::GlobWalkerBuilder::from_patterns(source_folder, &["*.{nud}"])
@@ -119,12 +119,20 @@ fn main() {
         .for_each(|e| {
             let path = e.path();
 
-            let nud_model = load_nud_model(path);
+            let nud_model = sm4sh_model::load_model(path);
 
             match nud_model {
                 Ok(nud_model) => {
-                    let model =
-                        load_model(&device, &queue, &nud_model, surface_format, &shared_data);
+                    // TODO: Some sort of race condition for texture creation?
+                    let _guard = lock.lock().unwrap();
+
+                    let model = sm4sh_wgpu::load_model(
+                        &device,
+                        &queue,
+                        &nud_model,
+                        surface_format,
+                        &shared_data,
+                    );
 
                     // Create a unique buffer to avoid mapping a buffer from multiple threads.
                     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -166,13 +174,6 @@ fn main() {
         });
 
     println!("Completed in {:?}", start.elapsed());
-}
-
-fn load_nud_model(path: &Path) -> Result<NudModel, Box<dyn std::error::Error>> {
-    let nud = Nud::from_file(path)?;
-    let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
-    let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
-    NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref()).map_err(Into::into)
 }
 
 fn render_screenshot(
