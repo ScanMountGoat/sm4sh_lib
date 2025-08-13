@@ -5,7 +5,10 @@ use clap::Parser;
 use futures::executor::block_on;
 use glam::{vec3, Vec3};
 use log::{error, info};
-use sm4sh_model::animation::{load_animations, Animation};
+use sm4sh_model::{
+    animation::{load_animations, Animation},
+    shader_database::ShaderDatabase,
+};
 use sm4sh_wgpu::{load_model, CameraData, Model, Renderer, SharedData};
 use winit::{
     dpi::PhysicalPosition,
@@ -97,7 +100,8 @@ impl<'a> State<'a> {
         let camera = calculate_camera_data(size, translation, rotation_xyz);
         renderer.update_camera(&queue, &camera);
 
-        let shared_data = SharedData::new(&device);
+        let database = ShaderDatabase::from_file(&cli.database);
+        let shared_data = SharedData::new(&device, database);
 
         let nud_model = sm4sh_model::load_model(&cli.file)?;
         let model = load_model(&device, &queue, &nud_model, config.format, &shared_data);
@@ -324,6 +328,8 @@ fn calculate_camera_data(
 struct Cli {
     /// The nud file
     file: String,
+    /// The shader database JSON file
+    database: String,
     /// The animation file
     anim: Option<String>,
 }

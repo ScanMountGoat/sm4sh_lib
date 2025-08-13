@@ -53,6 +53,13 @@ pub fn load_model(
     let default_texture = create_default_black_texture(device, queue)
         .create_view(&wgpu::TextureViewDescriptor::default());
 
+    let default_cube_texture = create_default_black_cube_texture(device, queue).create_view(
+        &wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            ..Default::default()
+        },
+    );
+
     // TODO: texture module
     let textures = model
         .textures
@@ -118,6 +125,7 @@ pub fn load_model(
                             m,
                             &textures,
                             &default_texture,
+                            &default_cube_texture,
                             output_format,
                             shared_data,
                         )
@@ -142,6 +150,7 @@ fn create_mesh(
     mesh: &sm4sh_model::NudMesh,
     hash_to_texture: &BTreeMap<u32, wgpu::TextureView>,
     default_texture: &wgpu::TextureView,
+    default_cube_texture: &wgpu::TextureView,
     output_format: wgpu::TextureFormat,
     shared_data: &SharedData,
 ) -> Mesh {
@@ -184,7 +193,16 @@ fn create_mesh(
 
     // TODO: Load all textures and samplers.
     let mut color_texture = None;
+    let mut color_sampler = None;
+
     let mut normal_texture = None;
+    let mut normal_sampler = None;
+
+    let mut reflection_texture = None;
+    let mut reflection_sampler = None;
+
+    let mut reflection_cube_texture = None;
+    let mut reflection_cube_sampler = None;
 
     if let Some(material) = &mesh.material1 {
         // TODO: Just use integers for keys in the database?
@@ -195,8 +213,22 @@ fn create_mesh(
         {
             for ((_, s), texture) in program.samplers.iter().zip(&material.textures) {
                 match s.as_str() {
-                    "colorSampler" => color_texture = hash_to_texture.get(&texture.hash),
-                    "normalSampler" => normal_texture = hash_to_texture.get(&texture.hash),
+                    "colorSampler" => {
+                        color_texture = hash_to_texture.get(&texture.hash);
+                        color_sampler = Some(device.create_sampler(&sampler(texture)));
+                    }
+                    "normalSampler" => {
+                        normal_texture = hash_to_texture.get(&texture.hash);
+                        normal_sampler = Some(device.create_sampler(&sampler(texture)));
+                    }
+                    "reflectionSampler" => {
+                        reflection_texture = hash_to_texture.get(&texture.hash);
+                        reflection_sampler = Some(device.create_sampler(&sampler(texture)));
+                    }
+                    "reflectionCubeSampler" => {
+                        reflection_cube_texture = hash_to_texture.get(&texture.hash);
+                        reflection_cube_sampler = Some(device.create_sampler(&sampler(texture)));
+                    }
                     _ => (),
                 }
             }
@@ -216,16 +248,25 @@ fn create_mesh(
         "Uniforms",
         &crate::shader::model::Uniforms {
             has_normal_map: normal_texture.is_some() as u32,
+            has_reflection_map: reflection_texture.is_some() as u32,
+            has_reflection_cube_map: reflection_cube_texture.is_some() as u32,
+            ao_min_gain: get_parameter(mesh, "NU_aoMinGain").unwrap_or_default(),
         },
     );
 
     let bind_group2 = crate::shader::model::bind_groups::BindGroup2::from_bindings(
         device,
         crate::shader::model::bind_groups::BindGroupLayout2 {
-            color_texture: color_texture.unwrap_or(default_texture),
-            normal_texture: normal_texture.unwrap_or(default_texture),
-            color_sampler: &sampler,
             uniforms: uniforms.as_entire_buffer_binding(),
+            color_texture: color_texture.unwrap_or(default_texture),
+            color_sampler: color_sampler.as_ref().unwrap_or(&sampler),
+            normal_texture: normal_texture.unwrap_or(default_texture),
+            normal_sampler: normal_sampler.as_ref().unwrap_or(&sampler),
+            reflection_texture: reflection_texture.unwrap_or(default_texture),
+            reflection_sampler: reflection_sampler.as_ref().unwrap_or(&sampler),
+            // TODO: Correctly initialize cube textures.
+            reflection_cube_texture: default_cube_texture,
+            reflection_cube_sampler: reflection_cube_sampler.as_ref().unwrap_or(&sampler),
         },
     );
 
@@ -258,6 +299,52 @@ fn create_mesh(
         bind_group3,
         pipeline,
     }
+}
+
+fn sampler(texture: &sm4sh_model::NudTexture) -> wgpu::SamplerDescriptor {
+    // TODO: set mipmaps and anisotropy
+    wgpu::SamplerDescriptor {
+        label: None,
+        address_mode_u: address_mode(texture.wrap_mode_s),
+        address_mode_v: address_mode(texture.wrap_mode_t),
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: match texture.mag_filter {
+            sm4sh_model::MagFilter::Unk0 => wgpu::FilterMode::Nearest,
+            sm4sh_model::MagFilter::Nearest => wgpu::FilterMode::Nearest,
+            sm4sh_model::MagFilter::Linear => wgpu::FilterMode::Linear,
+        },
+        min_filter: match texture.min_filter {
+            sm4sh_model::MinFilter::LinearMipmapLinear => wgpu::FilterMode::Linear,
+            sm4sh_model::MinFilter::Nearest => wgpu::FilterMode::Nearest,
+            sm4sh_model::MinFilter::Linear => wgpu::FilterMode::Linear,
+            sm4sh_model::MinFilter::NearestMipmapLinear => wgpu::FilterMode::Nearest,
+        },
+        ..Default::default()
+    }
+}
+
+fn address_mode(m: sm4sh_model::WrapMode) -> wgpu::AddressMode {
+    match m {
+        sm4sh_model::WrapMode::Repeat => wgpu::AddressMode::Repeat,
+        sm4sh_model::WrapMode::MirroredRepeat => wgpu::AddressMode::MirrorRepeat,
+        sm4sh_model::WrapMode::ClampToEdge => wgpu::AddressMode::ClampToEdge,
+    }
+}
+
+fn get_parameter(mesh: &sm4sh_model::NudMesh, name: &str) -> Option<Vec4> {
+    let material = mesh.material1.as_ref()?;
+    material.properties.iter().find_map(|p| {
+        if p.name == name {
+            Some(vec4(
+                *p.values.get(0)?,
+                *p.values.get(1)?,
+                *p.values.get(2)?,
+                *p.values.get(3)?,
+            ))
+        } else {
+            None
+        }
+    })
 }
 
 fn set_bones(bones: &Bones, vertices: &mut [crate::shader::model::VertexInput0]) {
@@ -396,6 +483,31 @@ pub fn create_default_black_texture(device: &wgpu::Device, queue: &wgpu::Queue) 
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         &[0u8; 4 * 4 * 4],
+    )
+}
+
+pub fn create_default_black_cube_texture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+) -> wgpu::Texture {
+    device.create_texture_with_data(
+        queue,
+        &wgpu::TextureDescriptor {
+            label: Some("DEFAULT_CUBE"),
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 6,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        },
+        wgpu::util::TextureDataOrder::LayerMajor,
+        &[0u8; 4 * 4 * 4 * 6],
     )
 }
 

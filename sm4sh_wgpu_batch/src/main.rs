@@ -2,6 +2,7 @@ use std::path::Path;
 
 use futures::executor::block_on;
 use log::error;
+use sm4sh_model::shader_database::ShaderDatabase;
 use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData};
 use wgpu::{
     DeviceDescriptor, Extent3d, PowerPreference, RequestAdapterOptions, TextureDescriptor,
@@ -101,7 +102,8 @@ fn main() {
     let output = device.create_texture(&texture_desc);
     let output_view = output.create_view(&Default::default());
 
-    let shared_data = SharedData::new(&device);
+    let database = ShaderDatabase::from_file(&args[2]);
+    let shared_data = SharedData::new(&device, database);
 
     // Load and render folders individually to save on memory.
     let source_folder = Path::new(source_folder);

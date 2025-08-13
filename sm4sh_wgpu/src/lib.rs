@@ -127,12 +127,12 @@ pub struct SharedData {
 }
 
 impl SharedData {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, database: ShaderDatabase) -> Self {
         // TODO: Include database in binary?
         Self {
             model_layout: crate::shader::model::create_pipeline_layout(device),
             model_shader: crate::shader::model::create_shader_module(device),
-            database: ShaderDatabase::from_file("shaders.json"),
+            database,
         }
     }
 }

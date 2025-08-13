@@ -18,22 +18,44 @@ var<storage> skinning_transforms: array<mat4x4<f32>>;
 var<storage> skinning_transforms_inv_transpose: array<mat4x4<f32>>;
 
 // PerMaterial values
-// TODO: Add uniform structs.
-@group(2) @binding(0)
-var color_texture: texture_2d<f32>;
+struct Uniforms {
+    has_normal_map: u32,
+    has_reflection_map: u32,
+    has_reflection_cube_map: u32,
+    // NU_ parameters
+    ao_min_gain: vec4<f32>,
+}
 
+@group(2) @binding(0)
+var<uniform> uniforms: Uniforms;
+
+// colorSampler in shaders.
 @group(2) @binding(1)
-var normal_texture: texture_2d<f32>;
+var color_texture: texture_2d<f32>;
 
 @group(2) @binding(2)
 var color_sampler: sampler;
 
-struct Uniforms {
-    has_normal_map: u32,
-}
-
+// normalSampler in shaders.
 @group(2) @binding(3)
-var<uniform> uniforms: Uniforms;
+var normal_texture: texture_2d<f32>;
+
+@group(2) @binding(4)
+var normal_sampler: sampler;
+
+// reflectionSampler in shaders.
+@group(2) @binding(5)
+var reflection_texture: texture_2d<f32>;
+
+@group(2) @binding(6)
+var reflection_sampler: sampler;
+
+// reflectionCubeSampler in shaders.
+@group(2) @binding(7)
+var reflection_cube_texture: texture_cube<f32>;
+
+@group(2) @binding(8)
+var reflection_cube_sampler: sampler;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -116,14 +138,20 @@ fn apply_normal_map(normal_map: vec3<f32>, tangent: vec3<f32>, bitangent: vec3<f
     return normalize(tangent * x + bitangent * y + normal * z);
 }
 
+// Translated from Link's face fragment shader in RenderDoc with Cemu.
+fn diffuse_ao_blend(ao: f32, ao_min_gain: vec4<f32>) -> vec3<f32> {
+    // Calculate the effect of NU_aoMinGain on the ambient occlusion map.
+    return clamp((1.0 - ao_min_gain.rgb) * ao + ao_min_gain.rgb, vec3(0.0), vec3(1.0));
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Normals are in view space, so the view vector is simple.
     let view = vec3(0.0, 0.0, 1.0);
 
-    let normal_map_ao = textureSample(normal_texture, color_sampler, in.uv0).rgba;
+    let normal_map_ao = textureSample(normal_texture, normal_sampler, in.uv0).rgba;
     let normal_map = normal_map_ao.rgb;
-    let ao = normal_map_ao.a;
+    var ao = 1.0;
     let vertex_tangent = normalize(in.tangent);
     let vertex_bitangent = normalize(in.bitangent);
     let vertex_normal = normalize(in.normal);
@@ -131,6 +159,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var normal = vertex_normal;
     if uniforms.has_normal_map == 1u {
         normal = apply_normal_map(pow(normal_map, vec3(2.2)), vertex_tangent, vertex_bitangent, vertex_normal);
+        ao = normal_map_ao.a;
     }
 
     let lighting = max(dot(normal, view), 0.0);
@@ -138,7 +167,14 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let color = textureSample(color_texture, color_sampler, in.uv0).rgba;
     let vertex_color = in.color * 2.0;
 
-    var out_color = color.rgb * vertex_color.rgb * lighting;
+    let ao_blend = diffuse_ao_blend(ao, uniforms.ao_min_gain);
+
+    var out_color = color.rgb * vertex_color.rgb * lighting * ao_blend;
+
+    if uniforms.has_reflection_map == 1u {
+        let sphere_uvs = vec2(normal.x * 0.5 + 0.5, 1.0 - (normal.y * 0.5 + 0.5));
+        out_color += textureSample(reflection_texture, reflection_sampler, sphere_uvs).rgb;
+    }
 
     let out_alpha = color.a * vertex_color.a;
 
