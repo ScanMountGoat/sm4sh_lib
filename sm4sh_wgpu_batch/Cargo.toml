@@ -15,4 +15,4 @@ globwalk = "0.8.0"
 image = "0.25.1"
 futures-intrusive = "0.4.0"
 glam.workspace = true
-rayon = "1.8.1"
+rayon.workspace = true

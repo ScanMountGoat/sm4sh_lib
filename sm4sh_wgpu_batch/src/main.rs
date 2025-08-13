@@ -1,8 +1,7 @@
-use std::{path::Path, sync::Mutex};
+use std::path::Path;
 
 use futures::executor::block_on;
 use log::error;
-use rayon::prelude::*;
 use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData};
 use wgpu::{
     DeviceDescriptor, Extent3d, PowerPreference, RequestAdapterOptions, TextureDescriptor,
@@ -107,71 +106,79 @@ fn main() {
     // Load and render folders individually to save on memory.
     let source_folder = Path::new(source_folder);
 
-    let lock = Mutex::new(());
-
     // Render each model folder.
     let start = std::time::Instant::now();
-    globwalk::GlobWalkerBuilder::from_patterns(source_folder, &["*.{nud}"])
+    let paths: Vec<_> = globwalk::GlobWalkerBuilder::from_patterns(source_folder, &["*.{nud}"])
         .build()
         .unwrap()
-        .par_bridge()
         .filter_map(Result::ok)
-        .for_each(|e| {
-            let path = e.path();
+        .map(|e| e.path().to_path_buf())
+        .collect();
 
-            let nud_model = sm4sh_model::load_model(path);
+    // Round up to avoid skipping any files at the end.
+    let n = paths.len().div_ceil(rayon::current_num_threads());
 
-            match nud_model {
-                Ok(nud_model) => {
-                    // TODO: Some sort of race condition for texture creation?
-                    let _guard = lock.lock().unwrap();
+    // Rayon's thread pool causes weird texture rendering issues potentially due to work stealing.
+    // TODO: Investigate why textures don't load properly when using Rayon's threadpool.
+    // Scoped threads are slightly less efficient but don't have this issue.
+    std::thread::scope(|s| {
+        for i in 0..rayon::current_num_threads() {
+            let paths = paths.iter().skip(i * n).take(n);
+            s.spawn(|| {
+                for path in paths {
+                    let nud_model = sm4sh_model::load_model(path);
 
-                    let model = sm4sh_wgpu::load_model(
-                        &device,
-                        &queue,
-                        &nud_model,
-                        surface_format,
-                        &shared_data,
-                    );
+                    match nud_model {
+                        Ok(nud_model) => {
+                            let model = sm4sh_wgpu::load_model(
+                                &device,
+                                &queue,
+                                &nud_model,
+                                surface_format,
+                                &shared_data,
+                            );
 
-                    // Create a unique buffer to avoid mapping a buffer from multiple threads.
-                    let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                        size: WIDTH as u64 * HEIGHT as u64 * 4,
-                        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                        label: None,
-                        mapped_at_creation: false,
-                    });
+                            // Create a unique buffer to avoid mapping a buffer from multiple threads.
+                            let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                                size: WIDTH as u64 * HEIGHT as u64 * 4,
+                                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                                label: None,
+                                mapped_at_creation: false,
+                            });
 
-                    // Convert fighter/mario/model/body/c00/model.nud to mario_model_body_c00.
-                    let output_path = path
-                        .parent()
-                        .unwrap()
-                        .strip_prefix(source_folder)
-                        .unwrap()
-                        .components()
-                        .map(|c| c.as_os_str().to_string_lossy())
-                        .collect::<Vec<_>>()
-                        .join("_");
-                    let output_path = source_folder.join(output_path).with_extension("png");
+                            // Convert fighter/mario/model/body/c00/model.nud to mario_model_body_c00.
+                            let output_path = path
+                                .parent()
+                                .unwrap()
+                                .strip_prefix(source_folder)
+                                .unwrap()
+                                .components()
+                                .map(|c| c.as_os_str().to_string_lossy())
+                                .collect::<Vec<_>>()
+                                .join("_");
+                            let output_path = source_folder.join(output_path).with_extension("png");
 
-                    render_screenshot(
-                        &device,
-                        &renderer,
-                        &output_view,
-                        &model,
-                        &camera,
-                        &output,
-                        &output_buffer,
-                        texture_desc.size,
-                        &queue,
-                        output_path,
-                    );
+                            render_screenshot(
+                                &device,
+                                &renderer,
+                                &output_view,
+                                &model,
+                                &camera,
+                                &output,
+                                &output_buffer,
+                                texture_desc.size,
+                                &queue,
+                                output_path,
+                            );
+                        }
+                        Err(e) => {
+                            error!("Error loading {path:?}: {e}");
+                        }
+                    }
                 }
-                Err(e) => {
-                    error!("Error loading {path:?}: {e}");
-                }
-            }
-        });
+            });
+        }
+    });
 
     println!("Completed in {:?}", start.elapsed());
 }
