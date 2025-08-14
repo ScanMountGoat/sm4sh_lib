@@ -18,4 +18,7 @@ Python bindings for sm4sh_model are available with [sm4sh_model_py](https://gith
 | [Vbn](https://github.com/ScanMountGoat/sm4sh_lib/blob/main/sm4sh_lib/src/vbn.rs) | VBN, NVB | vbn | skeletons |
 
 ## Credits
-This project is based on previous development and reverse engineering work done for [Smash Forge](https://github.com/jam1garner/Smash-Forge).
+This project is based primarily on previous development and reverse engineering work done for Smash Forge.
+
+- [Smash-Forge](https://github.com/jam1garner/Smash-Forge)
+- [Nintendo-File-Formats](https://github.com/kinnay/Nintendo-File-Formats)
