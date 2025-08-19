@@ -1,4 +1,6 @@
-use binrw::{helpers::until, BinRead, BinWrite};
+use std::io::{Cursor, Seek, Write};
+
+use binrw::{helpers::until, BinRead, BinReaderExt, BinResult, BinWrite};
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"NSP3"))]
@@ -41,9 +43,7 @@ pub struct Block {
     pub header_size: u32,   // 32
     pub major_version: u32, // 1
     pub minor_version: u32, // 0
-    #[br(dbg)]
     pub block_type: BlockType,
-    #[br(dbg)]
     pub data_size: u32,
     // TODO: padding
     pub unk: [u32; 2],
@@ -67,4 +67,74 @@ pub enum BlockType {
     TextureHeader = 11,
     TextureImageData = 12,
     TextureMipmapData = 13,
+}
+
+#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
+#[brw(magic(b"}BLK"))]
+pub struct RelocationInfo {
+    pub size: u32,               // 40
+    pub unk1: u32,               // 0
+    pub shader_string_size: u32, // shader structs + strings
+    pub shader_strings_offset: u32,
+    pub strings_size: u32,
+    pub strings_offset: u32,
+    pub unk2: u32, //0
+    pub relocation_count: u32,
+    pub relocation_table_offset: u32,
+}
+
+impl Gfx2 {
+    // TODO: Create a gx2 struct instead to support saving with different endianness.
+    pub fn gx2_be_bytes(&self) -> BinResult<Vec<u8>> {
+        let mut writer = Cursor::new(Vec::new());
+
+        let mut binary_pos = 4096;
+        for block in &self.blocks {
+            if matches!(
+                block.block_type,
+                BlockType::VertexShaderHeader | BlockType::PixelShaderHeader
+            ) {
+                let mut block_reader = Cursor::new(&block.data);
+                block_reader.seek(std::io::SeekFrom::End(-40))?;
+                let rlt: RelocationInfo = block_reader.read_be()?;
+
+                // TODO: Don't assume this starts at 0?
+                let mut data = block.data[..rlt.shader_string_size as usize].to_vec();
+
+                // Align program data.
+                binary_pos = rlt.shader_string_size.next_multiple_of(4096);
+
+                // Relocate offsets.
+                block_reader.set_position((rlt.relocation_table_offset & 0xFFFFF) as u64);
+                for _ in 0..rlt.relocation_count {
+                    // AAABBBBB with A tag and B offset.
+                    // TODO: offset type with 0xCA7... for string and 0xD06... for data
+                    let offset: u32 = block_reader.read_be()?;
+                    let offset_pos = (offset & 0xFFFFF) as usize;
+
+                    let old_offset =
+                        u32::from_be_bytes(data[offset_pos..offset_pos + 4].try_into().unwrap());
+                    let new_offset = old_offset & 0xFFFFF;
+                    data[offset_pos..offset_pos + 4].copy_from_slice(&new_offset.to_be_bytes());
+                }
+
+                // TODO: Why isn't the program offset in the relocation information?
+                if block.block_type == BlockType::VertexShaderHeader {
+                    data[212..216].copy_from_slice(&binary_pos.to_be_bytes());
+                } else {
+                    data[168..172].copy_from_slice(&binary_pos.to_be_bytes());
+                }
+
+                writer.write_all(&data)?;
+            } else if matches!(
+                block.block_type,
+                BlockType::VertexShaderProgram | BlockType::PixelShaderProgram
+            ) {
+                writer.set_position(binary_pos as u64);
+                writer.write_all(&block.data)?;
+            }
+        }
+
+        Ok(writer.into_inner())
+    }
 }
