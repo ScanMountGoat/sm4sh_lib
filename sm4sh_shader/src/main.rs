@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
+use sm4sh_lib::nsh::{BlockType, Nsh};
 use sm4sh_model::shader_database::{ShaderDatabase, ShaderProgram};
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
 
 mod gfx2;
 
@@ -14,16 +15,26 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    DumpShaders {
+        /// The input .nsh shader file.
+        nsh: String,
+        /// The output folder for the disassembled shaders.
+        output_folder: String,
+        /// The path to the gfd-tool executable
+        gfd_tool: String,
+    },
     /// Find the program in the nsh for each material shader ID value using shader dumps.
     MatchShaders {
         /// The path to a a text file with one ID like "92000161" per line.
         shader_ids: String,
         /// The path to a text file with one RenderDoc Cemu shader name like "shader_8e2dda0cc310098f_0000000000000079" per line.
         shader_names: String,
-        /// The folder containing nsh shader binaries from a shader file like texas_cross.nsh
+        /// The folder containing the output of the dump-shaders command.
         nsh_shader_dump: String,
         /// Cemu's dump/shaders folder to match with the nsh shaders and shader names.
         cemu_shader_dump: String,
+        /// Path for the output txt file.
+        output: String,
     },
     ShaderDatabase {
         /// Path to a text file with the output of the match-shaders command.
@@ -35,48 +46,101 @@ enum Commands {
     },
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    let start = std::time::Instant::now();
     match cli.command {
+        Commands::DumpShaders {
+            nsh,
+            output_folder,
+            gfd_tool,
+        } => dump_shaders(&nsh, &output_folder, &gfd_tool)?,
         Commands::MatchShaders {
             shader_ids,
             shader_names,
             nsh_shader_dump,
             cemu_shader_dump,
-        } => {
-            map_shaders_to_nsh(
-                &shader_ids,
-                &shader_names,
-                &nsh_shader_dump,
-                &cemu_shader_dump,
-            );
-        }
+            output,
+        } => match_shaders_to_nsh(
+            &shader_ids,
+            &shader_names,
+            &nsh_shader_dump,
+            &cemu_shader_dump,
+            &output,
+        )?,
         Commands::ShaderDatabase {
             shader_ids_shaders,
             nsh_shader_dump,
 
             output,
-        } => create_shader_database(&shader_ids_shaders, &nsh_shader_dump, &output),
+        } => create_shader_database(&shader_ids_shaders, &nsh_shader_dump, &output)?,
     }
+    println!("Finished in {:?}", start.elapsed());
+    Ok(())
 }
 
-fn map_shaders_to_nsh(
+fn dump_shaders(nsh: &str, output: &str, gfd_tool: &str) -> anyhow::Result<()> {
+    let nsh_path = Path::new(&nsh);
+    let nsh = Nsh::from_file(nsh_path)?;
+
+    let output = Path::new(output);
+    std::fs::create_dir_all(output).unwrap();
+
+    let name = nsh_path.file_stem().unwrap().to_string_lossy().to_string();
+
+    for (i, shader) in nsh.shaders.iter().enumerate() {
+        let gx2 = shader.gfx2.gx2_be_bytes()?;
+        let gx2_path = output.join(&name).with_extension(format!("{i}.gx2.bin"));
+        std::fs::write(gx2_path, gx2)?;
+
+        // TODO: Get this from the gx2 struct instead.
+        let binary_path = output.join(&name).with_extension(format!("{i}.bin"));
+        if let Some(block) = shader.gfx2.blocks.iter().find(|b| {
+            matches!(
+                b.block_type,
+                BlockType::VertexShaderProgram
+                    | BlockType::GeometryShaderProgram
+                    | BlockType::PixelShaderProgram
+            )
+        }) {
+            std::fs::write(&binary_path, &block.data)?;
+        }
+
+        let txt_path = output.join(&name).with_extension(format!("{i}.txt"));
+        dissassemble_shader(&binary_path, &txt_path, gfd_tool);
+    }
+    Ok(())
+}
+
+fn dissassemble_shader(binary_path: &Path, txt_path: &Path, gfd_tool: &str) {
+    std::process::Command::new(gfd_tool)
+        .arg("disassemble")
+        .arg(binary_path)
+        .stdout(File::create(txt_path).unwrap())
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+}
+
+fn match_shaders_to_nsh(
     shader_ids: &str,
     shader_names: &str,
     nsh_shader_dump: &str,
     cemu_shader_dump: &str,
-) {
+    output: &str,
+) -> anyhow::Result<()> {
     let mut ids = Vec::new();
-    for line in std::fs::read_to_string(shader_ids).unwrap().lines() {
-        ids.push(u32::from_str_radix(line, 16).unwrap());
+    for line in std::fs::read_to_string(shader_ids)?.lines() {
+        ids.push(u32::from_str_radix(line, 16)?);
     }
 
     // Read nsh binaries only once.
     let mut sm4sh_shaders = Vec::new();
-    for entry in std::fs::read_dir(nsh_shader_dump).unwrap() {
-        let sm4sh_path = entry.unwrap().path();
+    for entry in std::fs::read_dir(nsh_shader_dump)? {
+        let sm4sh_path = entry?.path();
         if sm4sh_path.extension().and_then(|e| e.to_str()) == Some("bin") {
-            let sm4sh_bytes = std::fs::read(&sm4sh_path).unwrap();
+            let sm4sh_bytes = std::fs::read(&sm4sh_path)?;
             sm4sh_shaders.push((sm4sh_path, sm4sh_bytes));
         }
     }
@@ -86,42 +150,46 @@ fn map_shaders_to_nsh(
     // This compiled WiiU shader binary can then be used to find the shader index in texas_cross.nsh.
     // In practice, IDs in order starting from 92000161 have increasing indices.
     // The gap between indices varies, so this needs to be precomputed using shader dumps.
+    let mut text = String::new();
     for (name, shader_id) in std::fs::read_to_string(shader_names)
         .unwrap()
         .lines()
         .zip(ids)
     {
         let name = name.trim().strip_prefix("shader_").unwrap();
-        let path = Path::new(cemu_shader_dump).join(format!("{name}_ps.bin"));
-        if let Ok(cemu_bytes) = std::fs::read(path) {
-            for (sm4sh_path, sm4sh_bytes) in &sm4sh_shaders {
-                for i in 0..sm4sh_bytes.len() {
-                    if let Some(b2) = sm4sh_bytes.get(i..i + cemu_bytes.len())
-                        && b2 == cemu_bytes
-                    {
+
+        // TODO: why does this not match vertex shaders?
+        for tag in ["_vs", "_ps"] {
+            let path = Path::new(cemu_shader_dump).join(format!("{name}{tag}.bin"));
+            if let Ok(cemu_bytes) = std::fs::read(path) {
+                for (sm4sh_path, sm4sh_bytes) in &sm4sh_shaders {
+                    if sm4sh_bytes == &cemu_bytes {
                         let sm4sh_name = sm4sh_path.file_stem().unwrap().to_string_lossy();
-                        println!("{shader_id:X?}, {name}, {sm4sh_name}");
+                        writeln!(&mut text, "{shader_id:X?}, {name}, {sm4sh_name}")?;
                         break;
                     }
                 }
             }
         }
     }
+    std::fs::write(output, text)?;
+    Ok(())
 }
 
-fn create_shader_database(shader_ids_shaders: &str, nsh_shader_dump: &str, output: &str) {
+fn create_shader_database(
+    shader_ids_shaders: &str,
+    nsh_shader_dump: &str,
+    output: &str,
+) -> anyhow::Result<()> {
     let mut programs = BTreeMap::new();
     for line in std::fs::read_to_string(shader_ids_shaders).unwrap().lines() {
         let parts: Vec<_> = line.split(",").map(|s| s.trim()).collect();
         let shader_id = parts[0].to_string();
-        let nsh_index: usize = parts[2]
-            .strip_prefix("texas_cross.")
-            .unwrap()
-            .parse()
-            .unwrap();
+        let nsh_index: usize = parts[2].strip_prefix("texas_cross.").unwrap().parse()?;
 
+        // TODO: Use the gx2 files instead.
         let txt_path = Path::new(nsh_shader_dump).join(format!("texas_cross.{nsh_index}.txt"));
-        let text = std::fs::read_to_string(txt_path).unwrap();
+        let text = std::fs::read_to_string(txt_path)?;
         let header = gfx2::pixel_shader_header(&text).unwrap().1;
 
         let samplers = header
@@ -150,6 +218,7 @@ fn create_shader_database(shader_ids_shaders: &str, nsh_shader_dump: &str, outpu
     }
 
     let database = ShaderDatabase { programs };
-    let json = serde_json::to_string_pretty(&database).unwrap();
-    std::fs::write(output, &json).unwrap();
+    let json = serde_json::to_string_pretty(&database)?;
+    std::fs::write(output, &json)?;
+    Ok(())
 }
