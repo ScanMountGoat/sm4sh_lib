@@ -96,12 +96,12 @@ fn map_shaders_to_nsh(
         if let Ok(cemu_bytes) = std::fs::read(path) {
             for (sm4sh_path, sm4sh_bytes) in &sm4sh_shaders {
                 for i in 0..sm4sh_bytes.len() {
-                    if let Some(b2) = sm4sh_bytes.get(i..i + cemu_bytes.len()) {
-                        if b2 == cemu_bytes {
-                            let sm4sh_name = sm4sh_path.file_stem().unwrap().to_string_lossy();
-                            println!("{shader_id:X?}, {name}, {sm4sh_name}");
-                            break;
-                        }
+                    if let Some(b2) = sm4sh_bytes.get(i..i + cemu_bytes.len())
+                        && b2 == cemu_bytes
+                    {
+                        let sm4sh_name = sm4sh_path.file_stem().unwrap().to_string_lossy();
+                        println!("{shader_id:X?}, {name}, {sm4sh_name}");
+                        break;
                     }
                 }
             }

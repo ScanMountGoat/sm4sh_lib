@@ -301,7 +301,7 @@ fn create_mesh(
     }
 }
 
-fn sampler(texture: &sm4sh_model::NudTexture) -> wgpu::SamplerDescriptor {
+fn sampler(texture: &sm4sh_model::NudTexture) -> wgpu::SamplerDescriptor<'_> {
     // TODO: set mipmaps and anisotropy
     wgpu::SamplerDescriptor {
         label: None,
@@ -336,7 +336,7 @@ fn get_parameter(mesh: &sm4sh_model::NudMesh, name: &str) -> Option<Vec4> {
     material.properties.iter().find_map(|p| {
         if p.name == name {
             Some(vec4(
-                *p.values.get(0)?,
+                *p.values.first()?,
                 *p.values.get(1)?,
                 *p.values.get(2)?,
                 *p.values.get(3)?,

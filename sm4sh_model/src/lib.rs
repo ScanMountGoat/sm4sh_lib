@@ -311,7 +311,7 @@ impl NudModel {
 }
 
 impl NudMesh {
-    pub fn triangle_list_indices(&self) -> Cow<[u16]> {
+    pub fn triangle_list_indices(&self) -> Cow<'_, [u16]> {
         match self.primitive_type {
             PrimitiveType::TriangleList => Cow::Borrowed(&self.vertex_indices),
             PrimitiveType::TriangleStrip => {
