@@ -16,8 +16,14 @@ pub struct Nsh {
     pub unk7: [(u32, u32); 16],
 
     #[br(count = program_count * 2)]
-    #[brw(align_after = 128)]
-    pub shaders: Vec<Gfx2>,
+    pub shaders: Vec<Gfx2Shader>,
+}
+
+#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
+pub struct Gfx2Shader {
+    pub gfx2: Gfx2,
+    #[br(parse_with = parse_extra_data)]
+    pub extra_data: Vec<u8>, // TODO: non empty for every other gfx2?
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
@@ -31,9 +37,7 @@ pub struct Gfx2 {
     // TODO: padding
     pub unk: [u32; 2],
 
-    // TODO: Extra data after eof block?
     #[br(parse_with = until(|b: &Block| b.block_type == BlockType::EndOfFile))]
-    #[brw(align_after = 128)]
     pub blocks: Vec<Block>,
 }
 
@@ -81,6 +85,25 @@ pub struct RelocationInfo {
     pub unk2: u32, //0
     pub relocation_count: u32,
     pub relocation_table_offset: u32,
+}
+
+fn parse_extra_data<R: std::io::Read + Seek>(
+    reader: &mut R,
+    endian: binrw::Endian,
+    args: (),
+) -> BinResult<Vec<u8>> {
+    // TODO: Is this count stored anywhere?
+    let mut extra_data = Vec::new();
+    while let Ok(bytes) = <[u8; 4]>::read_options(reader, endian, args) {
+        match &bytes[..] {
+            b"Gfx2" => {
+                reader.seek(std::io::SeekFrom::Current(-4))?;
+                break;
+            }
+            _ => extra_data.extend(bytes),
+        }
+    }
+    Ok(extra_data)
 }
 
 impl Gfx2 {
