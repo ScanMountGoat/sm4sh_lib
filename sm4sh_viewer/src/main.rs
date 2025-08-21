@@ -60,15 +60,14 @@ impl<'a> State<'a> {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
-        let surface = instance.create_surface(window).unwrap();
+        let surface = instance.create_surface(window)?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
-            .await
-            .unwrap();
+            .await?;
         info!("{:?}", adapter.get_info());
 
         let (device, queue) = adapter
@@ -76,8 +75,7 @@ impl<'a> State<'a> {
                 required_features: sm4sh_wgpu::FEATURES,
                 ..Default::default()
             })
-            .await
-            .unwrap();
+            .await?;
 
         let size = window.inner_size();
         let config = wgpu::SurfaceConfiguration {
@@ -109,7 +107,8 @@ impl<'a> State<'a> {
         let animations = cli
             .anim
             .as_ref()
-            .map(|anim| load_animations(anim).unwrap())
+            .map(|anim| load_animations(anim))
+            .transpose()?
             .unwrap_or_default();
 
         Ok(Self {
@@ -339,16 +338,14 @@ fn main() -> anyhow::Result<()> {
         .with_level(log::LevelFilter::Info)
         .with_module_level("wgpu", log::LevelFilter::Warn)
         .with_module_level("naga", log::LevelFilter::Warn)
-        .init()
-        .unwrap();
+        .init()?;
 
     let cli = Cli::parse();
 
-    let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoop::new()?;
     let window = WindowBuilder::new()
         .with_title(concat!("sm4sh_viewer ", env!("CARGO_PKG_VERSION")))
-        .build(&event_loop)
-        .unwrap();
+        .build(&event_loop)?;
 
     let mut state = block_on(State::new(&window, &cli))?;
     state.set_window_title(&window);

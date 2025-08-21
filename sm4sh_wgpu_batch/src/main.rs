@@ -43,7 +43,7 @@ fn calculate_camera_data(
         height,
     }
 }
-fn main() {
+fn main() -> anyhow::Result<()> {
     // TODO: use clap for this.
     let args: Vec<_> = std::env::args().collect();
     let source_folder = &args[1];
@@ -52,8 +52,7 @@ fn main() {
     simple_logger::SimpleLogger::new()
         .with_level(log::LevelFilter::Warn)
         .with_module_level("sm4sh_wgpu", log::LevelFilter::Warn)
-        .init()
-        .unwrap();
+        .init()?;
 
     // Load models in headless mode without a surface.
     // This simplifies testing for stability and performance.
@@ -64,13 +63,11 @@ fn main() {
     let adapter = block_on(instance.request_adapter(&RequestAdapterOptions {
         power_preference: PowerPreference::HighPerformance,
         ..Default::default()
-    }))
-    .unwrap();
+    }))?;
     let (device, queue) = block_on(adapter.request_device(&DeviceDescriptor {
         required_features: sm4sh_wgpu::FEATURES,
         ..Default::default()
-    }))
-    .unwrap();
+    }))?;
 
     let surface_format = wgpu::TextureFormat::Rgba8UnormSrgb;
     let renderer = Renderer::new(&device, WIDTH, HEIGHT, surface_format);
@@ -111,8 +108,7 @@ fn main() {
     // Render each model folder.
     let start = std::time::Instant::now();
     let paths: Vec<_> = globwalk::GlobWalkerBuilder::from_patterns(source_folder, &["*.{nud}"])
-        .build()
-        .unwrap()
+        .build()?
         .filter_map(Result::ok)
         .map(|e| e.path().to_path_buf())
         .collect();
@@ -183,6 +179,7 @@ fn main() {
     });
 
     println!("Completed in {:?}", start.elapsed());
+    Ok(())
 }
 
 fn render_screenshot(
