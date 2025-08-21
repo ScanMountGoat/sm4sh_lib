@@ -34,12 +34,18 @@ enum Commands {
         /// Path for the output txt file.
         output: String,
     },
-    ShaderDatabase {
-        /// Path to a text file with the output of the match-shaders command.
-        shader_ids_shaders: String,
-        /// The folder containing nsh shader binaries from a shader file like texas_cross.nsh
+    /// Convert shaders to annotated GLSL shaders.
+    AnnotateShaders {
+        /// The folder containing the output of the dump-shaders command.
         nsh_shader_dump: String,
-        /// Path for the output JSON database.
+    },
+    /// Convert annotated GLSL shaders to a shader database.
+    ShaderDatabase {
+        /// The text file with the output of the match-shaders command.
+        shader_ids_shaders: String,
+        /// The folder containing the output of the annotate-shaders command.
+        nsh_shader_dump: String,
+        /// The output JSON database.
         output: String,
     },
 }
@@ -66,10 +72,10 @@ fn main() -> anyhow::Result<()> {
             &cemu_shader_dump,
             &output,
         )?,
+        Commands::AnnotateShaders { nsh_shader_dump } => annoate_shaders(&nsh_shader_dump),
         Commands::ShaderDatabase {
             shader_ids_shaders,
             nsh_shader_dump,
-
             output,
         } => create_shader_database(&shader_ids_shaders, &nsh_shader_dump, &output)?,
     }
@@ -144,10 +150,12 @@ fn match_shaders_to_nsh(
         .lines()
         .zip(ids)
     {
-        let name = name.trim().strip_prefix("shader_").unwrap();
+        let names: Vec<_> = name
+            .split(",")
+            .map(|n| n.trim().strip_prefix("shader_").unwrap())
+            .collect();
 
-        // TODO: why does this not match vertex shaders?
-        for tag in ["_vs", "_ps"] {
+        for (name, tag) in names.iter().zip(["_vs", "_ps"]) {
             let path = Path::new(cemu_shader_dump).join(format!("{name}{tag}.bin"));
             if let Ok(cemu_bytes) = std::fs::read(path) {
                 for (sm4sh_path, sm4sh_bytes) in &sm4sh_shaders {
@@ -161,6 +169,11 @@ fn match_shaders_to_nsh(
         }
     }
     std::fs::write(output, text)?;
+    Ok(())
+}
+
+fn annotate_shaders(nsh_shader_dump: &str) -> anyhow::Result<()> {
+    // TODO: convert to GLSL using xc3_shader
     Ok(())
 }
 
