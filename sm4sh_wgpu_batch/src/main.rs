@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use clap::Parser;
 use futures::executor::block_on;
 use log::error;
 use sm4sh_model::shader_database::ShaderDatabase;
@@ -43,10 +44,19 @@ fn calculate_camera_data(
         height,
     }
 }
+
+#[derive(Parser)]
+#[command(author, version, about)]
+#[command(propagate_version = true)]
+struct Cli {
+    /// The source folder to search recursively for models and save the final PNG renders.
+    root_folder: String,
+    /// The shader database JSON file
+    database: String,
+}
+
 fn main() -> anyhow::Result<()> {
-    // TODO: use clap for this.
-    let args: Vec<_> = std::env::args().collect();
-    let source_folder = &args[1];
+    let cli = Cli::parse();
 
     // Check for any errors.
     simple_logger::SimpleLogger::new()
@@ -99,15 +109,15 @@ fn main() -> anyhow::Result<()> {
     let output = device.create_texture(&texture_desc);
     let output_view = output.create_view(&Default::default());
 
-    let database = ShaderDatabase::from_file(&args[2]);
+    let database = ShaderDatabase::from_file(&cli.database);
     let shared_data = SharedData::new(&device, database);
 
     // Load and render folders individually to save on memory.
-    let source_folder = Path::new(source_folder);
+    let root_folder = Path::new(&cli.root_folder);
 
     // Render each model folder.
     let start = std::time::Instant::now();
-    let paths: Vec<_> = globwalk::GlobWalkerBuilder::from_patterns(source_folder, &["*.{nud}"])
+    let paths: Vec<_> = globwalk::GlobWalkerBuilder::from_patterns(root_folder, &["*.{nud}"])
         .build()?
         .filter_map(Result::ok)
         .map(|e| e.path().to_path_buf())
@@ -148,13 +158,13 @@ fn main() -> anyhow::Result<()> {
                             let output_path = path
                                 .parent()
                                 .unwrap()
-                                .strip_prefix(source_folder)
+                                .strip_prefix(root_folder)
                                 .unwrap()
                                 .components()
                                 .map(|c| c.as_os_str().to_string_lossy())
                                 .collect::<Vec<_>>()
                                 .join("_");
-                            let output_path = source_folder.join(output_path).with_extension("png");
+                            let output_path = root_folder.join(output_path).with_extension("png");
 
                             render_screenshot(
                                 &device,
