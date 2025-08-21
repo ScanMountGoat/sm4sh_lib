@@ -1,6 +1,12 @@
 use std::io::{Cursor, Seek, Write};
 
 use binrw::{helpers::until, BinRead, BinReaderExt, BinResult, BinWrite};
+use xc3_write::{Xc3Write, Xc3WriteOffsets};
+
+use crate::{
+    file_read_impl, file_write_full_impl,
+    gx2::{Gx2PixelShader, Gx2VertexShader, UniformBlock, UniformVar},
+};
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"NSP3"))]
@@ -106,6 +112,38 @@ fn parse_extra_data<R: std::io::Read + Seek>(
     Ok(extra_data)
 }
 
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
+pub enum Gx2Shader {
+    Vertex(Gx2VertexShader),
+    Pixel(Gx2PixelShader),
+}
+
+impl Gx2Shader {
+    pub fn program_binary(&self) -> &[u8] {
+        match self {
+            Gx2Shader::Vertex(v) => &v.program_binary,
+            Gx2Shader::Pixel(p) => &p.program_binary,
+        }
+    }
+
+    pub fn uniform_blocks(&self) -> &[UniformBlock] {
+        match self {
+            Gx2Shader::Vertex(v) => &v.uniform_blocks,
+            Gx2Shader::Pixel(p) => &p.uniform_blocks,
+        }
+    }
+
+    pub fn uniform_vars(&self) -> &[UniformVar] {
+        match self {
+            Gx2Shader::Vertex(v) => &v.uniform_vars,
+            Gx2Shader::Pixel(p) => &p.uniform_vars,
+        }
+    }
+}
+
+file_read_impl!(binrw::Endian::Big, Gx2Shader);
+file_write_full_impl!(xc3_write::Endian::Big, Gx2Shader);
+
 impl Gfx2 {
     // TODO: Create a gx2 struct instead to support saving with different endianness.
     pub fn gx2_be_bytes(&self) -> BinResult<Vec<u8>> {
@@ -159,5 +197,11 @@ impl Gfx2 {
         }
 
         Ok(writer.into_inner())
+    }
+
+    pub fn gx2_shader(&self) -> BinResult<Gx2Shader> {
+        let bytes = self.gx2_be_bytes()?;
+        let mut reader = Cursor::new(bytes);
+        reader.read_be()
     }
 }

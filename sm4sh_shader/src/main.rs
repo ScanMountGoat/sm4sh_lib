@@ -1,9 +1,7 @@
 use clap::{Parser, Subcommand};
-use sm4sh_lib::nsh::{BlockType, Nsh};
+use sm4sh_lib::nsh::{Gx2Shader, Nsh};
 use sm4sh_model::shader_database::{ShaderDatabase, ShaderProgram};
 use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
-
-mod gfx2;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -89,22 +87,12 @@ fn dump_shaders(nsh: &str, output: &str, gfd_tool: &str) -> anyhow::Result<()> {
     let name = nsh_path.file_stem().unwrap().to_string_lossy().to_string();
 
     for (i, shader) in nsh.shaders.iter().enumerate() {
-        let gx2 = shader.gfx2.gx2_be_bytes()?;
+        let gx2 = shader.gfx2.gx2_shader()?;
         let gx2_path = output.join(&name).with_extension(format!("{i}.gx2.bin"));
-        std::fs::write(gx2_path, gx2)?;
+        gx2.save(gx2_path)?;
 
-        // TODO: Get this from the gx2 struct instead.
         let binary_path = output.join(&name).with_extension(format!("{i}.bin"));
-        if let Some(block) = shader.gfx2.blocks.iter().find(|b| {
-            matches!(
-                b.block_type,
-                BlockType::VertexShaderProgram
-                    | BlockType::GeometryShaderProgram
-                    | BlockType::PixelShaderProgram
-            )
-        }) {
-            std::fs::write(&binary_path, &block.data)?;
-        }
+        std::fs::write(&binary_path, gx2.program_binary())?;
 
         let txt_path = output.join(&name).with_extension(format!("{i}.txt"));
         dissassemble_shader(&binary_path, &txt_path, gfd_tool);
@@ -187,23 +175,24 @@ fn create_shader_database(
         let shader_id = parts[0].to_string();
         let nsh_index: usize = parts[2].strip_prefix("texas_cross.").unwrap().parse()?;
 
-        // TODO: Use the gx2 files instead.
-        let txt_path = Path::new(nsh_shader_dump).join(format!("texas_cross.{nsh_index}.txt"));
-        let text = std::fs::read_to_string(txt_path)?;
-        let header = gfx2::pixel_shader_header(&text).unwrap().1;
+        let gx2_path = Path::new(nsh_shader_dump).join(format!("texas_cross.{nsh_index}.gx2.bin"));
+        let gx2 = Gx2Shader::from_file(gx2_path)?;
 
-        let samplers = header
-            .sampler_vars
-            .into_iter()
-            .map(|s| (s.location, s.name))
+        let gx2_samplers = match &gx2 {
+            Gx2Shader::Vertex(v) => &v.sampler_vars,
+            Gx2Shader::Pixel(p) => &p.sampler_vars,
+        };
+        let samplers = gx2_samplers
+            .iter()
+            .map(|s| (s.location as usize, s.name.clone()))
             .collect();
 
         // NU_ parameters are in the MC block.
         let mut parameters = BTreeMap::new();
-        if let Some(block_index) = header.uniform_blocks.iter().position(|b| b.name == "MC") {
-            for var in header.uniform_vars.into_iter() {
-                if var.block == block_index {
-                    parameters.insert(var.offset, var.name);
+        if let Some(block_index) = gx2.uniform_blocks().iter().position(|b| b.name == "MC") {
+            for var in gx2.uniform_vars().iter() {
+                if var.uniform_buffer_index == block_index as i32 {
+                    parameters.insert(var.offset as usize, var.name.clone());
                 }
             }
         }

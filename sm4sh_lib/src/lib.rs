@@ -1,9 +1,10 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use binrw::{
-    file_ptr::FilePtrArgs, BinRead, BinReaderExt, BinResult, Endian, FilePtr32, NullString,
+    file_ptr::FilePtrArgs, BinRead, BinReaderExt, BinResult, Endian, FilePtr32, NullString, VecArgs,
 };
 
+pub mod gx2;
 pub mod jtb;
 pub mod mta;
 pub mod nhb;
@@ -91,6 +92,60 @@ where
     }
 }
 
+fn parse_count32_offset32<T, R, Args>(
+    reader: &mut R,
+    endian: binrw::Endian,
+    args: FilePtrArgs<Args>,
+) -> BinResult<Vec<T>>
+where
+    for<'a> T: BinRead<Args<'a> = Args> + 'static,
+    R: std::io::Read + std::io::Seek,
+    Args: Clone,
+{
+    let count = u32::read_options(reader, endian, ())?;
+    let pos = reader.stream_position()?;
+    let offset = u32::read_options(reader, endian, ())?;
+
+    if offset == 0 && count != 0 {
+        return Err(binrw::Error::AssertFail {
+            pos,
+            message: format!("unexpected null offset for count {count}"),
+        });
+    }
+
+    parse_vec(reader, endian, args, offset as u64, count as usize)
+}
+
+fn parse_vec<T, R, Args>(
+    reader: &mut R,
+    endian: binrw::Endian,
+    args: FilePtrArgs<Args>,
+    offset: u64,
+    count: usize,
+) -> BinResult<Vec<T>>
+where
+    for<'a> T: BinRead<Args<'a> = Args> + 'static,
+    R: std::io::Read + std::io::Seek,
+    Args: Clone,
+{
+    let saved_pos = reader.stream_position()?;
+
+    reader.seek(SeekFrom::Start(offset + args.offset))?;
+
+    let values = <Vec<T>>::read_options(
+        reader,
+        endian,
+        VecArgs {
+            count,
+            inner: args.inner.clone(),
+        },
+    )?;
+
+    reader.seek(SeekFrom::Start(saved_pos))?;
+
+    Ok(values)
+}
+
 macro_rules! file_write_full_impl {
     ($endian:path, $($type_name:path),*) => {
         $(
@@ -108,6 +163,8 @@ macro_rules! file_write_full_impl {
         )*
     };
 }
+pub(crate) use file_write_full_impl;
+
 file_write_full_impl!(
     xc3_write::Endian::Big,
     nud::Nud,
@@ -151,7 +208,7 @@ macro_rules! file_read_impl {
     ($endian:path, $($type_name:path),*) => {
         $(
             impl $type_name {
-                pub fn read<R: Read + Seek>(reader: &mut R) -> binrw::BinResult<Self> {
+                pub fn read<R: std::io::Read + std::io::Seek>(reader: &mut R) -> binrw::BinResult<Self> {
                     reader.read_type($endian).map_err(Into::into)
                 }
 
@@ -170,6 +227,7 @@ macro_rules! file_read_impl {
         )*
     };
 }
+pub(crate) use file_read_impl;
 
 // TODO: Detect endianness by trying both for u32 magic?
 file_read_impl!(
@@ -185,3 +243,23 @@ file_read_impl!(
 );
 
 file_read_impl!(Endian::Little, nhb::Nhb, sb::Sb);
+
+macro_rules! file_write_impl {
+    ($endian:path, $($type_name:path),*) => {
+        $(
+            impl $type_name {
+                pub fn write<W: std::io::Write + std::io::Seek>(&self, writer: &mut W) -> binrw::BinResult<()> {
+                    <Self as binrw::BinWrite>::write_options(&self, writer, $endian, ())
+                }
+
+                /// Write to `path` using a buffered writer for better performance.
+                pub fn save<P: AsRef<std::path::Path>>(&self, path: P) ->binrw::BinResult<()> {
+                    let mut writer = std::io::BufWriter::new(std::fs::File::create(path)?);
+                    self.write(&mut writer)
+                }
+            }
+        )*
+    };
+}
+
+file_write_impl!(binrw::Endian::Big, nsh::Nsh, vbn::Vbn);
