@@ -1,7 +1,10 @@
+use anyhow::Context;
 use clap::{Parser, Subcommand};
+use rayon::prelude::*;
 use sm4sh_lib::nsh::{Gx2Shader, Nsh};
 use sm4sh_model::shader_database::{ShaderDatabase, ShaderProgram};
 use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
+use xc3_shader::graph::Graph;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -72,7 +75,7 @@ fn main() -> anyhow::Result<()> {
             &cemu_shader_dump,
             &output,
         )?,
-        Commands::AnnotateShaders { nsh_shader_dump } => annoate_shaders(&nsh_shader_dump),
+        Commands::AnnotateShaders { nsh_shader_dump } => annotate_shaders(&nsh_shader_dump)?,
         Commands::ShaderDatabase {
             shader_ids_shaders,
             nsh_shader_dump,
@@ -173,7 +176,23 @@ fn match_shaders_to_nsh(
 }
 
 fn annotate_shaders(nsh_shader_dump: &str) -> anyhow::Result<()> {
-    // TODO: convert to GLSL using xc3_shader
+    globwalk::GlobWalkerBuilder::from_patterns(nsh_shader_dump, &["*.txt"])
+        .build()?
+        .par_bridge()
+        .try_for_each(|entry| {
+            let path = entry?.path().to_path_buf();
+            annotate_shader(&path).with_context(|| format!("failed to process {path:?}"))
+        })
+}
+
+fn annotate_shader(txt_path: &Path) -> anyhow::Result<()> {
+    // TODO: Share annotation code with xc3_shader.
+    let text = std::fs::read_to_string(txt_path)?;
+    let graph = Graph::from_latte_asm(&text)?;
+    let glsl = graph.to_glsl();
+
+    let name = txt_path.file_stem().unwrap();
+    std::fs::write(txt_path.with_file_name(name).with_extension("glsl"), &glsl)?;
     Ok(())
 }
 

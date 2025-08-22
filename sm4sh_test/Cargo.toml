@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 sm4sh_lib = { path = "../sm4sh_lib" }
 sm4sh_model = { path = "../sm4sh_model" }
-globwalk = "0.9.1"
+globwalk.workspace = true
 rayon.workspace = true
 binrw.workspace = true
 clap.workspace = true
