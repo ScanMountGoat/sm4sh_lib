@@ -28,7 +28,7 @@ pub struct Gx2VertexShader {
 
     #[br(parse_with = parse_count32_offset32)]
     #[xc3(count_offset(u32, u32))]
-    pub sampler_vars: Vec<Sampler>,
+    pub sampler_vars: Vec<SamplerVar>,
 
     #[br(parse_with = parse_count32_offset32)]
     #[xc3(count_offset(u32, u32))]
@@ -78,7 +78,7 @@ pub struct Gx2PixelShader {
 
     #[br(parse_with = parse_count32_offset32)]
     #[xc3(count_offset(u32, u32))]
-    pub sampler_vars: Vec<Sampler>,
+    pub sampler_vars: Vec<SamplerVar>,
 
     pub r_buffer: [u32; 4],
 }
@@ -130,7 +130,7 @@ pub struct Attribute {
 }
 
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
-pub struct Sampler {
+pub struct SamplerVar {
     #[br(parse_with = parse_string_ptr32)]
     #[xc3(offset(u32))]
     pub name: String,

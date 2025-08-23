@@ -1,7 +1,7 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use rayon::prelude::*;
-use sm4sh_lib::nsh::{Gx2Shader, Nsh};
+use sm4sh_lib::{gx2::Gx2PixelShader, nsh::Nsh};
 use sm4sh_model::shader_database::{ShaderDatabase, ShaderProgram};
 use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
 
@@ -98,16 +98,23 @@ fn dump_shaders(nsh: &str, output: &str, gfd_tool: &str) -> anyhow::Result<()> {
 
     let name = nsh_path.file_stem().unwrap().to_string_lossy().to_string();
 
-    for (i, shader) in nsh.shaders.iter().enumerate() {
-        let gx2 = shader.gfx2.gx2_shader()?;
-        let gx2_path = output.join(format!("{name}.{i}.gx2.bin"));
-        gx2.save(gx2_path)?;
+    for (i, program) in nsh.programs.iter().enumerate() {
+        for (gx2, ext) in [
+            program.vertex.gfx2.gx2_shader()?,
+            program.pixel.gfx2.gx2_shader()?,
+        ]
+        .iter()
+        .zip(&["vert", "frag"])
+        {
+            let gx2_path = output.join(format!("{name}.{i}.{ext}.gx2.bin"));
+            gx2.save(gx2_path)?;
 
-        let binary_path = output.join(format!("{name}.{i}.bin"));
-        std::fs::write(&binary_path, gx2.program_binary())?;
+            let binary_path = output.join(format!("{name}.{i}.{ext}.bin"));
+            std::fs::write(&binary_path, gx2.program_binary())?;
 
-        let txt_path = output.join(format!("{name}.{i}.txt"));
-        dissassemble_shader(&binary_path, &txt_path, gfd_tool);
+            let txt_path = output.join(format!("{name}.{i}.{ext}.txt"));
+            dissassemble_shader(&binary_path, &txt_path, gfd_tool);
+        }
     }
     Ok(())
 }
@@ -179,7 +186,7 @@ fn match_shaders_to_nsh(
 }
 
 fn annotate_shaders(nsh_shader_dump: &str) -> anyhow::Result<()> {
-    globwalk::GlobWalkerBuilder::from_patterns(nsh_shader_dump, &["*.txt"])
+    globwalk::GlobWalkerBuilder::from_patterns(nsh_shader_dump, &["*.vert.txt"])
         .build()?
         .filter_map(|e| e.ok())
         .par_bridge()
@@ -203,24 +210,22 @@ fn create_shader_database(
     for line in std::fs::read_to_string(shader_ids_shaders).unwrap().lines() {
         let parts: Vec<_> = line.split(",").map(|s| s.trim()).collect();
         let shader_id = parts[0].to_string();
-        let nsh_index: usize = parts[2].strip_prefix("texas_cross.").unwrap().parse()?;
+        let nsh_index: usize = parts[2].split(".").nth(1).unwrap().parse()?;
 
-        let gx2_path = Path::new(nsh_shader_dump).join(format!("texas_cross.{nsh_index}.gx2.bin"));
-        let gx2 = Gx2Shader::from_file(gx2_path)?;
+        let gx2_path =
+            Path::new(nsh_shader_dump).join(format!("texas_cross.{nsh_index}.frag.gx2.bin"));
+        let gx2 = Gx2PixelShader::from_file(gx2_path)?;
 
-        let gx2_samplers = match &gx2 {
-            Gx2Shader::Vertex(v) => &v.sampler_vars,
-            Gx2Shader::Pixel(p) => &p.sampler_vars,
-        };
-        let samplers = gx2_samplers
+        let samplers = gx2
+            .sampler_vars
             .iter()
             .map(|s| (s.location as usize, s.name.clone()))
             .collect();
 
         // NU_ parameters are in the MC block.
         let mut parameters = BTreeMap::new();
-        if let Some(block_index) = gx2.uniform_blocks().iter().position(|b| b.name == "MC") {
-            for var in gx2.uniform_vars().iter() {
+        if let Some(block_index) = gx2.uniform_blocks.iter().position(|b| b.name == "MC") {
+            for var in gx2.uniform_vars.iter() {
                 if var.uniform_block_index == block_index as i32 {
                     parameters.insert(var.offset as usize, var.name.clone());
                 }

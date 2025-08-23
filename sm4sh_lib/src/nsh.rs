@@ -5,7 +5,7 @@ use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
 use crate::{
     file_read_impl, file_write_full_impl,
-    gx2::{Gx2PixelShader, Gx2VertexShader, UniformBlock, UniformVar},
+    gx2::{Attribute, Gx2PixelShader, Gx2VertexShader, SamplerVar, UniformBlock, UniformVar},
 };
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
@@ -21,8 +21,14 @@ pub struct Nsh {
     pub unk6: [u32; 17], // TODO: all 0?
     pub unk7: [(u32, u32); 16],
 
-    #[br(count = program_count * 2)]
-    pub shaders: Vec<Gfx2Shader>,
+    #[br(count = program_count)]
+    pub programs: Vec<ShaderProgram>,
+}
+
+#[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
+pub struct ShaderProgram {
+    pub vertex: Gfx2Shader,
+    pub pixel: Gfx2Shader,
 }
 
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
@@ -139,9 +145,28 @@ impl Gx2Shader {
             Gx2Shader::Pixel(p) => &p.uniform_vars,
         }
     }
+
+    pub fn sampler_vars(&self) -> &[SamplerVar] {
+        match self {
+            Gx2Shader::Vertex(_) => &[],
+            Gx2Shader::Pixel(p) => &p.sampler_vars,
+        }
+    }
+
+    pub fn attributes(&self) -> &[Attribute] {
+        match self {
+            Gx2Shader::Vertex(v) => &v.attributes,
+            Gx2Shader::Pixel(_) => &[],
+        }
+    }
 }
 
-file_read_impl!(binrw::Endian::Big, Gx2Shader);
+file_read_impl!(
+    binrw::Endian::Big,
+    Gx2Shader,
+    Gx2VertexShader,
+    Gx2PixelShader
+);
 file_write_full_impl!(xc3_write::Endian::Big, Gx2Shader);
 
 impl Gfx2 {

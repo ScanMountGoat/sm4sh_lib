@@ -1,60 +1,160 @@
 use std::{collections::BTreeSet, fmt::Write, path::Path};
 
-use sm4sh_lib::nsh::Gx2Shader;
+use log::error;
+use sm4sh_lib::gx2::{Gx2PixelShader, Gx2VertexShader};
 use xc3_shader::graph::{Expr, Graph};
 
-pub fn annotate_shader(txt_path: &Path) -> anyhow::Result<()> {
-    let text = std::fs::read_to_string(txt_path)?;
+pub fn annotate_shader(vert_asm_path: &Path) -> anyhow::Result<()> {
+    let name = vert_asm_path.with_extension("");
+    let name = name.file_stem().unwrap().to_string_lossy();
 
-    let name = txt_path.file_stem().unwrap().to_string_lossy();
-    let gx2_path = txt_path.with_file_name(format!("{name}.gx2.bin"));
-    let shader = Gx2Shader::from_file(gx2_path)?;
+    let vert_asm = std::fs::read_to_string(vert_asm_path)?;
 
-    let annotated = annotate_gx2_shader(&text, &shader)?;
+    let frag_asm_path = vert_asm_path.with_file_name(format!("{name}.frag.txt"));
+    let frag_asm = std::fs::read_to_string(frag_asm_path)?;
 
-    std::fs::write(txt_path.with_file_name(format!("{name}.glsl")), &annotated)?;
+    let vert_gx2_path = vert_asm_path.with_file_name(format!("{name}.vert.gx2.bin"));
+    let vert = Gx2VertexShader::from_file(vert_gx2_path)?;
+
+    let frag_gx2_path = vert_asm_path.with_file_name(format!("{name}.frag.gx2.bin"));
+    let frag = Gx2PixelShader::from_file(frag_gx2_path)?;
+
+    let vertex_glsl = annotate_vertex_shader(&vert_asm, &vert)?;
+    let frag_glsl = annotate_fragment_shader(&frag_asm, &vert, &frag)?;
+
+    std::fs::write(
+        vert_asm_path.with_file_name(format!("{name}.vert")),
+        &vertex_glsl,
+    )?;
+    std::fs::write(
+        vert_asm_path.with_file_name(format!("{name}.frag")),
+        &frag_glsl,
+    )?;
+
     Ok(())
 }
 
 // TODO: Share annotation code with xc3_shader.
-fn annotate_gx2_shader(latte_asm: &str, shader: &Gx2Shader) -> Result<String, anyhow::Error> {
+fn annotate_vertex_shader(
+    latte_asm: &str,
+    shader: &Gx2VertexShader,
+) -> Result<String, anyhow::Error> {
     let mut graph = Graph::from_latte_asm(latte_asm)?;
 
     for node in &mut graph.nodes {
-        if let Gx2Shader::Pixel(pixel) = &shader {
-            if let Expr::Func { name, args, .. } = &mut node.input {
-                if name.starts_with("texture")
-                    && let Some(Expr::Global { name, .. }) = args.first_mut()
-                {
-                    // The name of the texture is its binding location.
-                    // texture(t15, ...) -> texture(g_VSMTextureSampler, ...)
-                    if let Some(index) =
-                        name.strip_prefix("t").and_then(|n| n.parse::<usize>().ok())
-                    {
-                        if let Some(sampler_name) = pixel.sampler_vars.iter().find_map(|s| {
-                            if s.location as usize == index {
-                                Some(&s.name)
-                            } else {
-                                None
-                            }
-                        }) {
-                            *name = sampler_name.into();
+        node.input.visit_exprs_mut(&mut |e| {
+            replace_uniform(e, &shader.uniform_blocks, &shader.uniform_vars)
+        });
+    }
+
+    let mut outputs = BTreeSet::new();
+    for node in &mut graph.nodes {
+        for prefix in ["PIX", "PARAM"] {
+            if node.output.name.starts_with(prefix) {
+                let index: usize = node.output.name.trim_start_matches(prefix).parse()?;
+                outputs.insert(index);
+
+                node.output.name = format!("out_attr{index}").into();
+            }
+        }
+    }
+    let glsl = graph.to_glsl();
+    let mut annotated = String::new();
+    write_uniform_blocks(&mut annotated, &shader.uniform_blocks, &shader.uniform_vars)?;
+    for attribute in &shader.attributes {
+        writeln!(
+            &mut annotated,
+            "layout(location = {}) in vec4 {};",
+            attribute.location, attribute.name
+        )?;
+    }
+
+    writeln!(&mut annotated)?;
+
+    let output_count = shader
+        .registers
+        .spi_vs_out_id
+        .iter()
+        .flat_map(|id| id.to_be_bytes())
+        .filter(|i| *i != 0xFF)
+        .count();
+
+    for i in 0..output_count {
+        writeln!(
+            &mut annotated,
+            "layout(location = {i}) out vec4 out_attr{i};"
+        )?;
+    }
+
+    writeln!(&mut annotated)?;
+    writeln!(&mut annotated, "void main() {{")?;
+
+    // Vertex input attribute registers can also be remapped.
+    for (i, location) in shader
+        .registers
+        .sq_vtx_semantic
+        .iter()
+        .enumerate()
+        .take(shader.registers.num_sq_vtx_semantic as usize)
+    {
+        if *location != 0xFF {
+            if let Some(a) = shader.attributes.iter().find(|a| a.location == *location) {
+                // Register 0 is special, so we need to start with register 1.
+                for c in "xyzw".chars() {
+                    writeln!(&mut annotated, "    R{}.{c} = {}.{c};", i + 1, a.name).unwrap();
+                }
+            } else {
+                error!("Unable to find name for attribute location {location}");
+            }
+        }
+    }
+
+    for line in glsl.lines() {
+        writeln!(&mut annotated, "    {line}")?;
+    }
+    writeln!(&mut annotated, "}}")?;
+    Ok(annotated)
+}
+
+fn annotate_fragment_shader(
+    latte_asm: &str,
+    vertex_shader: &Gx2VertexShader,
+    frag_shader: &Gx2PixelShader,
+) -> Result<String, anyhow::Error> {
+    let mut graph = Graph::from_latte_asm(latte_asm)?;
+
+    for node in &mut graph.nodes {
+        if let Expr::Func { name, args, .. } = &mut node.input {
+            if name.starts_with("texture")
+                && let Some(Expr::Global { name, .. }) = args.first_mut()
+            {
+                // The name of the texture is its binding location.
+                // texture(t15, ...) -> texture(g_VSMTextureSampler, ...)
+                if let Some(index) = name.strip_prefix("t").and_then(|n| n.parse::<usize>().ok()) {
+                    if let Some(sampler_name) = frag_shader.sampler_vars.iter().find_map(|s| {
+                        if s.location as usize == index {
+                            Some(&s.name)
+                        } else {
+                            None
                         }
+                    }) {
+                        *name = sampler_name.into();
                     }
                 }
             }
         }
 
         node.input.visit_exprs_mut(&mut |e| {
-            replace_uniform(e, shader.uniform_blocks(), shader.uniform_vars())
+            replace_uniform(e, &frag_shader.uniform_blocks, &frag_shader.uniform_vars)
         });
     }
-    let mut output_locations = BTreeSet::new();
+
+    let mut outputs = BTreeSet::new();
     for node in &mut graph.nodes {
         for prefix in ["PIX", "PARAM"] {
             if node.output.name.starts_with(prefix) {
                 let index: usize = node.output.name.trim_start_matches(prefix).parse()?;
-                output_locations.insert(index);
+                outputs.insert(index);
 
                 node.output.name = format!("out_attr{index}").into();
             }
@@ -64,43 +164,82 @@ fn annotate_gx2_shader(latte_asm: &str, shader: &Gx2Shader) -> Result<String, an
     let mut annotated = String::new();
     write_uniform_blocks(
         &mut annotated,
-        shader.uniform_blocks(),
-        shader.uniform_vars(),
+        &frag_shader.uniform_blocks,
+        &frag_shader.uniform_vars,
     )?;
-    if let Gx2Shader::Pixel(pixel) = &shader {
-        for sampler in &pixel.sampler_vars {
-            writeln!(
-                &mut annotated,
-                "layout(binding = {}) uniform {} {};",
-                sampler.location,
-                sampler_type(sampler),
-                sampler.name
-            )?;
-        }
-    }
-    if let Gx2Shader::Vertex(vertex) = &shader {
-        for attribute in &vertex.attributes {
-            writeln!(
-                &mut annotated,
-                "layout(location = {}) in vec4 {};",
-                attribute.location, attribute.name
-            )?;
-        }
+    for sampler in &frag_shader.sampler_vars {
+        writeln!(
+            &mut annotated,
+            "layout(binding = {}) uniform {} {};",
+            sampler.location,
+            sampler_type(sampler),
+            sampler.name
+        )?;
     }
     writeln!(&mut annotated)?;
-    for i in output_locations.iter() {
+
+    let input_locations = fragment_input_locations(vertex_shader, frag_shader);
+
+    for (i, location) in input_locations.iter().enumerate() {
+        writeln!(
+            &mut annotated,
+            "layout(location = {location}) in vec4 in_attr{i};"
+        )?;
+    }
+    writeln!(&mut annotated)?;
+
+    for i in outputs {
         writeln!(
             &mut annotated,
             "layout(location = {i}) out vec4 out_attr{i};"
         )?;
     }
+
     writeln!(&mut annotated)?;
     writeln!(&mut annotated, "void main() {{")?;
+
+    // Fragment input attributes initialize R0, R1, ...?
+    for i in 0..input_locations.len() {
+        for c in "xyzw".chars() {
+            writeln!(&mut annotated, "    R{i}.{c} = in_attr{i}.{c};").unwrap();
+        }
+    }
+
     for line in glsl.lines() {
         writeln!(&mut annotated, "    {line}")?;
     }
     writeln!(&mut annotated, "}}")?;
     Ok(annotated)
+}
+
+fn fragment_input_locations(
+    vertex_shader: &Gx2VertexShader,
+    frag_shader: &Gx2PixelShader,
+) -> Vec<i32> {
+    // Fragment inputs are remapped by vertex and fragment registers.
+    // https://github.com/decaf-emu/decaf-emu/blob/e6c528a20a41c34e0f9eb91dd3da40f119db2dee/src/libgpu/src/spirv/spirv_transpiler.cpp#L280-L301
+    let mut input_locations = Vec::new();
+
+    for input_id in frag_shader
+        .registers
+        .spi_ps_input_cntls
+        .iter()
+        .take(frag_shader.registers.num_spi_ps_input_cntl as usize)
+    {
+        let mut i = 0;
+        for register in &vertex_shader.registers.spi_vs_out_id {
+            // The order is [id3, id2, id1, id0];
+            for id in &register.to_le_bytes() {
+                if *id == (input_id & 0xFF) as u8 {
+                    input_locations.push(i);
+                }
+
+                i += 1;
+            }
+        }
+    }
+
+    input_locations
 }
 
 fn replace_uniform(
@@ -124,11 +263,11 @@ fn replace_uniform(
                 *name = (&block.name).into();
 
                 // TODO: Don't assume vec4 for all uniforms when converting indices to offsets.
-                // TODO: How do these indices match up with offsets?
+                // TODO: Are indices in terms of floats?
                 // TODO: group uniforms into blocks to make this easier.
                 if let Some(var) = vars
                     .iter()
-                    .find(|v| v.uniform_block_index == block_index as i32 && matches!(index.as_deref(), Some(Expr::Int(i)) if *i * 16 == v.offset as i32))
+                    .find(|v| v.uniform_block_index == block_index as i32 && matches!(index.as_deref(), Some(Expr::Int(i)) if *i * 4 == v.offset as i32))
                 {
                     *field = Some(var.name.clone().into());
                     *index = None;
@@ -191,7 +330,7 @@ fn data_type(var: &sm4sh_lib::gx2::UniformVar) -> &'static str {
     }
 }
 
-fn sampler_type(sampler: &sm4sh_lib::gx2::Sampler) -> &'static str {
+fn sampler_type(sampler: &sm4sh_lib::gx2::SamplerVar) -> &'static str {
     match sampler.sampler_type {
         sm4sh_lib::gx2::SamplerType::D1 => "sampler1D",
         sm4sh_lib::gx2::SamplerType::D2 => "sampler2D",
