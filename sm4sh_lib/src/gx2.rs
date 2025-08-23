@@ -114,9 +114,9 @@ pub struct UniformVar {
     pub data_type: VarType,
     pub count: u32,
     pub offset: u32,
-    /// The index into [uniform_buffers](struct.FragmentShader.html#structfield.uniform_buffers)
+    /// The index into [uniform_blocks](struct.FragmentShader.html#structfield.uniform_blocks)
     /// or `-1` if this uniform is not part of a buffer.
-    pub uniform_buffer_index: i32,
+    pub uniform_block_index: i32,
 }
 
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
@@ -156,7 +156,7 @@ pub enum VarType {
     Vec4 = 11,
     IVec2 = 15,
     IVec4 = 17,
-    Unk20 = 20,
+    UVec4 = 20,
     Mat2x4 = 23,
     Mat3x4 = 26,
     Mat4 = 29,
@@ -165,11 +165,11 @@ pub enum VarType {
 #[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy, Hash)]
 #[brw(repr(u32))]
 pub enum SamplerType {
-    Unk1 = 0,
+    D1 = 0,
     D2 = 1,
     Unk2 = 2,
     Unk3 = 3,
-    Unk4 = 4,
+    Cube = 4,
     Unk10 = 10,
     Unk13 = 13,
 }

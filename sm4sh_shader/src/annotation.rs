@@ -45,8 +45,9 @@ fn annotate_gx2_shader(latte_asm: &str, shader: &Gx2Shader) -> Result<String, an
             }
         }
 
-        node.input
-            .visit_exprs_mut(&mut |e| replace_uniform(e, shader.uniform_blocks()));
+        node.input.visit_exprs_mut(&mut |e| {
+            replace_uniform(e, shader.uniform_blocks(), shader.uniform_vars())
+        });
     }
     let mut output_locations = BTreeSet::new();
     for node in &mut graph.nodes {
@@ -102,24 +103,37 @@ fn annotate_gx2_shader(latte_asm: &str, shader: &Gx2Shader) -> Result<String, an
     Ok(annotated)
 }
 
-fn replace_uniform(e: &mut Expr, blocks: &[sm4sh_lib::gx2::UniformBlock]) {
-    if let Expr::Parameter { name, field, .. } = e {
-        match name.as_str() {
-            "KC0" => {
-                // TODO: What is the correct way to map KC0 to uniform blocks?
-                if let Some(block) = blocks.iter().find(|b| b.offset == 1) {
-                    *field = Some("values".into());
-                    *name = (&block.name).into();
+fn replace_uniform(
+    e: &mut Expr,
+    blocks: &[sm4sh_lib::gx2::UniformBlock],
+    vars: &[sm4sh_lib::gx2::UniformVar],
+) {
+    if let Expr::Parameter {
+        name, field, index, ..
+    } = e
+    {
+        if let Some(constant_buffer_index) = name
+            .strip_prefix("CB")
+            .and_then(|i| i.parse::<usize>().ok())
+        {
+            if let Some(block_index) = blocks
+                .iter()
+                .position(|b| b.offset as usize == constant_buffer_index)
+            {
+                let block = &blocks[block_index];
+                *name = (&block.name).into();
+
+                // TODO: Don't assume vec4 for all uniforms when converting indices to offsets.
+                // TODO: How do these indices match up with offsets?
+                // TODO: group uniforms into blocks to make this easier.
+                if let Some(var) = vars
+                    .iter()
+                    .find(|v| v.uniform_block_index == block_index as i32 && matches!(index.as_deref(), Some(Expr::Int(i)) if *i * 16 == v.offset as i32))
+                {
+                    *field = Some(var.name.clone().into());
+                    *index = None;
                 }
             }
-            "KC1" => {
-                // TODO: What is the correct way to map KC1 to uniform blocks?
-                if let Some(block) = blocks.iter().find(|b| b.offset == 2) {
-                    *field = Some("values".into());
-                    *name = (&block.name).into();
-                }
-            }
-            _ => (),
         }
     }
 }
@@ -138,7 +152,7 @@ fn write_uniform_blocks(
 
         let mut block_vars: Vec<_> = vars
             .iter()
-            .filter(|v| v.uniform_buffer_index == i as i32)
+            .filter(|v| v.uniform_block_index == i as i32)
             .collect();
         block_vars.sort_by_key(|v| v.offset);
 
@@ -154,7 +168,6 @@ fn write_uniform_blocks(
                 }
             }
         }
-        writeln!(annotated, "    vec4 values[{}];", block.size / 16)?;
         writeln!(annotated, "}} {};", &block.name)?;
         writeln!(annotated)?;
     }

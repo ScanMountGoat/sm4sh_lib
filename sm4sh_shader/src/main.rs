@@ -221,7 +221,7 @@ fn create_shader_database(
         let mut parameters = BTreeMap::new();
         if let Some(block_index) = gx2.uniform_blocks().iter().position(|b| b.name == "MC") {
             for var in gx2.uniform_vars().iter() {
-                if var.uniform_buffer_index == block_index as i32 {
+                if var.uniform_block_index == block_index as i32 {
                     parameters.insert(var.offset as usize, var.name.clone());
                 }
             }
