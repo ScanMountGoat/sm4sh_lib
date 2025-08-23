@@ -107,7 +107,7 @@ impl<'a> State<'a> {
         let animations = cli
             .anim
             .as_ref()
-            .map(|anim| load_animations(anim))
+            .map(load_animations)
             .transpose()?
             .unwrap_or_default();
 

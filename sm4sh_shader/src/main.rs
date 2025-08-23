@@ -4,7 +4,10 @@ use rayon::prelude::*;
 use sm4sh_lib::nsh::{Gx2Shader, Nsh};
 use sm4sh_model::shader_database::{ShaderDatabase, ShaderProgram};
 use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
-use xc3_shader::graph::Graph;
+
+use crate::annotation::annotate_shader;
+
+mod annotation;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -97,13 +100,13 @@ fn dump_shaders(nsh: &str, output: &str, gfd_tool: &str) -> anyhow::Result<()> {
 
     for (i, shader) in nsh.shaders.iter().enumerate() {
         let gx2 = shader.gfx2.gx2_shader()?;
-        let gx2_path = output.join(&name).with_extension(format!("{i}.gx2.bin"));
+        let gx2_path = output.join(format!("{name}.{i}.gx2.bin"));
         gx2.save(gx2_path)?;
 
-        let binary_path = output.join(&name).with_extension(format!("{i}.bin"));
+        let binary_path = output.join(format!("{name}.{i}.bin"));
         std::fs::write(&binary_path, gx2.program_binary())?;
 
-        let txt_path = output.join(&name).with_extension(format!("{i}.txt"));
+        let txt_path = output.join(format!("{name}.{i}.txt"));
         dissassemble_shader(&binary_path, &txt_path, gfd_tool);
     }
     Ok(())
@@ -178,21 +181,16 @@ fn match_shaders_to_nsh(
 fn annotate_shaders(nsh_shader_dump: &str) -> anyhow::Result<()> {
     globwalk::GlobWalkerBuilder::from_patterns(nsh_shader_dump, &["*.txt"])
         .build()?
+        .filter_map(|e| e.ok())
         .par_bridge()
-        .try_for_each(|entry| {
-            let path = entry?.path().to_path_buf();
-            annotate_shader(&path).with_context(|| format!("failed to process {path:?}"))
-        })
-}
-
-fn annotate_shader(txt_path: &Path) -> anyhow::Result<()> {
-    // TODO: Share annotation code with xc3_shader.
-    let text = std::fs::read_to_string(txt_path)?;
-    let graph = Graph::from_latte_asm(&text)?;
-    let glsl = graph.to_glsl();
-
-    let name = txt_path.file_stem().unwrap();
-    std::fs::write(txt_path.with_file_name(name).with_extension("glsl"), &glsl)?;
+        .for_each(|entry| {
+            let path = entry.path().to_path_buf();
+            if let Err(e) =
+                annotate_shader(&path).with_context(|| format!("failed to process {path:?}"))
+            {
+                println!("{e:?}");
+            }
+        });
     Ok(())
 }
 
