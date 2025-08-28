@@ -2,12 +2,12 @@ use std::{collections::BTreeMap, path::Path};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ShaderDatabase {
     pub programs: BTreeMap<String, ShaderProgram>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ShaderProgram {
     pub samplers: BTreeMap<usize, String>,
     pub parameters: BTreeMap<usize, String>,
