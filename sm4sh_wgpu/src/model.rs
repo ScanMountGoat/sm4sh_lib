@@ -205,12 +205,7 @@ fn create_mesh(
     let mut reflection_cube_sampler = None;
 
     if let Some(material) = &mesh.material1 {
-        // TODO: Just use integers for keys in the database?
-        if let Some(program) = shared_data
-            .database
-            .programs
-            .get(&format!("{:X}", material.shader_id))
-        {
+        if let Some(program) = shared_data.database.get_shader(material.shader_id) {
             for ((_, s), texture) in program.samplers.iter().zip(&material.textures) {
                 match s.as_str() {
                     "colorSampler" => {

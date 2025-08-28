@@ -2,7 +2,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use rayon::prelude::*;
 use sm4sh_lib::{gx2::Gx2PixelShader, nsh::Nsh};
-use sm4sh_model::shader_database::{ShaderDatabase, ShaderProgram};
+use sm4sh_model::database::{ShaderDatabase, ShaderProgram};
 use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
 
 use crate::annotation::annotate_shader;

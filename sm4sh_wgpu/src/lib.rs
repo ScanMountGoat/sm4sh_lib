@@ -1,6 +1,6 @@
 use encase::{internal::WriteInto, ShaderSize, ShaderType, StorageBuffer, UniformBuffer};
 use glam::{vec2, Mat4, Vec4};
-use sm4sh_model::shader_database::ShaderDatabase;
+use sm4sh_model::database::ShaderDatabase;
 use wgpu::util::DeviceExt;
 
 mod model;

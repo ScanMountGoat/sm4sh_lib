@@ -7,7 +7,7 @@ use glam::{vec3, Vec3};
 use log::{error, info};
 use sm4sh_model::{
     animation::{load_animations, Animation},
-    shader_database::ShaderDatabase,
+    database::ShaderDatabase,
 };
 use sm4sh_wgpu::{load_model, CameraData, Model, Renderer, SharedData};
 use winit::{

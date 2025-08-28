@@ -3,7 +3,7 @@ use std::path::Path;
 use clap::Parser;
 use futures::executor::block_on;
 use log::error;
-use sm4sh_model::shader_database::ShaderDatabase;
+use sm4sh_model::database::ShaderDatabase;
 use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData};
 use wgpu::{
     DeviceDescriptor, Extent3d, PowerPreference, RequestAdapterOptions, TextureDescriptor,

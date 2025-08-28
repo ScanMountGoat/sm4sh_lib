@@ -19,4 +19,8 @@ impl ShaderDatabase {
         let json = std::fs::read_to_string(path).unwrap();
         serde_json::from_str(&json).unwrap()
     }
+
+    pub fn get_shader(&self, shader_id: u32) -> Option<&ShaderProgram> {
+        self.programs.get(&format!("{shader_id:X?}"))
+    }
 }

@@ -28,7 +28,7 @@ pub use sm4sh_lib::nut::NutFormat;
 pub use sm4sh_lib::vbn::BoneType;
 
 pub mod animation;
-pub mod shader_database;
+pub mod database;
 pub mod skinning;
 pub mod vertex;
 
