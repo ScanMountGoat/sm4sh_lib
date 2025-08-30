@@ -286,130 +286,172 @@ fn frame_index_pos(frame: f32, frame_count: usize) -> (usize, f32) {
     (index, x)
 }
 
-#[derive(Debug)]
 struct TransformData {
-    translation_min: Option<Vec3>,
-    translation_max: Option<Vec3>,
+    translation: Option<TranslationData>,
+    rotation: Option<RotationData>,
+    scale: Option<ScaleData>,
+}
 
-    rotation_min: Option<Vec3>,
-    rotation_max: Option<Vec3>,
+enum TranslationData {
+    Frame,
+    Interpolate { min: Vec3, max: Vec3 },
+    Constant(Vec3),
+}
 
-    scale_min: Option<Vec3>,
-    scale_max: Option<Vec3>,
+enum RotationData {
+    Interpolate { min: Vec3, max: Vec3 },
+    FConst { value: Vec3, extra: f32 },
+    Constant(Vec3),
+    Frame,
+}
+
+enum ScaleData {
+    Constant(Vec3),
+    Interpolate { min: Vec3, max: Vec3 },
 }
 
 impl TransformData {
     fn translation(&self, keys: &[u16], key_index: &mut usize) -> Option<Vec3> {
-        interpolate_vec3(self.translation_min, self.translation_max, keys, key_index)
+        match self.translation.as_ref()? {
+            TranslationData::Frame => None,
+            TranslationData::Interpolate { min, max } => {
+                Some(interpolate_vec3(*min, *max, keys, key_index))
+            }
+
+            TranslationData::Constant(v) => Some(*v),
+        }
     }
 
     fn rotation(&self, keys: &[u16], key_index: &mut usize) -> Option<Quat> {
-        let xyz = interpolate_vec3(self.rotation_min, self.rotation_max, keys, key_index)?;
-        let [x, y, z] = xyz.to_array();
-        // Assume unit quaternion.
-        let w = (1.0 - x * x - y * y - z * z).abs().sqrt();
-        Some(Quat::from_xyzw(x, y, z, w))
+        match self.rotation.as_ref()? {
+            RotationData::Interpolate { min, max } => {
+                let v = interpolate_vec3(*min, *max, keys, key_index);
+                Some(Quat::from_xyzw(v.x, v.y, v.z, calculate_w(v)))
+            }
+            RotationData::FConst { value, extra } => {
+                // https://github.com/jam1garner/Smash-Forge/blob/36d221f1182cdb14927acb1fc3399c8f06d42a53/Smash%20Forge/Filetypes/Animation/OMOOld.cs#L320-L335
+                let scale = keys[*key_index] as f32 / 65535.0 * extra;
+                *key_index += 1;
+                let x = value.x;
+                let y = value.y;
+                let z = value.z + scale;
+                let w = rotation_type6_w(x, y, z);
+                Some(Quat::from_xyzw(x, y, z, w))
+            }
+            RotationData::Constant(v) => Some(Quat::from_xyzw(v.x, v.y, v.z, calculate_w(*v))),
+            RotationData::Frame => None,
+        }
     }
 
     fn scale(&self, keys: &[u16], key_index: &mut usize) -> Option<Vec3> {
-        interpolate_vec3(self.scale_min, self.scale_max, keys, key_index)
+        match self.scale.as_ref()? {
+            ScaleData::Constant(v) => Some(*v),
+            ScaleData::Interpolate { min, max } => {
+                Some(interpolate_vec3(*min, *max, keys, key_index))
+            }
+        }
     }
 }
 
-fn interpolate_vec3(
-    min: Option<Vec3>,
-    max: Option<Vec3>,
-    keys: &[u16],
-    key_index: &mut usize,
-) -> Option<Vec3> {
-    let min = min?;
-    if let Some(max) = max {
-        let f = vec3(
-            keys[*key_index] as f32,
-            keys[*key_index + 1] as f32,
-            keys[*key_index + 2] as f32,
-        ) / 65535.0;
-        *key_index += 3;
-        Some(min + f * max)
-    } else {
-        Some(min)
-    }
+fn calculate_w(v: Vec3) -> f32 {
+    // Assume unit quaternion.
+    (1.0 - v.length_squared()).abs().sqrt()
+}
+
+fn interpolate_vec3(min: Vec3, max: Vec3, keys: &[u16], key_index: &mut usize) -> Vec3 {
+    let f = vec3(
+        keys[*key_index] as f32,
+        keys[*key_index + 1] as f32,
+        keys[*key_index + 2] as f32,
+    ) / 65535.0;
+    *key_index += 3;
+    min + f * max
 }
 
 fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> BinResult<TransformData> {
     let mut data = Cursor::new(&inter_data[node.inter_offset as usize..]);
 
-    let mut translation_min = None;
-    let mut translation_max = None;
-    if node.flags.position() {
+    let translation = if node.flags.position() {
         match node.flags.position_type() {
-            PositionType::Frame => {}
-            PositionType::Interpolate => {
-                let v: [f32; 3] = data.read_be()?;
-                translation_min = Some(v.into());
-
-                let v: [f32; 3] = data.read_be()?;
-                translation_max = Some(v.into());
-            }
+            PositionType::Frame => Some(TranslationData::Frame),
+            PositionType::Interpolate => Some(TranslationData::Interpolate {
+                min: data.read_be::<[f32; 3]>()?.into(),
+                max: data.read_be::<[f32; 3]>()?.into(),
+            }),
             PositionType::Constant => {
                 let v: [f32; 3] = data.read_be()?;
-                translation_min = Some(v.into());
+                Some(TranslationData::Constant(v.into()))
             }
         }
-    }
+    } else {
+        None
+    };
 
-    let mut rotation_min = None;
-    let mut rotation_max = None;
-    if node.flags.rotation() {
+    let rotation = if node.flags.rotation() {
         match node.flags.rotation_type() {
-            RotationType::Interpolate => {
-                let v: [f32; 3] = data.read_be()?;
-                rotation_min = Some(v.into());
-
-                let v: [f32; 3] = data.read_be()?;
-                rotation_max = Some(v.into());
-            }
-            RotationType::FConst => {
-                // TODO: Is this actually a full quaternion?
-                let v: [f32; 4] = data.read_be()?;
-                rotation_min = Some([v[0], v[1], v[2]].into());
-            }
+            RotationType::Interpolate => Some(RotationData::Interpolate {
+                min: data.read_be::<[f32; 3]>()?.into(),
+                max: data.read_be::<[f32; 3]>()?.into(),
+            }),
+            RotationType::FConst => Some(RotationData::FConst {
+                value: data.read_be::<[f32; 3]>()?.into(),
+                extra: data.read_be()?,
+            }),
             RotationType::Constant => {
                 let v: [f32; 3] = data.read_be()?;
-                rotation_min = Some(v.into());
+                Some(RotationData::Constant(v.into()))
             }
             RotationType::Frame => {
                 // TODO: what does "frame" mean?
+                Some(RotationData::Frame)
             }
         }
-    }
+    } else {
+        None
+    };
 
-    let mut scale_min = None;
-    let mut scale_max = None;
-    if node.flags.scale() {
+    let scale = if node.flags.scale() {
         match node.flags.scale_type() {
             ScaleType::Constant | ScaleType::Constant2 => {
                 let v: [f32; 3] = data.read_be()?;
-                scale_min = Some(v.into());
+                Some(ScaleData::Constant(v.into()))
             }
-            ScaleType::Interpolate => {
-                let v: [f32; 3] = data.read_be()?;
-                scale_min = Some(v.into());
-
-                let v: [f32; 3] = data.read_be()?;
-                scale_max = Some(v.into());
-            }
+            ScaleType::Interpolate => Some(ScaleData::Interpolate {
+                min: data.read_be::<[f32; 3]>()?.into(),
+                max: data.read_be::<[f32; 3]>()?.into(),
+            }),
         }
-    }
+    } else {
+        None
+    };
 
     Ok(TransformData {
-        translation_min,
-        translation_max,
-        rotation_min,
-        rotation_max,
-        scale_min,
-        scale_max,
+        translation,
+        rotation,
+        scale,
     })
+}
+
+// https://github.com/jam1garner/Smash-Forge/blob/36d221f1182cdb14927acb1fc3399c8f06d42a53/Smash%20Forge/Filetypes/Animation/OMOOld.cs#L12-L33
+fn rotation_type6_w(x: f32, y: f32, z: f32) -> f32 {
+    let epsilon = 1.0e-12;
+    let cumulative = 1.0 - (x * x + y * y + z * z);
+    let f12 = 1.0 / cumulative.sqrt();
+    let sqrt_cumulative = if (cumulative - epsilon) < 0.0 {
+        0.0
+    } else {
+        f12
+    };
+    let f7 = (0.5 * cumulative) * sqrt_cumulative;
+    let f8 = 1.5 - (f7 * sqrt_cumulative);
+    let f0 = f8 * sqrt_cumulative;
+    let f9 = (0.5 * cumulative) * f0;
+    let f10 = 1.5 - (f9 * f0);
+    let f0 = f0 * f10;
+    let f11 = (0.5 * cumulative) * f0;
+    let f13 = 1.5 - (f11 * f0);
+    let f0 = f0 * f13;
+    cumulative * f0
 }
 
 fn sm4sh_to_blender(m: Mat4) -> Mat4 {
