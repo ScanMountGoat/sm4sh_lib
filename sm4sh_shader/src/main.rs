@@ -1,13 +1,15 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
+use glsl_lang::{ast::TranslationUnit, parse::DefaultParse};
 use rayon::prelude::*;
 use sm4sh_lib::{gx2::Gx2PixelShader, nsh::Nsh};
 use sm4sh_model::database::{ShaderDatabase, ShaderProgram};
 use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
 
-use crate::annotation::annotate_shader;
+use crate::{annotation::annotate_shader, database::shader_from_glsl};
 
 mod annotation;
+mod database;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -54,6 +56,13 @@ enum Commands {
         /// The output JSON database.
         output: String,
     },
+    /// Find output dependencies for the given GLSL shader program.
+    GlslOutputDependencies {
+        /// The input fragment GLSL file.
+        frag: String,
+        /// The output txt or Graphviz dot file.
+        output: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -84,6 +93,9 @@ fn main() -> anyhow::Result<()> {
             nsh_shader_dump,
             output,
         } => create_shader_database(&shader_ids_shaders, &nsh_shader_dump, &output)?,
+        Commands::GlslOutputDependencies { frag, output } => {
+            glsl_output_dependencies(&frag, &output)
+        }
     }
     println!("Finished in {:?}", start.elapsed());
     Ok(())
@@ -99,22 +111,27 @@ fn dump_shaders(nsh: &str, output: &str, gfd_tool: &str) -> anyhow::Result<()> {
     let name = nsh_path.file_stem().unwrap().to_string_lossy().to_string();
 
     for (i, program) in nsh.programs.iter().enumerate() {
-        for (gx2, ext) in [
-            program.vertex.gfx2.gx2_shader()?,
-            program.pixel.gfx2.gx2_shader()?,
-        ]
-        .iter()
-        .zip(&["vert", "frag"])
-        {
-            let gx2_path = output.join(format!("{name}.{i}.{ext}.gx2.bin"));
-            gx2.save(gx2_path)?;
+        // Extract vertex shader.
+        let gx2 = program.vertex_gx2()?;
+        let gx2_path = output.join(format!("{name}.{i}.vert.gx2.bin"));
+        gx2.save(gx2_path)?;
 
-            let binary_path = output.join(format!("{name}.{i}.{ext}.bin"));
-            std::fs::write(&binary_path, gx2.program_binary())?;
+        let binary_path = output.join(format!("{name}.{i}.vert.bin"));
+        std::fs::write(&binary_path, &gx2.program_binary)?;
 
-            let txt_path = output.join(format!("{name}.{i}.{ext}.txt"));
-            dissassemble_shader(&binary_path, &txt_path, gfd_tool);
-        }
+        let txt_path = output.join(format!("{name}.{i}.vert.txt"));
+        dissassemble_shader(&binary_path, &txt_path, gfd_tool);
+
+        // Extract pixel shader.
+        let gx2 = program.pixel_gx2()?;
+        let gx2_path = output.join(format!("{name}.{i}.frag.gx2.bin"));
+        gx2.save(gx2_path)?;
+
+        let binary_path = output.join(format!("{name}.{i}.frag.bin"));
+        std::fs::write(&binary_path, &gx2.program_binary)?;
+
+        let txt_path = output.join(format!("{name}.{i}.frag.txt"));
+        dissassemble_shader(&binary_path, &txt_path, gfd_tool);
     }
     Ok(())
 }
@@ -245,4 +262,21 @@ fn create_shader_database(
     let json = serde_json::to_string_pretty(&database)?;
     std::fs::write(output, &json)?;
     Ok(())
+}
+
+fn glsl_output_dependencies(frag: &str, output: &str) {
+    let frag_glsl = std::fs::read_to_string(&frag).unwrap();
+    let fragment = TranslationUnit::parse(&frag_glsl).unwrap();
+
+    // TODO: make an argument for this?
+    let vert = std::fs::read_to_string(Path::new(&frag).with_extension("vert"))
+        .ok()
+        .map(|v| TranslationUnit::parse(&v).unwrap());
+
+    let shader = shader_from_glsl(vert.as_ref(), &fragment);
+    if output.ends_with(".dot") {
+        // std::fs::write(output, ).unwrap();
+    } else {
+        std::fs::write(output, format!("{shader:#?}")).unwrap();
+    }
 }
