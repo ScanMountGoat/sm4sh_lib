@@ -60,7 +60,7 @@ enum Commands {
     GlslOutputDependencies {
         /// The input fragment GLSL file.
         frag: String,
-        /// The output txt or Graphviz dot file.
+        /// The output txt file.
         output: String,
     },
 }
@@ -265,7 +265,7 @@ fn create_shader_database(
 }
 
 fn glsl_output_dependencies(frag: &str, output: &str) {
-    let frag_glsl = std::fs::read_to_string(&frag).unwrap();
+    let frag_glsl = std::fs::read_to_string(frag).unwrap();
     let fragment = TranslationUnit::parse(&frag_glsl).unwrap();
 
     // TODO: make an argument for this?
@@ -273,10 +273,8 @@ fn glsl_output_dependencies(frag: &str, output: &str) {
         .ok()
         .map(|v| TranslationUnit::parse(&v).unwrap());
 
+    // TODO: use expression printing from xc3_shader
+    // TODO: graphviz support
     let shader = shader_from_glsl(vert.as_ref(), &fragment);
-    if output.ends_with(".dot") {
-        // std::fs::write(output, ).unwrap();
-    } else {
-        std::fs::write(output, format!("{shader:#?}")).unwrap();
-    }
+    std::fs::write(output, format!("{shader:#?}")).unwrap();
 }

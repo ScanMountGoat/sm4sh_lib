@@ -124,12 +124,11 @@ fn annotate_fragment_shader(
 
     let mut texture_names = Vec::new();
     for e in &graph.exprs {
-        if let Expr::Func { name, args, .. } = e {
-            if name.starts_with("texture") {
-                if let Some(Expr::Global { name, .. }) = args.first().map(|a| &graph.exprs[*a]) {
-                    texture_names.push(name.clone());
-                }
-            }
+        if let Expr::Func { name, args, .. } = e
+            && name.starts_with("texture")
+            && let Some(Expr::Global { name, .. }) = args.first().map(|a| &graph.exprs[*a])
+        {
+            texture_names.push(name.clone());
         }
     }
 
@@ -137,18 +136,17 @@ fn annotate_fragment_shader(
         if let Expr::Global { name, .. } = &mut graph.exprs[i] {
             // The name of the texture is its binding location.
             // texture(t15, ...) -> texture(g_VSMTextureSampler, ...)
-            if texture_names.contains(&name) {
-                if let Some(index) = name.strip_prefix("t").and_then(|n| n.parse::<usize>().ok()) {
-                    if let Some(sampler_name) = frag_shader.sampler_vars.iter().find_map(|s| {
-                        if s.location as usize == index {
-                            Some(&s.name)
-                        } else {
-                            None
-                        }
-                    }) {
-                        *name = sampler_name.into();
+            if texture_names.contains(name)
+                && let Some(index) = name.strip_prefix("t").and_then(|n| n.parse::<usize>().ok())
+                && let Some(sampler_name) = frag_shader.sampler_vars.iter().find_map(|s| {
+                    if s.location as usize == index {
+                        Some(&s.name)
+                    } else {
+                        None
                     }
-                }
+                })
+            {
+                *name = sampler_name.into();
             }
         }
 
@@ -259,16 +257,15 @@ fn replace_uniform(
     blocks: &[sm4sh_lib::gx2::UniformBlock],
     vars: &[sm4sh_lib::gx2::UniformVar],
 ) {
-    let result = uniform_block_name_var_name(expr_index, &graph, blocks, vars);
+    let result = uniform_block_name_var_name(expr_index, graph, blocks, vars);
     if let Expr::Parameter {
         name, field, index, ..
     } = &mut graph.exprs[expr_index]
+        && let Some((new_name, new_field)) = result
     {
-        if let Some((new_name, new_field)) = result {
-            *name = new_name;
-            *field = Some(new_field);
-            *index = None;
-        }
+        *name = new_name;
+        *field = Some(new_field);
+        *index = None;
     }
 }
 
@@ -278,28 +275,25 @@ fn uniform_block_name_var_name(
     blocks: &[sm4sh_lib::gx2::UniformBlock],
     vars: &[sm4sh_lib::gx2::UniformVar],
 ) -> Option<(SmolStr, SmolStr)> {
-    if let Expr::Parameter { name, index, .. } = &graph.exprs[expr_index] {
-        if let Some(constant_buffer_index) = name
+    if let Expr::Parameter { name, index, .. } = &graph.exprs[expr_index]
+        && let Some(constant_buffer_index) = name
             .strip_prefix("CB")
             .and_then(|i| i.parse::<usize>().ok())
-        {
-            if let Some(block_index) = blocks
-                .iter()
-                .position(|b| b.offset as usize == constant_buffer_index)
-            {
-                let block = &blocks[block_index];
+        && let Some(block_index) = blocks
+            .iter()
+            .position(|b| b.offset as usize == constant_buffer_index)
+    {
+        let block = &blocks[block_index];
 
-                // TODO: Don't assume vec4 for all uniforms when converting indices to offsets.
-                // TODO: Are indices in terms of floats?
-                // TODO: group uniforms into blocks to make this easier.
-                let i = index.and_then(|i| graph.exprs.get(i));
-                if let Some(var) = vars.iter().find(|v| {
-                    v.uniform_block_index == block_index as i32
-                        && matches!(i.as_deref(), Some(Expr::Int(i)) if *i * 4 == v.offset as i32)
-                }) {
-                    return Some(((&block.name).into(), var.name.clone().into()));
-                }
-            }
+        // TODO: Don't assume vec4 for all uniforms when converting indices to offsets.
+        // TODO: Are indices in terms of floats?
+        // TODO: group uniforms into blocks to make this easier.
+        let i = index.and_then(|i| graph.exprs.get(i));
+        if let Some(var) = vars.iter().find(|v| {
+            v.uniform_block_index == block_index as i32
+                && matches!(i, Some(Expr::Int(i)) if *i * 4 == v.offset as i32)
+        }) {
+            return Some(((&block.name).into(), var.name.clone().into()));
         }
     }
 
