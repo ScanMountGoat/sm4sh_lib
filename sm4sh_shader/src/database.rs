@@ -83,24 +83,17 @@ impl xc3_shader::expr::Operation for Operation {
     }
 }
 
-pub fn shader_from_glsl(
-    vertex: Option<&TranslationUnit>,
-    fragment: &TranslationUnit,
-) -> ShaderProgram {
+pub fn shader_from_glsl(vertex: &TranslationUnit, fragment: &TranslationUnit) -> ShaderProgram {
     let frag = Graph::from_glsl(fragment);
     let frag_attributes = find_attribute_locations(fragment);
 
-    let vertex = vertex.map(|v| (Graph::from_glsl(v), find_attribute_locations(v)));
-    let (vert, vert_attributes) = vertex.unzip();
+    let vert = Graph::from_glsl(vertex);
+    let vert_attributes = find_attribute_locations(vertex);
 
     // Create a combined graph that links vertex outputs to fragment inputs.
     // This effectively moves all shader logic to the fragment shader.
     // This simplifies generating shader code or material nodes in 3D applications.
-    let graph = if let (Some(vert), Some(vert_attributes)) = (vert, vert_attributes) {
-        merge_vertex_fragment(vert, &vert_attributes, frag, &frag_attributes)
-    } else {
-        frag
-    };
+    let graph = merge_vertex_fragment(vert, &vert_attributes, frag, &frag_attributes);
 
     let mut exprs = IndexSet::new();
     let mut expr_to_index = IndexMap::new();
@@ -121,5 +114,40 @@ pub fn shader_from_glsl(
     ShaderProgram {
         output_dependencies,
         exprs: exprs.into_iter().collect(),
+    }
+}
+
+pub fn convert_expr(e: OutputExpr<Operation>) -> OutputExpr<sm4sh_model::database::Operation> {
+    match e {
+        OutputExpr::Value(value) => OutputExpr::Value(value),
+        OutputExpr::Func { op, args } => OutputExpr::Func {
+            op: op.into(),
+            args,
+        },
+    }
+}
+
+impl From<Operation> for sm4sh_model::database::Operation {
+    fn from(value: Operation) -> Self {
+        match value {
+            Operation::Add => Self::Add,
+            Operation::Sub => Self::Sub,
+            Operation::Mul => Self::Mul,
+            Operation::Div => Self::Div,
+            Operation::Mix => Self::Mix,
+            Operation::Clamp => Self::Clamp,
+            Operation::Min => Self::Min,
+            Operation::Max => Self::Max,
+            Operation::Abs => Self::Abs,
+            Operation::Floor => Self::Floor,
+            Operation::Power => Self::Power,
+            Operation::Sqrt => Self::Sqrt,
+            Operation::InverseSqrt => Self::InverseSqrt,
+            Operation::Fma => Self::Fma,
+            Operation::Dot4 => Self::Dot4,
+            Operation::Select => Self::Select,
+            Operation::Negate => Self::Negate,
+            Operation::Unk => Self::Unk,
+        }
     }
 }

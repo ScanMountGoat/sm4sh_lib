@@ -1,6 +1,9 @@
 use std::{collections::BTreeMap, path::Path};
 
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
+use xc3_shader::expr::OutputExpr;
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ShaderDatabase {
@@ -9,6 +12,12 @@ pub struct ShaderDatabase {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ShaderProgram {
+    /// Indices into [exprs](#structfield.exprs) for values assigned to a fragment output.
+    pub output_dependencies: IndexMap<SmolStr, usize>,
+
+    /// Unique exprs used for this program.
+    pub exprs: Vec<OutputExpr<Operation>>,
+
     pub samplers: BTreeMap<usize, String>,
     pub parameters: BTreeMap<usize, String>,
 }
@@ -22,5 +31,33 @@ impl ShaderDatabase {
 
     pub fn get_shader(&self, shader_id: u32) -> Option<&ShaderProgram> {
         self.programs.get(&format!("{shader_id:X?}"))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+pub enum Operation {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mix,
+    Clamp,
+    Min,
+    Max,
+    Abs,
+    Floor,
+    Power,
+    Sqrt,
+    InverseSqrt,
+    Fma,
+    Dot4,
+    Select,
+    Negate,
+    Unk,
+}
+
+impl Default for Operation {
+    fn default() -> Self {
+        Self::Unk
     }
 }

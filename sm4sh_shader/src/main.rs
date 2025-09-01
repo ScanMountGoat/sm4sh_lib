@@ -6,7 +6,10 @@ use sm4sh_lib::{gx2::Gx2PixelShader, nsh::Nsh};
 use sm4sh_model::database::{ShaderDatabase, ShaderProgram};
 use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
 
-use crate::{annotation::annotate_shader, database::shader_from_glsl};
+use crate::{
+    annotation::annotate_shader,
+    database::{convert_expr, shader_from_glsl},
+};
 
 mod annotation;
 mod database;
@@ -94,7 +97,7 @@ fn main() -> anyhow::Result<()> {
             output,
         } => create_shader_database(&shader_ids_shaders, &nsh_shader_dump, &output)?,
         Commands::GlslOutputDependencies { frag, output } => {
-            glsl_output_dependencies(&frag, &output)
+            glsl_output_dependencies(&frag, &output)?
         }
     }
     println!("Finished in {:?}", start.elapsed());
@@ -110,30 +113,33 @@ fn dump_shaders(nsh: &str, output: &str, gfd_tool: &str) -> anyhow::Result<()> {
 
     let name = nsh_path.file_stem().unwrap().to_string_lossy().to_string();
 
-    for (i, program) in nsh.programs.iter().enumerate() {
-        // Extract vertex shader.
-        let gx2 = program.vertex_gx2()?;
-        let gx2_path = output.join(format!("{name}.{i}.vert.gx2.bin"));
-        gx2.save(gx2_path)?;
+    nsh.programs
+        .par_iter()
+        .enumerate()
+        .try_for_each(|(i, program)| {
+            // Extract vertex shader.
+            let gx2 = program.vertex_gx2()?;
+            let gx2_path = output.join(format!("{name}.{i}.vert.gx2.bin"));
+            gx2.save(gx2_path)?;
 
-        let binary_path = output.join(format!("{name}.{i}.vert.bin"));
-        std::fs::write(&binary_path, &gx2.program_binary)?;
+            let binary_path = output.join(format!("{name}.{i}.vert.bin"));
+            std::fs::write(&binary_path, &gx2.program_binary)?;
 
-        let txt_path = output.join(format!("{name}.{i}.vert.txt"));
-        dissassemble_shader(&binary_path, &txt_path, gfd_tool);
+            let txt_path = output.join(format!("{name}.{i}.vert.txt"));
+            dissassemble_shader(&binary_path, &txt_path, gfd_tool);
 
-        // Extract pixel shader.
-        let gx2 = program.pixel_gx2()?;
-        let gx2_path = output.join(format!("{name}.{i}.frag.gx2.bin"));
-        gx2.save(gx2_path)?;
+            // Extract pixel shader.
+            let gx2 = program.pixel_gx2()?;
+            let gx2_path = output.join(format!("{name}.{i}.frag.gx2.bin"));
+            gx2.save(gx2_path)?;
 
-        let binary_path = output.join(format!("{name}.{i}.frag.bin"));
-        std::fs::write(&binary_path, &gx2.program_binary)?;
+            let binary_path = output.join(format!("{name}.{i}.frag.bin"));
+            std::fs::write(&binary_path, &gx2.program_binary)?;
 
-        let txt_path = output.join(format!("{name}.{i}.frag.txt"));
-        dissassemble_shader(&binary_path, &txt_path, gfd_tool);
-    }
-    Ok(())
+            let txt_path = output.join(format!("{name}.{i}.frag.txt"));
+            dissassemble_shader(&binary_path, &txt_path, gfd_tool);
+            Ok(())
+        })
 }
 
 fn dissassemble_shader(binary_path: &Path, txt_path: &Path, gfd_tool: &str) {
@@ -223,58 +229,75 @@ fn create_shader_database(
     nsh_shader_dump: &str,
     output: &str,
 ) -> anyhow::Result<()> {
-    let mut programs = BTreeMap::new();
-    for line in std::fs::read_to_string(shader_ids_shaders).unwrap().lines() {
-        let parts: Vec<_> = line.split(",").map(|s| s.trim()).collect();
-        let shader_id = parts[0].to_string();
-        let nsh_index: usize = parts[2].split(".").nth(1).unwrap().parse()?;
+    let folder = Path::new(nsh_shader_dump);
 
-        let gx2_path =
-            Path::new(nsh_shader_dump).join(format!("texas_cross.{nsh_index}.frag.gx2.bin"));
-        let gx2 = Gx2PixelShader::from_file(gx2_path)?;
+    let programs = std::fs::read_to_string(shader_ids_shaders)
+        .unwrap()
+        .lines()
+        .par_bridge()
+        .map(|line| {
+            let parts: Vec<_> = line.split(",").map(|s| s.trim()).collect();
+            let shader_id = parts[0].to_string();
+            let nsh_index: usize = parts[2].split(".").nth(1).unwrap().parse()?;
 
-        let samplers = gx2
-            .sampler_vars
-            .iter()
-            .map(|s| (s.location as usize, s.name.clone()))
-            .collect();
+            let gx2_path = folder.join(format!("texas_cross.{nsh_index}.frag.gx2.bin"));
+            let gx2 = Gx2PixelShader::from_file(gx2_path)?;
 
-        // NU_ parameters are in the MC block.
-        let mut parameters = BTreeMap::new();
-        if let Some(block_index) = gx2.uniform_blocks.iter().position(|b| b.name == "MC") {
-            for var in gx2.uniform_vars.iter() {
-                if var.uniform_block_index == block_index as i32 {
-                    parameters.insert(var.offset as usize, var.name.clone());
+            let samplers = gx2
+                .sampler_vars
+                .iter()
+                .map(|s| (s.location as usize, s.name.clone()))
+                .collect();
+
+            // NU_ parameters are in the MC block.
+            let mut parameters = BTreeMap::new();
+            if let Some(block_index) = gx2.uniform_blocks.iter().position(|b| b.name == "MC") {
+                for var in gx2.uniform_vars.iter() {
+                    if var.uniform_block_index == block_index as i32 {
+                        parameters.insert(var.offset as usize, var.name.clone());
+                    }
                 }
             }
-        }
 
-        programs.insert(
-            shader_id,
-            ShaderProgram {
-                samplers,
-                parameters,
-            },
-        );
-    }
+            let vert_path = folder.join(format!("texas_cross.{nsh_index}.vert"));
+            let vertex = std::fs::read_to_string(vert_path)?;
+            let vertex = TranslationUnit::parse(&vertex)?;
+
+            let frag_path = folder.join(format!("texas_cross.{nsh_index}.frag"));
+            let fragment = std::fs::read_to_string(frag_path)?;
+            let fragment = TranslationUnit::parse(&fragment)?;
+
+            let program = shader_from_glsl(&vertex, &fragment);
+
+            Ok((
+                shader_id,
+                ShaderProgram {
+                    output_dependencies: program.output_dependencies,
+                    exprs: program.exprs.into_iter().map(convert_expr).collect(),
+                    samplers,
+                    parameters,
+                },
+            ))
+        })
+        .collect::<anyhow::Result<_>>()?;
 
     let database = ShaderDatabase { programs };
-    let json = serde_json::to_string_pretty(&database)?;
+    let json = serde_json::to_string(&database)?;
     std::fs::write(output, &json)?;
     Ok(())
 }
 
-fn glsl_output_dependencies(frag: &str, output: &str) {
-    let frag_glsl = std::fs::read_to_string(frag).unwrap();
-    let fragment = TranslationUnit::parse(&frag_glsl).unwrap();
+fn glsl_output_dependencies(frag: &str, output: &str) -> anyhow::Result<()> {
+    let frag_glsl = std::fs::read_to_string(frag)?;
+    let fragment = TranslationUnit::parse(&frag_glsl)?;
 
     // TODO: make an argument for this?
-    let vert = std::fs::read_to_string(Path::new(&frag).with_extension("vert"))
-        .ok()
-        .map(|v| TranslationUnit::parse(&v).unwrap());
+    let vert_glsl = std::fs::read_to_string(Path::new(&frag).with_extension("vert"))?;
+    let vert = TranslationUnit::parse(&vert_glsl)?;
 
     // TODO: use expression printing from xc3_shader
     // TODO: graphviz support
-    let shader = shader_from_glsl(vert.as_ref(), &fragment);
-    std::fs::write(output, format!("{shader:#?}")).unwrap();
+    let shader = shader_from_glsl(&vert, &fragment);
+    std::fs::write(output, format!("{shader:#?}"))?;
+    Ok(())
 }
