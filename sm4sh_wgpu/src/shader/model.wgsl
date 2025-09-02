@@ -217,11 +217,12 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var normal = vertex_normal;
 
     // TODO: Rename these in the shadergen itself?
-    // TODO: Dump all attribute names from database.
     let a_Position = in.clip_position;
     let a_TexCoord0 = vec4(in.uv0, 0.0, 0.0);
     let a_TexCoord1 = vec4(0.0);
+    let a_TexCoord2 = vec4(0.0);
     let a_Normal = vec4(vertex_normal, 0.0);
+    let a_Tangent = vec4(vertex_tangent, 0.0);
     let a_Binormal = vec4(vertex_bitangent, 0.0);
     let a_Color = in.color;
 

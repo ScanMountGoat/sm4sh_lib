@@ -2,7 +2,10 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use glsl_lang::{ast::TranslationUnit, parse::DefaultParse};
 use rayon::prelude::*;
-use sm4sh_lib::{gx2::Gx2PixelShader, nsh::Nsh};
+use sm4sh_lib::{
+    gx2::{Gx2PixelShader, Gx2VertexShader},
+    nsh::Nsh,
+};
 use sm4sh_model::database::{ShaderDatabase, ShaderProgram};
 use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
 
@@ -241,9 +244,12 @@ fn create_shader_database(
             let nsh_index: usize = parts[2].split(".").nth(1).unwrap().parse()?;
 
             let gx2_path = folder.join(format!("texas_cross.{nsh_index}.frag.gx2.bin"));
-            let gx2 = Gx2PixelShader::from_file(gx2_path)?;
+            let frag_gx2 = Gx2PixelShader::from_file(gx2_path)?;
 
-            let samplers = gx2
+            let gx2_path = folder.join(format!("texas_cross.{nsh_index}.vert.gx2.bin"));
+            let vert_gx2 = Gx2VertexShader::from_file(gx2_path)?;
+
+            let samplers = frag_gx2
                 .sampler_vars
                 .iter()
                 .map(|s| (s.location as usize, s.name.clone()))
@@ -251,8 +257,8 @@ fn create_shader_database(
 
             // NU_ parameters are in the MC block.
             let mut parameters = BTreeMap::new();
-            if let Some(block_index) = gx2.uniform_blocks.iter().position(|b| b.name == "MC") {
-                for var in gx2.uniform_vars.iter() {
+            if let Some(block_index) = frag_gx2.uniform_blocks.iter().position(|b| b.name == "MC") {
+                for var in frag_gx2.uniform_vars.iter() {
                     if var.uniform_block_index == block_index as i32 {
                         parameters.insert(var.offset as usize, var.name.clone());
                     }
@@ -269,11 +275,18 @@ fn create_shader_database(
 
             let program = shader_from_glsl(&vertex, &fragment);
 
+            let attributes = vert_gx2
+                .attributes
+                .iter()
+                .map(|a| (a.location as usize, a.name.clone()))
+                .collect();
+
             Ok((
                 shader_id,
                 ShaderProgram {
                     output_dependencies: program.output_dependencies,
                     exprs: program.exprs.into_iter().map(convert_expr).collect(),
+                    attributes,
                     samplers,
                     parameters,
                 },

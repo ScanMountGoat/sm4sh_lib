@@ -18,6 +18,7 @@ pub struct ShaderProgram {
     /// Unique exprs used for this program.
     pub exprs: Vec<OutputExpr<Operation>>,
 
+    pub attributes: BTreeMap<usize, String>,
     pub samplers: BTreeMap<usize, String>,
     pub parameters: BTreeMap<usize, String>,
 }

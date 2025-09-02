@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, fmt::Write, path::Path};
 
 use log::error;
-use sm4sh_lib::gx2::{Gx2PixelShader, Gx2VertexShader};
+use sm4sh_lib::gx2::{Gx2PixelShader, Gx2VertexShader, VarType};
 use smol_str::SmolStr;
 use xc3_shader::graph::{Expr, Graph};
 
@@ -257,24 +257,27 @@ fn replace_uniform(
     blocks: &[sm4sh_lib::gx2::UniformBlock],
     vars: &[sm4sh_lib::gx2::UniformVar],
 ) {
-    let result = uniform_block_name_var_name(expr_index, graph, blocks, vars);
+    let result = uniform_block_var_index(expr_index, graph, blocks, vars);
     if let Expr::Parameter {
         name, field, index, ..
     } = &mut graph.exprs[expr_index]
-        && let Some((new_name, new_field)) = result
+        && let Some((new_name, new_field, new_index)) = result
     {
         *name = new_name;
         *field = Some(new_field);
-        *index = None;
+        *index = match new_index {
+            UniformArrayIndex::Single => None,
+            UniformArrayIndex::Index(i) => Some(i),
+        }
     }
 }
 
-fn uniform_block_name_var_name(
+fn uniform_block_var_index(
     expr_index: usize,
     graph: &Graph,
     blocks: &[sm4sh_lib::gx2::UniformBlock],
     vars: &[sm4sh_lib::gx2::UniformVar],
-) -> Option<(SmolStr, SmolStr)> {
+) -> Option<(SmolStr, SmolStr, UniformArrayIndex)> {
     if let Expr::Parameter { name, index, .. } = &graph.exprs[expr_index]
         && let Some(constant_buffer_index) = name
             .strip_prefix("CB")
@@ -288,16 +291,85 @@ fn uniform_block_name_var_name(
         // TODO: Don't assume vec4 for all uniforms when converting indices to offsets.
         // TODO: Are indices in terms of floats?
         // TODO: group uniforms into blocks to make this easier.
-        let i = index.and_then(|i| graph.exprs.get(i));
-        if let Some(var) = vars.iter().find(|v| {
-            v.uniform_block_index == block_index as i32
-                && matches!(i, Some(Expr::Int(i)) if *i * 4 == v.offset as i32)
-        }) {
-            return Some(((&block.name).into(), var.name.clone().into()));
+        if let Some(Expr::Int(i)) = index.and_then(|i| graph.exprs.get(i)) {
+            if let Some((var_name, var_index)) = vars.iter().find_map(|v| {
+                if v.uniform_block_index == block_index as i32 && *i * 4 == v.offset as i32 {
+                    Some((&v.name, uniform_array_index(*i as usize, v)?))
+                } else {
+                    None
+                }
+            }) {
+                return Some(((&block.name).into(), var_name.into(), var_index));
+            }
         }
     }
 
     None
+}
+
+enum UniformArrayIndex {
+    Single,
+    Index(usize),
+}
+
+fn uniform_array_index(
+    buffer_index: usize,
+    var: &sm4sh_lib::gx2::UniformVar,
+) -> Option<UniformArrayIndex> {
+    // Treat matrices like vec4 arrays.
+    // TODO: Is this correct for all types?
+    let item_element_size = match var.data_type {
+        VarType::Void => todo!(),
+        VarType::Bool => 4,
+        VarType::Float => 4,
+        VarType::Vec2 => 8,
+        VarType::Vec3 => 12,
+        VarType::Vec4 => 16,
+        VarType::IVec2 => 8,
+        VarType::IVec4 => 16,
+        VarType::UVec4 => 16,
+        VarType::Mat2x4 => 16,
+        VarType::Mat3x4 => 16,
+        VarType::Mat4 => 16,
+    };
+    let item_size = match var.data_type {
+        VarType::Void => 0,
+        VarType::Bool => 4,
+        VarType::Float => 4,
+        VarType::Vec2 => 8,
+        VarType::Vec3 => 12,
+        VarType::Vec4 => 16,
+        VarType::IVec2 => 8,
+        VarType::IVec4 => 16,
+        VarType::UVec4 => 16,
+        VarType::Mat2x4 => 2 * 16,
+        VarType::Mat3x4 => 3 * 16,
+        VarType::Mat4 => 4 * 16,
+    };
+
+    // TODO: Are constant buffer accesses in latte shaders always indexing floats?
+    let offset = buffer_index * 4;
+
+    // Find the index within an array.
+    let uniform_start = var.offset as usize;
+    let uniform_end = uniform_start + item_size * var.count as usize;
+
+    if (uniform_start..uniform_end).contains(&offset) {
+        if var.count > 1
+            || matches!(
+                var.data_type,
+                VarType::Mat2x4 | VarType::Mat3x4 | VarType::Mat4
+            )
+        {
+            Some(UniformArrayIndex::Index(
+                (offset - uniform_start) / item_element_size,
+            ))
+        } else {
+            Some(UniformArrayIndex::Single)
+        }
+    } else {
+        None
+    }
 }
 
 fn write_uniform_blocks(
