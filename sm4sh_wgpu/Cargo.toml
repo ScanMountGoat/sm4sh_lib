@@ -11,6 +11,10 @@ wgpu.workspace = true
 glam = { workspace = true, features = ["bytemuck"] }
 ordered-float.workspace = true
 log.workspace = true
+smol_str.workspace = true
+indoc.workspace = true
+indexmap.workspace = true
+case = "1.0"
 
 [build-dependencies]
 wgsl_to_wgpu = "0.15.0"

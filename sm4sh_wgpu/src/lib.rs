@@ -6,6 +6,7 @@ use wgpu::util::DeviceExt;
 mod model;
 mod renderer;
 mod shader;
+mod shadergen;
 mod skeleton;
 mod texture;
 

@@ -19,11 +19,36 @@ var<storage> skinning_transforms_inv_transpose: array<mat4x4<f32>>;
 
 // PerMaterial values
 struct Uniforms {
-    has_normal_map: u32,
-    has_reflection_map: u32,
-    has_reflection_cube_map: u32,
     // NU_ parameters
-    ao_min_gain: vec4<f32>,
+    alphaBlendParams: vec4<f32>,
+    angleFadeParams: vec4<f32>,
+    aoMinGain: vec4<f32>,
+    colorGain: vec4<f32>,
+    colorOffset: vec4<f32>,
+    colorSampler2UV: vec4<f32>,
+    colorSampler3UV: vec4<f32>,
+    colorSamplerUV: vec4<f32>,
+    colorStepUV: vec4<f32>,
+    customSoftLightParams: vec4<f32>,
+    diffuseColor: vec4<f32>,
+    dualNormalScrollParams: vec4<f32>,
+    finalColorGain: vec4<f32>,
+    finalColorGain2: vec4<f32>,
+    finalColorGain3: vec4<f32>,
+    fogParams: vec4<f32>,
+    fresnelColor: vec4<f32>,
+    fresnelParams: vec4<f32>,
+    normalParams: vec4<f32>,
+    normalSamplerAUV: vec4<f32>,
+    normalSamplerBUV: vec4<f32>,
+    reflectionColor: vec4<f32>,
+    reflectionParams: vec4<f32>,
+    rotatePivotUV: vec4<f32>,
+    softLightingParams: vec4<f32>,
+    specularColor: vec4<f32>,
+    specularColorGain: vec4<f32>,
+    specularParams: vec4<f32>,
+    zOffset: vec4<f32>,
 }
 
 @group(2) @binding(0)
@@ -56,6 +81,27 @@ var reflection_cube_texture: texture_cube<f32>;
 
 @group(2) @binding(8)
 var reflection_cube_sampler: sampler;
+
+// color2Sampler in shaders.
+@group(2) @binding(9)
+var color2_texture: texture_2d<f32>;
+
+@group(2) @binding(10)
+var color2_sampler: sampler;
+
+// diffuseSampler in shaders.
+@group(2) @binding(11)
+var diffuse_texture: texture_2d<f32>;
+
+@group(2) @binding(12)
+var diffuse_sampler: sampler;
+
+// lightMapSampler in shaders.
+@group(2) @binding(13)
+var light_map_texture: texture_2d<f32>;
+
+@group(2) @binding(14)
+var light_map_sampler: sampler;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -146,6 +192,18 @@ fn diffuse_ao_blend(ao: f32, ao_min_gain: vec4<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
+    // Required for wgsl_to_wgpu reachability analysis to include these resources.
+    let REMOVE_BEGIN = 0.0;
+    var _unused = textureSample(color_texture, color_sampler, vec2(0.0));
+    _unused = textureSample(normal_texture, normal_sampler, vec2(0.0));
+    _unused = textureSample(reflection_texture, reflection_sampler, vec2(0.0));
+    _unused = textureSample(reflection_cube_texture, reflection_cube_sampler, vec3(0.0));
+    _unused = textureSample(color2_texture, color2_sampler, vec2(0.0));
+    _unused = textureSample(diffuse_texture, diffuse_sampler, vec2(0.0));
+    _unused = textureSample(light_map_texture, light_map_sampler, vec2(0.0));
+    _unused = uniforms.aoMinGain;
+    let REMOVE_END = 0.0;
+
     // Normals are in view space, so the view vector is simple.
     let view = vec3(0.0, 0.0, 1.0);
 
@@ -157,28 +215,23 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let vertex_normal = normalize(in.normal);
     // TODO: How is gamma handled for in game shaders?
     var normal = vertex_normal;
-    if uniforms.has_normal_map == 1u {
-        normal = apply_normal_map(pow(normal_map, vec3(2.2)), vertex_tangent, vertex_bitangent, vertex_normal);
-        ao = normal_map_ao.a;
-    }
 
-    let lighting = max(dot(normal, view), 0.0);
+    // TODO: Rename these in the shadergen itself?
+    // TODO: Dump all attribute names from database.
+    let a_Position = in.clip_position;
+    let a_TexCoord0 = vec4(in.uv0, 0.0, 0.0);
+    let a_TexCoord1 = vec4(0.0);
+    let a_Normal = vec4(vertex_normal, 0.0);
+    let a_Binormal = vec4(vertex_bitangent, 0.0);
+    let a_Color = in.color;
 
-    let color = textureSample(color_texture, color_sampler, in.uv0).rgba;
-    let vertex_color = in.color * 2.0;
+    var out_color = vec4(0.0);
 
-    let ao_blend = diffuse_ao_blend(ao, uniforms.ao_min_gain);
-
-    var out_color = color.rgb * vertex_color.rgb * lighting * ao_blend;
-
-    if uniforms.has_reflection_map == 1u {
-        let sphere_uvs = vec2(normal.x * 0.5 + 0.5, 1.0 - (normal.y * 0.5 + 0.5));
-        out_color += textureSample(reflection_texture, reflection_sampler, sphere_uvs).rgb;
-    }
-
-    let out_alpha = color.a * vertex_color.a;
+    // Replaced with generated code.
+    let ASSIGN_VARS_GENERATED = 0.0;
+    let ASSIGN_OUT_COLOR_GENERATED = 0.0;
 
     var out: FragmentOutput;
-    out.color = vec4(out_color, out_alpha);
+    out.color = out_color;
     return out;
 }

@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, path::Path};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
-use xc3_shader::expr::OutputExpr;
+pub use xc3_shader::expr::{Attribute, OutputExpr, Parameter, Texture, Value};
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ShaderDatabase {

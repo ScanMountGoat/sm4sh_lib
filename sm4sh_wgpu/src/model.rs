@@ -9,8 +9,8 @@ use sm4sh_model::{
 use wgpu::util::DeviceExt;
 
 use crate::{
-    renderer::DEPTH_FORMAT, texture::create_texture, CameraData, DeviceBufferExt, QueueBufferExt,
-    SharedData,
+    renderer::DEPTH_FORMAT, shadergen::ShaderWgsl, texture::create_texture, CameraData,
+    DeviceBufferExt, QueueBufferExt, SharedData,
 };
 
 pub struct Model {
@@ -195,6 +195,9 @@ fn create_mesh(
     let mut color_texture = None;
     let mut color_sampler = None;
 
+    let mut color2_texture = None;
+    let mut color2_sampler = None;
+
     let mut normal_texture = None;
     let mut normal_sampler = None;
 
@@ -203,6 +206,12 @@ fn create_mesh(
 
     let mut reflection_cube_texture = None;
     let mut reflection_cube_sampler = None;
+
+    let mut diffuse_texture = None;
+    let mut diffuse_sampler = None;
+
+    let mut light_map_texture = None;
+    let mut light_map_sampler = None;
 
     if let Some(material) = &mesh.material1 {
         if let Some(program) = shared_data.database.get_shader(material.shader_id) {
@@ -224,6 +233,18 @@ fn create_mesh(
                         reflection_cube_texture = hash_to_texture.get(&texture.hash);
                         reflection_cube_sampler = Some(device.create_sampler(&sampler(texture)));
                     }
+                    "color2Sampler" => {
+                        color2_texture = hash_to_texture.get(&texture.hash);
+                        color2_sampler = Some(device.create_sampler(&sampler(texture)));
+                    }
+                    "diffuseSampler" => {
+                        diffuse_texture = hash_to_texture.get(&texture.hash);
+                        diffuse_sampler = Some(device.create_sampler(&sampler(texture)));
+                    }
+                    "lightMapSampler" => {
+                        light_map_texture = hash_to_texture.get(&texture.hash);
+                        light_map_sampler = Some(device.create_sampler(&sampler(texture)));
+                    }
                     _ => (),
                 }
             }
@@ -239,13 +260,41 @@ fn create_mesh(
         ..Default::default()
     });
 
+    // TODO: Use snake case for these uniforms?
     let uniforms = device.create_uniform_buffer(
         "Uniforms",
         &crate::shader::model::Uniforms {
-            has_normal_map: normal_texture.is_some() as u32,
-            has_reflection_map: reflection_texture.is_some() as u32,
-            has_reflection_cube_map: reflection_cube_texture.is_some() as u32,
-            ao_min_gain: get_parameter(mesh, "NU_aoMinGain").unwrap_or_default(),
+            alphaBlendParams: get_parameter(mesh, "NU_alphaBlendParams").unwrap_or_default(),
+            angleFadeParams: get_parameter(mesh, "NU_angleFadeParams").unwrap_or_default(),
+            aoMinGain: get_parameter(mesh, "NU_aoMinGain").unwrap_or_default(),
+            colorGain: get_parameter(mesh, "NU_colorGain").unwrap_or_default(),
+            colorOffset: get_parameter(mesh, "NU_colorOffset").unwrap_or_default(),
+            colorSampler2UV: get_parameter(mesh, "NU_colorSampler2UV").unwrap_or_default(),
+            colorSampler3UV: get_parameter(mesh, "NU_colorSampler3UV").unwrap_or_default(),
+            colorSamplerUV: get_parameter(mesh, "NU_colorSamplerUV").unwrap_or_default(),
+            colorStepUV: get_parameter(mesh, "NU_colorStepUV").unwrap_or_default(),
+            customSoftLightParams: get_parameter(mesh, "NU_customSoftLightParams")
+                .unwrap_or_default(),
+            diffuseColor: get_parameter(mesh, "NU_diffuseColor").unwrap_or_default(),
+            dualNormalScrollParams: get_parameter(mesh, "NU_dualNormalScrollParams")
+                .unwrap_or_default(),
+            finalColorGain: get_parameter(mesh, "NU_finalColorGain").unwrap_or_default(),
+            finalColorGain2: get_parameter(mesh, "NU_finalColorGain2").unwrap_or_default(),
+            finalColorGain3: get_parameter(mesh, "NU_finalColorGain3").unwrap_or_default(),
+            fogParams: get_parameter(mesh, "NU_fogParams").unwrap_or_default(),
+            fresnelColor: get_parameter(mesh, "NU_fresnelColor").unwrap_or_default(),
+            fresnelParams: get_parameter(mesh, "NU_fresnelParams").unwrap_or_default(),
+            normalParams: get_parameter(mesh, "NU_normalParams").unwrap_or_default(),
+            normalSamplerAUV: get_parameter(mesh, "NU_normalSamplerAUV").unwrap_or_default(),
+            normalSamplerBUV: get_parameter(mesh, "NU_normalSamplerBUV").unwrap_or_default(),
+            reflectionColor: get_parameter(mesh, "NU_reflectionColor").unwrap_or_default(),
+            reflectionParams: get_parameter(mesh, "NU_reflectionParams").unwrap_or_default(),
+            rotatePivotUV: get_parameter(mesh, "NU_rotatePivotUV").unwrap_or_default(),
+            softLightingParams: get_parameter(mesh, "NU_softLightingParams").unwrap_or_default(),
+            specularColor: get_parameter(mesh, "NU_specularColor").unwrap_or_default(),
+            specularColorGain: get_parameter(mesh, "NU_specularColorGain").unwrap_or_default(),
+            specularParams: get_parameter(mesh, "NU_specularParams").unwrap_or_default(),
+            zOffset: get_parameter(mesh, "NU_zOffset").unwrap_or_default(),
         },
     );
 
@@ -262,6 +311,12 @@ fn create_mesh(
             // TODO: Correctly initialize cube textures.
             reflection_cube_texture: default_cube_texture,
             reflection_cube_sampler: reflection_cube_sampler.as_ref().unwrap_or(&sampler),
+            color2_texture: color2_texture.unwrap_or(default_texture),
+            color2_sampler: color2_sampler.as_ref().unwrap_or(&sampler),
+            diffuse_texture: diffuse_texture.unwrap_or(default_texture),
+            diffuse_sampler: diffuse_sampler.as_ref().unwrap_or(&sampler),
+            light_map_texture: light_map_texture.unwrap_or(default_texture),
+            light_map_sampler: light_map_sampler.as_ref().unwrap_or(&sampler),
         },
     );
 
@@ -531,12 +586,26 @@ fn model_pipeline(
         sm4sh_model::CullMode::Outside2 => Some(wgpu::Face::Back),
     });
 
+    // TODO: Generate code for other materials as well?
+    let program = mesh
+        .material1
+        .as_ref()
+        .map(|m| m.shader_id)
+        .and_then(|id| shared_data.database.get_shader(id));
+    let shader_wgsl = ShaderWgsl::new(program);
+    let source = shader_wgsl.create_model_shader();
+
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(source)),
+    });
+
     // TODO: alpha testing.
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Model Pipeline"),
         layout: Some(&shared_data.model_layout),
         vertex: crate::shader::model::vertex_state(
-            &shared_data.model_shader,
+            &module,
             &crate::shader::model::vs_main_entry(wgpu::VertexStepMode::Vertex),
         ),
         primitive: wgpu::PrimitiveState {
@@ -554,7 +623,7 @@ fn model_pipeline(
         }),
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(crate::shader::model::fragment_state(
-            &shared_data.model_shader,
+            &module,
             &crate::shader::model::fs_main_entry([Some(wgpu::ColorTargetState {
                 format: output_format,
                 blend,
