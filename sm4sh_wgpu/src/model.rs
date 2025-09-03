@@ -191,6 +191,54 @@ fn create_mesh(
         usage: wgpu::BufferUsages::INDEX,
     });
 
+    let bind_group2 = create_bind_group2(
+        device,
+        mesh,
+        hash_to_texture,
+        default_texture,
+        default_cube_texture,
+        shared_data,
+    );
+
+    let per_mesh = device.create_uniform_buffer(
+        "PerMesh",
+        &crate::shader::model::PerMesh {
+            parent_bone: ivec4(
+                group.parent_bone_index.map(|i| i as i32).unwrap_or(-1),
+                0,
+                0,
+                0,
+            ),
+        },
+    );
+
+    let bind_group3 = crate::shader::model::bind_groups::BindGroup3::from_bindings(
+        device,
+        crate::shader::model::bind_groups::BindGroupLayout3 {
+            per_mesh: per_mesh.as_entire_buffer_binding(),
+        },
+    );
+
+    let pipeline = model_pipeline(device, output_format, shared_data, mesh);
+
+    Mesh {
+        vertex_buffer,
+        index_buffer,
+        vertex_index_count: mesh.vertex_indices.len() as u32,
+        bind_group2,
+        bind_group3,
+        pipeline,
+    }
+}
+
+fn create_bind_group2(
+    device: &wgpu::Device,
+    mesh: &NudMesh,
+    hash_to_texture: &BTreeMap<u32, wgpu::TextureView>,
+    default_texture: &wgpu::TextureView,
+    default_cube_texture: &wgpu::TextureView,
+    shared_data: &SharedData,
+) -> crate::shader::model::bind_groups::BindGroup2 {
     // TODO: Load all textures and samplers.
     let mut color_texture = None;
     let mut color_sampler = None;
@@ -262,7 +310,7 @@ fn create_mesh(
 
     // TODO: Use snake case for these uniforms?
     let uniforms = device.create_uniform_buffer(
-        "Uniforms",
+        "MC",
         &crate::shader::model::Uniforms {
             alphaBlendParams: get_parameter(mesh, "NU_alphaBlendParams").unwrap_or_default(),
             angleFadeParams: get_parameter(mesh, "NU_angleFadeParams").unwrap_or_default(),
@@ -298,9 +346,133 @@ fn create_mesh(
         },
     );
 
+    // Default values for all buffers taken from Rosalina c00 on Miiverse stage.
+    let fb0 = device.create_uniform_buffer(
+        "FB0",
+        &crate::shader::model::Fb0 {
+            depthOfField0: vec4(0.0075, 2.5, 0.25, 0.0),
+            depthOfField1: Vec4::ZERO,
+            depthOfFieldTexSize: Vec4::ZERO,
+            projInvMatrix: Mat4::ZERO,
+            refraction_param: Vec4::ZERO,
+            proj_to_view: Vec4::ZERO,
+            view_to_proj: Vec4::ZERO,
+            gi_buffer_size: Vec4::ZERO,
+            weight0: vec4(1.0, 4.0, 0.0, 0.0),
+            weight1: vec4(0.00052, 0.00093, 0.00104, 0.00185),
+            random_vector: [Vec4::ZERO; 31], // TODO: Fill in these values
+            reflection_param: vec4(24.95364, 16.34215, 42.68987, 1.00),
+            sun_shaft_light_param0: [vec4(1.0, 1.0, 1.0, 1.0), vec4(0.0, 0.0, 0.0, 0.0)],
+            sun_shaft_light_param1: [vec4(1.0, 1.0, 1.0, 1.0), vec4(0.5, 2.0, 1.0, 1.0)],
+            sun_shaft_blur_param: [
+                vec4(1.0, 1.0, 1.0, 1.0),
+                vec4(0.10, 0.10, -15.0, 0.0),
+                vec4(30.0, 12.0, 29.0, 11.0),
+                vec4(1.0, 0.0, 0.0, 0.0),
+            ],
+            sun_shaft_composite_param: [vec4(0.0, 1.0, 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0)],
+            glare_abstract_param: vec4(0.0, 0.0, 0.0, 1.0),
+            renderTargetTexSize: Vec4::ZERO,
+            glare_fog_param: [vec4(0.0001, 0.0, 0.0, 0.0), vec4(0.315, 0.31792, 0.35, 1.0)],
+            glare_simple_color: vec4(0.685, 0.68208, 0.65, 1.0),
+            // TODO: Are these used?
+            pad0_FB0: Vec4::ZERO,
+            lens_flare_param: Vec4::ZERO,
+            outline_param: Vec4::ZERO,
+            post_reflection_color: Vec4::ZERO,
+            MultiShadowMatrix: [Mat4::IDENTITY; 4],
+            ShadowMapMatrix: Mat4::IDENTITY,
+            view: Mat4::IDENTITY,
+            eye: Mat4::IDENTITY,
+            constantColor: Vec4::ZERO,
+            lightMapPos: Vec4::ZERO,
+            reflectionGain: Vec4::ZERO,
+            hdrConstant: Vec4::ZERO,
+            _g_fresnelColor: Vec4::ZERO,
+            effect_light_param0: Vec4::ZERO,
+            effect_light_param1: Vec4::ZERO,
+            bgRotInv: Mat4::IDENTITY,
+            reflectionColor1: Vec4::ZERO,
+            reflectionColor2: Vec4::ZERO,
+            reflectionColor3: Vec4::ZERO,
+            effect_light_param2: Vec4::ZERO,
+        },
+    );
+
+    let fb1 = device.create_uniform_buffer(
+        "FB1",
+        &crate::shader::model::Fb1 {
+            lightMapMatrix: Mat4::IDENTITY,
+            blinkColor: Vec4::ZERO,
+            g_constantVolume: vec4(1.0, 1.0, 1.0, 0.0),
+            g_constantOffset: vec4(1.0, 1.0, 1.0, 1.0),
+            uvScrollCounter: vec4(0.35, 0.0, 0.0, 0.0),
+            spycloakParams: vec4(-100.0, 0.0, 0.0, 0.0),
+            compressParam: vec4(1.0, 0.0, 0.0, 0.0),
+            g_fresnelColor: vec4(1.0, 1.0, 1.0, 1.0),
+            depthOffset: vec4(0.51304, 0.51304, 0.51304, 0.0),
+            // TODO: Are these used?
+            outlineColor: Vec4::ZERO,
+            pad0_FB1: [Vec4::ZERO; 3],
+            lightMapColorGain: Vec4::ZERO,
+            lightMapColorOffset: Vec4::ZERO,
+            ceilingDir: Vec4::ZERO,
+            ceilingColor: Vec4::ZERO,
+            groundColor: Vec4::ZERO,
+            ambientColor: Vec4::ZERO,
+            lightDirColor1: Vec4::ZERO,
+            lightDirColor2: Vec4::ZERO,
+            lightDirColor3: Vec4::ZERO,
+            lightDir1: Vec4::ZERO,
+            lightDir2: Vec4::ZERO,
+            lightDir3: Vec4::ZERO,
+            fogColor: Vec4::ZERO,
+            g_fresnelOffset: Vec4::ZERO,
+            ShadowMapParam: Vec4::ZERO,
+            charShadowColor: Vec4::ZERO,
+            charShadowColor2: Vec4::ZERO,
+            softLightingParams2: Vec4::ZERO,
+            bgShadowColor: Vec4::ZERO,
+            g_iblColorGain: Vec4::ZERO,
+            g_iblColorOffset: Vec4::ZERO,
+            g_constantMin: Vec4::ZERO,
+            loupeShadowParams: Vec4::ZERO,
+            softLightColorGain: Vec4::ZERO,
+            softLightColorOffset: Vec4::ZERO,
+            characterColor: Vec4::ZERO,
+        },
+    );
+
+    let fb3 = device.create_uniform_buffer(
+        "FB3",
+        &crate::shader::model::Fb3 {
+            hdrRange: vec4(0.5, 2.0, 0.0, 0.0),
+            colrHdrRange: Vec4::ZERO,
+        },
+    );
+
+    let fb4 = device.create_uniform_buffer(
+        "FB4",
+        &crate::shader::model::Fb4 {
+            effect_light_entry: Vec4::ZERO,
+        },
+    );
+
+    let fb5 = device.create_uniform_buffer(
+        "FB5",
+        &crate::shader::model::Fb5 {
+            effect_light_area: UVec4::ZERO,
+        },
+    );
+
     let bind_group2 = crate::shader::model::bind_groups::BindGroup2::from_bindings(
         device,
         crate::shader::model::bind_groups::BindGroupLayout2 {
+            fb0: fb0.as_entire_buffer_binding(),
+            fb1: fb1.as_entire_buffer_binding(),
+            fb3: fb3.as_entire_buffer_binding(),
+            fb4: fb4.as_entire_buffer_binding(),
+            fb5: fb5.as_entire_buffer_binding(),
             uniforms: uniforms.as_entire_buffer_binding(),
             color_texture: color_texture.unwrap_or(default_texture),
             color_sampler: color_sampler.as_ref().unwrap_or(&sampler),
@@ -319,36 +491,7 @@ fn create_mesh(
             light_map_sampler: light_map_sampler.as_ref().unwrap_or(&sampler),
         },
     );
-
-    let per_mesh = device.create_uniform_buffer(
-        "PerMesh",
-        &crate::shader::model::PerMesh {
-            parent_bone: ivec4(
-                group.parent_bone_index.map(|i| i as i32).unwrap_or(-1),
-                0,
-                0,
-                0,
-            ),
-        },
-    );
-
-    let bind_group3 = crate::shader::model::bind_groups::BindGroup3::from_bindings(
-        device,
-        crate::shader::model::bind_groups::BindGroupLayout3 {
-            per_mesh: per_mesh.as_entire_buffer_binding(),
-        },
-    );
-
-    let pipeline = model_pipeline(device, output_format, shared_data, mesh);
-
-    Mesh {
-        vertex_buffer,
-        index_buffer,
-        vertex_index_count: mesh.vertex_indices.len() as u32,
-        bind_group2,
-        bind_group3,
-        pipeline,
-    }
+    bind_group2
 }
 
 fn sampler(texture: &sm4sh_model::NudTexture) -> wgpu::SamplerDescriptor<'_> {

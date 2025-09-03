@@ -112,18 +112,28 @@ fn attribute_wgsl(a: &sm4sh_model::database::Attribute) -> Option<String> {
 }
 
 fn parameter_wgsl(p: &Parameter) -> Option<String> {
+    // TODO: just convert case instead of matching names?
     match p.name.as_str() {
-        "MC" => Some(format!(
-            "uniforms.{}{}{}",
-            p.field,
-            p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
-            channel_wgsl(p.channel)
-        )),
+        "MC" => parameter_wgsl_inner(p, "uniforms"),
+        "FB0" => parameter_wgsl_inner(p, "fb0"),
+        "FB1" => parameter_wgsl_inner(p, "fb1"),
+        "FB3" => parameter_wgsl_inner(p, "fb3"),
+        "FB4" => parameter_wgsl_inner(p, "fb4"),
+        "FB5" => parameter_wgsl_inner(p, "fb5"),
         _ => {
             error!("Unrecognized uniform {p}");
             None
         }
     }
+}
+
+fn parameter_wgsl_inner(p: &Parameter, buffer_name: &str) -> Option<String> {
+    Some(format!(
+        "{buffer_name}.{}{}{}",
+        p.field,
+        p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+        channel_wgsl(p.channel)
+    ))
 }
 
 fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {

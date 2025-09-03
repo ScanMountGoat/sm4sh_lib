@@ -17,7 +17,123 @@ var<storage> skinning_transforms: array<mat4x4<f32>>;
 @group(1) @binding(1)
 var<storage> skinning_transforms_inv_transpose: array<mat4x4<f32>>;
 
-// PerMaterial values
+// FB0 in shaders.
+struct Fb0 {
+    depthOfField0: vec4<f32>,
+    depthOfField1: vec4<f32>,
+    depthOfFieldTexSize: vec4<f32>,
+    projInvMatrix: mat4x4<f32>,
+    refraction_param: vec4<f32>,
+    proj_to_view: vec4<f32>,
+    view_to_proj: vec4<f32>,
+    gi_buffer_size: vec4<f32>,
+    weight0: vec4<f32>,
+    weight1: vec4<f32>,
+    random_vector: array<vec4<f32>, 31>,
+    reflection_param: vec4<f32>,
+    sun_shaft_light_param0: array<vec4<f32>, 2>,
+    sun_shaft_light_param1: array<vec4<f32>, 2>,
+    sun_shaft_blur_param: array<vec4<f32>, 4>,
+    sun_shaft_composite_param: array<vec4<f32>, 2>,
+    glare_abstract_param: vec4<f32>,
+    renderTargetTexSize: vec4<f32>,
+    glare_fog_param: array<vec4<f32>, 2>,
+    glare_simple_color: vec4<f32>,
+    pad0_FB0: vec4<f32>,
+    lens_flare_param: vec4<f32>,
+    outline_param: vec4<f32>,
+    post_reflection_color: vec4<f32>,
+    MultiShadowMatrix: array<mat4x4<f32>, 4>,
+    ShadowMapMatrix: mat4x4<f32>,
+    view: mat4x4<f32>,
+    eye: mat4x4<f32>,
+    constantColor: vec4<f32>,
+    lightMapPos: vec4<f32>,
+    reflectionGain: vec4<f32>,
+    hdrConstant: vec4<f32>,
+    _g_fresnelColor: vec4<f32>,
+    effect_light_param0: vec4<f32>,
+    effect_light_param1: vec4<f32>,
+    bgRotInv: mat4x4<f32>,
+    reflectionColor1: vec4<f32>,
+    reflectionColor2: vec4<f32>,
+    reflectionColor3: vec4<f32>,
+    effect_light_param2: vec4<f32>,
+}
+
+@group(2) @binding(0)
+var<uniform> fb0: Fb0;
+
+// FB1 in shaders.
+struct Fb1 {
+    lightMapMatrix: mat4x4<f32>,
+    blinkColor: vec4<f32>,
+    g_constantVolume: vec4<f32>,
+    g_constantOffset: vec4<f32>,
+    uvScrollCounter: vec4<f32>,
+    spycloakParams: vec4<f32>,
+    compressParam: vec4<f32>,
+    g_fresnelColor: vec4<f32>,
+    depthOffset: vec4<f32>,
+    outlineColor: vec4<f32>,
+    pad0_FB1: array<vec4<f32>, 3>,
+    lightMapColorGain: vec4<f32>,
+    lightMapColorOffset: vec4<f32>,
+    ceilingDir: vec4<f32>,
+    ceilingColor: vec4<f32>,
+    groundColor: vec4<f32>,
+    ambientColor: vec4<f32>,
+    lightDirColor1: vec4<f32>,
+    lightDirColor2: vec4<f32>,
+    lightDirColor3: vec4<f32>,
+    lightDir1: vec4<f32>,
+    lightDir2: vec4<f32>,
+    lightDir3: vec4<f32>,
+    fogColor: vec4<f32>,
+    g_fresnelOffset: vec4<f32>,
+    ShadowMapParam: vec4<f32>,
+    charShadowColor: vec4<f32>,
+    charShadowColor2: vec4<f32>,
+    softLightingParams2: vec4<f32>,
+    bgShadowColor: vec4<f32>,
+    g_iblColorGain: vec4<f32>,
+    g_iblColorOffset: vec4<f32>,
+    g_constantMin: vec4<f32>,
+    loupeShadowParams: vec4<f32>,
+    softLightColorGain: vec4<f32>,
+    softLightColorOffset: vec4<f32>,
+    characterColor: vec4<f32>,
+}
+
+@group(2) @binding(1)
+var<uniform> fb1: Fb1;
+
+// FB3 in shaders.
+struct Fb3 {
+    hdrRange: vec4<f32>,
+    colrHdrRange: vec4<f32>
+}
+
+@group(2) @binding(2)
+var<uniform> fb3: Fb3;
+
+// FB4 in shaders.
+struct Fb4 {
+    effect_light_entry: vec4<f32>
+}
+
+@group(2) @binding(3)
+var<uniform> fb4: Fb4;
+
+// FB5 in shaders.
+struct Fb5 {
+    effect_light_area: vec4<u32>
+}
+
+@group(2) @binding(4)
+var<uniform> fb5: Fb5;
+
+// MC in shaders with only the used parameters.
 struct Uniforms {
     // NU_ parameters
     alphaBlendParams: vec4<f32>,
@@ -51,56 +167,56 @@ struct Uniforms {
     zOffset: vec4<f32>,
 }
 
-@group(2) @binding(0)
+@group(2) @binding(5)
 var<uniform> uniforms: Uniforms;
 
 // colorSampler in shaders.
-@group(2) @binding(1)
+@group(2) @binding(6)
 var color_texture: texture_2d<f32>;
 
-@group(2) @binding(2)
+@group(2) @binding(7)
 var color_sampler: sampler;
 
 // normalSampler in shaders.
-@group(2) @binding(3)
+@group(2) @binding(8)
 var normal_texture: texture_2d<f32>;
 
-@group(2) @binding(4)
+@group(2) @binding(9)
 var normal_sampler: sampler;
 
 // reflectionSampler in shaders.
-@group(2) @binding(5)
+@group(2) @binding(10)
 var reflection_texture: texture_2d<f32>;
 
-@group(2) @binding(6)
+@group(2) @binding(11)
 var reflection_sampler: sampler;
 
 // reflectionCubeSampler in shaders.
-@group(2) @binding(7)
+@group(2) @binding(12)
 var reflection_cube_texture: texture_cube<f32>;
 
-@group(2) @binding(8)
+@group(2) @binding(13)
 var reflection_cube_sampler: sampler;
 
 // color2Sampler in shaders.
-@group(2) @binding(9)
+@group(2) @binding(14)
 var color2_texture: texture_2d<f32>;
 
-@group(2) @binding(10)
+@group(2) @binding(15)
 var color2_sampler: sampler;
 
 // diffuseSampler in shaders.
-@group(2) @binding(11)
+@group(2) @binding(16)
 var diffuse_texture: texture_2d<f32>;
 
-@group(2) @binding(12)
+@group(2) @binding(17)
 var diffuse_sampler: sampler;
 
 // lightMapSampler in shaders.
-@group(2) @binding(13)
+@group(2) @binding(18)
 var light_map_texture: texture_2d<f32>;
 
-@group(2) @binding(14)
+@group(2) @binding(19)
 var light_map_sampler: sampler;
 
 struct VertexOutput {
@@ -202,6 +318,11 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = textureSample(diffuse_texture, diffuse_sampler, vec2(0.0));
     _unused = textureSample(light_map_texture, light_map_sampler, vec2(0.0));
     _unused = uniforms.aoMinGain;
+    _unused = fb0.lens_flare_param;
+    _unused = fb1.ShadowMapParam;
+    _unused = fb3.colrHdrRange;
+    _unused = fb4.effect_light_entry;
+    _unused = vec4<f32>(fb5.effect_light_area);
     let REMOVE_END = 0.0;
 
     // Normals are in view space, so the view vector is simple.
