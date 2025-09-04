@@ -19,3 +19,4 @@ glsl-lang = { version = "0.7.2", features = ["lexer-v2-full"] } # TODO: avoid th
 smol_str.workspace = true
 indexmap.workspace = true
 indoc.workspace = true
+simple_logger.workspace = true

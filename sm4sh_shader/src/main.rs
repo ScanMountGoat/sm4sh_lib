@@ -72,6 +72,10 @@ enum Commands {
 }
 
 fn main() -> anyhow::Result<()> {
+    simple_logger::SimpleLogger::new()
+        .with_level(log::LevelFilter::Warn)
+        .init()?;
+
     let cli = Cli::parse();
     let start = std::time::Instant::now();
     match cli.command {
