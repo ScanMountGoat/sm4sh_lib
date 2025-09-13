@@ -258,53 +258,82 @@ fn replace_uniform(
     vars: &[sm4sh_lib::gx2::UniformVar],
 ) {
     let result = uniform_block_var_index(expr_index, graph, blocks, vars);
-    if let Expr::Parameter {
-        name, field, index, ..
-    } = &mut graph.exprs[expr_index]
-        && let Some((new_name, new_field, new_index)) = result
+    if let Expr::Parameter { .. } = &mut graph.exprs[expr_index]
+        && let Some(new_expr) = result
     {
-        *name = new_name;
-        *field = Some(new_field);
-        *index = match new_index {
-            UniformArrayIndex::Single => None,
-            UniformArrayIndex::Index(i) => Some(i),
-        }
+        graph.exprs[expr_index] = new_expr;
     }
 }
 
 fn uniform_block_var_index(
     expr_index: usize,
-    graph: &Graph,
+    graph: &mut Graph,
     blocks: &[sm4sh_lib::gx2::UniformBlock],
     vars: &[sm4sh_lib::gx2::UniformVar],
-) -> Option<(SmolStr, SmolStr, UniformArrayIndex)> {
-    if let Expr::Parameter { name, index, .. } = &graph.exprs[expr_index]
-        && let Some(constant_buffer_index) = name
-            .strip_prefix("CB")
-            .and_then(|i| i.parse::<usize>().ok())
-        && let Some(block_index) = blocks
-            .iter()
-            .position(|b| b.offset as usize == constant_buffer_index)
+) -> Option<Expr> {
+    if let Expr::Parameter {
+        name,
+        index,
+        channel,
+        ..
+    } = graph.exprs[expr_index].clone()
     {
+        let constant_buffer_index = name
+            .strip_prefix("CB")
+            .and_then(|i| i.parse::<usize>().ok())?;
+
+        let block_index = blocks
+            .iter()
+            .position(|b| b.offset as usize == constant_buffer_index)?;
+
         let block = &blocks[block_index];
 
         // TODO: Don't assume vec4 for all uniforms when converting indices to offsets.
-        // TODO: Are indices in terms of floats?
+        // TODO: Are uniform var offsets in terms of floats?
         // TODO: group uniforms into blocks to make this easier.
-        if let Some(Expr::Int(i)) = index.and_then(|i| graph.exprs.get(i)) {
-            if let Some((var_name, var_index)) = vars.iter().find_map(|v| {
-                if v.uniform_block_index == block_index as i32 && *i * 4 == v.offset as i32 {
-                    Some((&v.name, uniform_array_index(*i as usize, v)?))
+        if let Some(Expr::Int(i)) = index.and_then(|i| graph.exprs.get(i).cloned()) {
+            vars.iter().find_map(|v| {
+                if v.uniform_block_index == block_index as i32 && i * 4 == v.offset as i32 {
+                    // TODO: Can this also result in a different channel?
+                    // CB index, channel -> field, index, channel
+                    let (new_index, new_channel) =
+                        uniform_array_index_channel(i as usize, channel, v)?;
+
+                    let index = match new_index {
+                        UniformArrayIndex::Single => None,
+                        UniformArrayIndex::Index(new_index) => {
+                            // The new index expr might not be part of the graph yet.
+                            let new_index_expr = Expr::Int(new_index as i32);
+                            Some(
+                                graph
+                                    .exprs
+                                    .iter()
+                                    .position(|e| e == &new_index_expr)
+                                    .unwrap_or_else(|| {
+                                        let i = graph.exprs.len();
+                                        graph.exprs.push(new_index_expr);
+                                        i
+                                    }),
+                            )
+                        }
+                    };
+
+                    Some(Expr::Parameter {
+                        name: SmolStr::from(&block.name),
+                        field: Some(SmolStr::from(&v.name)),
+                        index,
+                        channel: Some(new_channel),
+                    })
                 } else {
                     None
                 }
-            }) {
-                return Some(((&block.name).into(), var_name.into(), var_index));
-            }
+            })
+        } else {
+            None
         }
+    } else {
+        None
     }
-
-    None
 }
 
 enum UniformArrayIndex {
@@ -312,60 +341,75 @@ enum UniformArrayIndex {
     Index(usize),
 }
 
-fn uniform_array_index(
+fn uniform_array_index_channel(
     buffer_index: usize,
+    channel: Option<char>,
     var: &sm4sh_lib::gx2::UniformVar,
-) -> Option<UniformArrayIndex> {
+) -> Option<(UniformArrayIndex, char)> {
     // Treat matrices like vec4 arrays.
     // TODO: Is this correct for all types?
-    let item_element_size = match var.data_type {
+    let element_size_in_floats = match var.data_type {
         VarType::Void => todo!(),
-        VarType::Bool => 4,
-        VarType::Float => 4,
-        VarType::Vec2 => 8,
-        VarType::Vec3 => 12,
-        VarType::Vec4 => 16,
-        VarType::IVec2 => 8,
-        VarType::IVec4 => 16,
-        VarType::UVec4 => 16,
-        VarType::Mat2x4 => 16,
-        VarType::Mat3x4 => 16,
-        VarType::Mat4 => 16,
+        VarType::Bool => 1,
+        VarType::Float => 1,
+        VarType::Vec2 => 2,
+        VarType::Vec3 => 3,
+        VarType::Vec4 => 4,
+        VarType::IVec2 => 2,
+        VarType::IVec4 => 4,
+        VarType::UVec4 => 4,
+        VarType::Mat2x4 => 4,
+        VarType::Mat3x4 => 4,
+        VarType::Mat4 => 4,
     };
-    let item_size = match var.data_type {
+    let size_in_floats = match var.data_type {
         VarType::Void => 0,
-        VarType::Bool => 4,
-        VarType::Float => 4,
-        VarType::Vec2 => 8,
-        VarType::Vec3 => 12,
-        VarType::Vec4 => 16,
-        VarType::IVec2 => 8,
-        VarType::IVec4 => 16,
-        VarType::UVec4 => 16,
-        VarType::Mat2x4 => 2 * 16,
-        VarType::Mat3x4 => 3 * 16,
-        VarType::Mat4 => 4 * 16,
+        VarType::Bool => 1,
+        VarType::Float => 1,
+        VarType::Vec2 => 2,
+        VarType::Vec3 => 3,
+        VarType::Vec4 => 4,
+        VarType::IVec2 => 2,
+        VarType::IVec4 => 4,
+        VarType::UVec4 => 4,
+        VarType::Mat2x4 => 2 * 4,
+        VarType::Mat3x4 => 3 * 4,
+        VarType::Mat4 => 4 * 4,
     };
 
-    // TODO: Are constant buffer accesses in latte shaders always indexing floats?
-    let offset = buffer_index * 4;
+    // TODO: Are constant buffer accesses in latte shaders always indexing vec4s?
+    let channel_offset = match channel {
+        Some('x') => 0,
+        Some('y') => 1,
+        Some('z') => 2,
+        Some('w') => 3,
+        None => 0,
+        _ => todo!(),
+    };
+    let float_index = buffer_index * 4 + channel_offset;
 
     // Find the index within an array.
-    let uniform_start = var.offset as usize;
-    let uniform_end = uniform_start + item_size * var.count as usize;
+    // TODO: Do uniforms always have offsets in terms of floats?
+    let uniform_float_start = var.offset as usize;
+    let uniform_float_end = uniform_float_start + size_in_floats * var.count as usize;
 
-    if (uniform_start..uniform_end).contains(&offset) {
+    let new_channel_index = (float_index - uniform_float_start) % 4;
+    let new_channel = ['x', 'y', 'z', 'w'][new_channel_index];
+
+    if (uniform_float_start..uniform_float_end).contains(&float_index) {
         if var.count > 1
             || matches!(
                 var.data_type,
                 VarType::Mat2x4 | VarType::Mat3x4 | VarType::Mat4
             )
         {
-            Some(UniformArrayIndex::Index(
-                (offset - uniform_start) / item_element_size,
-            ))
+            // TODO: Calculate the new xyzw channel as well?
+            // TODO: Add unit tests for this?
+            // TODO: Fix this for matrices and matrix arrays.
+            let new_index = (float_index - uniform_float_start) / element_size_in_floats;
+            Some((UniformArrayIndex::Index(new_index), new_channel))
         } else {
-            Some(UniformArrayIndex::Single)
+            Some((UniformArrayIndex::Single, new_channel))
         }
     } else {
         None
