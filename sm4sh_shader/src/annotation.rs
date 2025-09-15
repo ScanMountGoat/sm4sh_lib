@@ -293,9 +293,8 @@ fn uniform_block_var_index(
         // TODO: group uniforms into blocks to make this easier.
         if let Some(Expr::Int(i)) = index.and_then(|i| graph.exprs.get(i).cloned()) {
             vars.iter().find_map(|v| {
-                if v.uniform_block_index == block_index as i32 && i * 4 == v.offset as i32 {
-                    // TODO: Can this also result in a different channel?
-                    // CB index, channel -> field, index, channel
+                // TODO: Will array uniforms always have a uniform without brackets for the entire array?
+                if v.uniform_block_index == block_index as i32 && !v.name.contains("[") {
                     let (new_index, new_channel) =
                         uniform_array_index_channel(i as usize, channel, v)?;
 
@@ -403,9 +402,7 @@ fn uniform_array_index_channel(
                 VarType::Mat2x4 | VarType::Mat3x4 | VarType::Mat4
             )
         {
-            // TODO: Calculate the new xyzw channel as well?
             // TODO: Add unit tests for this?
-            // TODO: Fix this for matrices and matrix arrays.
             let new_index = (float_index - uniform_float_start) / element_size_in_floats;
             Some((UniformArrayIndex::Index(new_index), new_channel))
         } else {
