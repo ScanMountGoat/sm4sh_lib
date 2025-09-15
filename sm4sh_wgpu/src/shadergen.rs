@@ -210,8 +210,21 @@ fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {
             "dot(vec4({}, {}, {}, {}), vec4({}, {}, {}, {}))",
             arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, arg7?
         )),
+        Operation::Sin => Some(format!("sin({})", arg0?)),
+        Operation::Cos => Some(format!("cos({})", arg0?)),
+        Operation::Exp2 => Some(format!("exp2({})", arg0?)),
+        Operation::Log2 => Some(format!("log2({})", arg0?)),
         Operation::Select => Some(format!("mix({}, {}, f32({}))", arg2?, arg1?, arg0?)),
         Operation::Negate => Some(format!("-({})", arg0?)),
+        Operation::Equal => Some(format!("{} == {}", arg0?, arg1?)),
+        Operation::NotEqual => Some(format!("{} != {}", arg0?, arg1?)),
+        Operation::Less => Some(format!("{} < {}", arg0?, arg1?)),
+        Operation::Greater => Some(format!("{} > {}", arg0?, arg1?)),
+        Operation::LessEqual => Some(format!("{} <= {}", arg0?, arg1?)),
+        Operation::GreaterEqual => Some(format!("{} >= {}", arg0?, arg1?)),
+        Operation::Fract => Some(format!("fract({})", arg0?)),
+        Operation::IntBitsToFloat => Some(format!("bitcast<f32>({})", arg0?)),
+        Operation::FloatBitsToInt => Some(format!("bitcast<i32>({})", arg0?)),
         Operation::Unk => None,
     }
 }

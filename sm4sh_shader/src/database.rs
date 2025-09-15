@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use glsl_lang::ast::TranslationUnit;
 use indexmap::{IndexMap, IndexSet};
+use log::error;
 use smol_str::SmolStr;
 use xc3_shader::{
     expr::{OutputExpr, output_expr},
@@ -41,8 +42,21 @@ pub enum Operation {
     InverseSqrt,
     Fma,
     Dot4,
+    Sin,
+    Cos,
+    Exp2,
+    Log2,
+    Fract,
+    IntBitsToFloat,
+    FloatBitsToInt,
     Select,
     Negate,
+    Equal,
+    NotEqual,
+    Less,
+    Greater,
+    LessEqual,
+    GreaterEqual,
     Unk,
 }
 
@@ -61,6 +75,7 @@ impl std::fmt::Display for Operation {
 impl xc3_shader::expr::Operation for Operation {
     fn query_operation_args<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Self, Vec<&'a Expr>)> {
         // TODO: Share these queries with xc3_shader?
+        // TODO: Use queries to simplify operations
         op_mix(graph, expr)
             .or_else(|| op_pow(graph, expr))
             .or_else(|| op_sqrt(graph, expr))
@@ -78,6 +93,23 @@ impl xc3_shader::expr::Operation for Operation {
             .or_else(|| op_func(graph, expr, "abs", Operation::Abs))
             .or_else(|| op_func(graph, expr, "floor", Operation::Floor))
             .or_else(|| op_func(graph, expr, "fma", Operation::Fma))
+            .or_else(|| op_func(graph, expr, "sin", Operation::Sin))
+            .or_else(|| op_func(graph, expr, "cos", Operation::Cos))
+            .or_else(|| op_func(graph, expr, "log2", Operation::Log2))
+            .or_else(|| op_func(graph, expr, "exp2", Operation::Exp2))
+            .or_else(|| op_func(graph, expr, "fract", Operation::Fract))
+            .or_else(|| op_func(graph, expr, "intBitsToFloat", Operation::IntBitsToFloat))
+            .or_else(|| op_func(graph, expr, "floatBitsToInt", Operation::FloatBitsToInt))
+            .or_else(|| binary_op(graph, expr, BinaryOp::Equal, Operation::Equal))
+            .or_else(|| binary_op(graph, expr, BinaryOp::NotEqual, Operation::NotEqual))
+            .or_else(|| binary_op(graph, expr, BinaryOp::Greater, Operation::Greater))
+            .or_else(|| binary_op(graph, expr, BinaryOp::GreaterEqual, Operation::GreaterEqual))
+            .or_else(|| binary_op(graph, expr, BinaryOp::Less, Operation::Less))
+            .or_else(|| binary_op(graph, expr, BinaryOp::LessEqual, Operation::LessEqual))
+            .or_else(|| {
+                error!("Unsuported expression {expr:?}");
+                None
+            })
     }
 
     fn preprocess_expr<'a>(graph: &'a Graph, expr: &'a Expr) -> Cow<'a, Expr> {
@@ -151,8 +183,21 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::InverseSqrt => Self::InverseSqrt,
             Operation::Fma => Self::Fma,
             Operation::Dot4 => Self::Dot4,
+            Operation::Sin => Self::Sin,
+            Operation::Cos => Self::Cos,
+            Operation::Exp2 => Self::Exp2,
+            Operation::Log2 => Self::Log2,
+            Operation::Fract => Self::Fract,
+            Operation::FloatBitsToInt => Self::FloatBitsToInt,
+            Operation::IntBitsToFloat => Self::IntBitsToFloat,
             Operation::Select => Self::Select,
             Operation::Negate => Self::Negate,
+            Operation::Equal => Self::Equal,
+            Operation::NotEqual => Self::NotEqual,
+            Operation::Less => Self::Less,
+            Operation::Greater => Self::Greater,
+            Operation::LessEqual => Self::LessEqual,
+            Operation::GreaterEqual => Self::GreaterEqual,
             Operation::Unk => Self::Unk,
         }
     }
