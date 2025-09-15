@@ -323,6 +323,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = fb3.colrHdrRange;
     _unused = fb4.effect_light_entry;
     _unused = vec4<f32>(fb5.effect_light_area);
+    _unused = camera.projection[0];
     let REMOVE_END = 0.0;
 
     // Normals are in view space, so the view vector is simple.

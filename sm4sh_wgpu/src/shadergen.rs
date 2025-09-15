@@ -120,6 +120,51 @@ fn parameter_wgsl(p: &Parameter) -> Option<String> {
         "FB3" => parameter_wgsl_inner(p, "fb3"),
         "FB4" => parameter_wgsl_inner(p, "fb4"),
         "FB5" => parameter_wgsl_inner(p, "fb5"),
+        "PerDraw" => match p.field.as_str() {
+            // TODO: This should be the parent bone transform?
+            "LocalToWorldMatrix" => Some(format!(
+                "camera.view{}{}",
+                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                channel_wgsl(p.channel)
+            )),
+            "LocalToViewMatrix" => Some(format!(
+                "camera.view{}{}",
+                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                channel_wgsl(p.channel)
+            )),
+            "LocalToProjectionMatrix" => Some(format!(
+                "camera.view_projection{}{}",
+                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                channel_wgsl(p.channel)
+            )),
+            _ => {
+                error!("Unrecognized uniform {p}");
+                None
+            }
+        },
+        "PerView" => match p.field.as_str() {
+            // TODO: This should include bone transform?
+            "WorldToProjectionMatrix" => Some(format!(
+                "camera.view_projection{}{}",
+                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                channel_wgsl(p.channel)
+            )),
+            // TODO: This should include bone transform?
+            "WorldToViewMatrix" => Some(format!(
+                "camera.view{}{}",
+                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                channel_wgsl(p.channel)
+            )),
+            "ViewToProjectionMatrix" => Some(format!(
+                "camera.projection{}{}",
+                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                channel_wgsl(p.channel)
+            )),
+            _ => {
+                error!("Unrecognized uniform {p}");
+                None
+            }
+        },
         _ => {
             error!("Unrecognized uniform {p}");
             None
