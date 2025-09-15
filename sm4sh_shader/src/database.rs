@@ -52,6 +52,12 @@ impl Default for Operation {
     }
 }
 
+impl std::fmt::Display for Operation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 impl xc3_shader::expr::Operation for Operation {
     fn query_operation_args<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Self, Vec<&'a Expr>)> {
         // TODO: Share these queries with xc3_shader?

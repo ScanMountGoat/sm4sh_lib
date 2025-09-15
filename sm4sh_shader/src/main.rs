@@ -7,7 +7,12 @@ use sm4sh_lib::{
     nsh::Nsh,
 };
 use sm4sh_model::database::{ShaderDatabase, ShaderProgram};
-use std::{collections::BTreeMap, fmt::Write, fs::File, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Write,
+    fs::File,
+    path::Path,
+};
 
 use crate::{
     annotation::annotate_shader,
@@ -312,9 +317,46 @@ fn glsl_output_dependencies(frag: &str, output: &str) -> anyhow::Result<()> {
     let vert_glsl = std::fs::read_to_string(Path::new(&frag).with_extension("vert"))?;
     let vert = TranslationUnit::parse(&vert_glsl)?;
 
-    // TODO: use expression printing from xc3_shader
     // TODO: graphviz support
     let shader = shader_from_glsl(&vert, &fragment);
-    std::fs::write(output, format!("{shader:#?}"))?;
+    std::fs::write(output, shader_str(&shader))?;
     Ok(())
+}
+
+pub fn shader_str(s: &crate::database::ShaderProgram) -> String {
+    // Use a condensed representation similar to GLSL for nicer diffs.
+    let mut output = String::new();
+    for (k, v) in &s.output_dependencies {
+        let mut visited = BTreeSet::new();
+        write_expr_dependencies_recursive(&mut output, s, *v, &mut visited);
+        writeln!(&mut output, "{k} = var{v};").unwrap();
+        writeln!(&mut output).unwrap();
+    }
+    output
+}
+
+fn write_expr_dependencies_recursive(
+    output: &mut String,
+    s: &crate::database::ShaderProgram,
+    i: usize,
+    visited: &mut BTreeSet<usize>,
+) {
+    // Write all values that this value depends on first.
+    if visited.insert(i) {
+        let expr = &s.exprs[i];
+        match expr {
+            xc3_shader::expr::OutputExpr::Value(xc3_shader::expr::Value::Texture(t)) => {
+                for arg in t.texcoords.iter() {
+                    write_expr_dependencies_recursive(output, s, *arg, visited);
+                }
+            }
+            xc3_shader::expr::OutputExpr::Func { args, .. } => {
+                for arg in args.iter() {
+                    write_expr_dependencies_recursive(output, s, *arg, visited);
+                }
+            }
+            xc3_shader::expr::OutputExpr::Value(_) => (),
+        }
+        writeln!(output, "var{i} = {expr};").unwrap()
+    }
 }
