@@ -3,12 +3,12 @@ members = ["sm4sh_lib", "sm4sh_model", "sm4sh_shader", "sm4sh_test", "sm4sh_view
 resolver = "2"
 
 [workspace.dependencies]
-bilge = "0.2.0"
+bilge = "0.3.0"
 binrw = "0.15.0"
 half = "2.4.1"
 clap = {version = "4.5.28", features = ["derive"] }
 rayon = "1.10.0"
-wgpu = "25.0.2"
+wgpu = "26.0.0"
 glam = "0.30.4"
 log = "0.4.22"
 simple_logger = "5.0.0"

@@ -10,10 +10,10 @@ sm4sh_model = { path = "../sm4sh_model" }
 futures = "0.3"
 wgpu.workspace = true
 log.workspace = true
-simple_logger = "2.1.0"
+simple_logger.workspace = true
 globwalk.workspace = true
 image = "0.25.1"
-futures-intrusive = "0.4.0"
+futures-intrusive = "0.5.0"
 glam.workspace = true
 rayon.workspace = true
 anyhow.workspace = true
