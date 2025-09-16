@@ -282,10 +282,10 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
 
     out.clip_position = camera.view_projection * vec4(position, 1.0);
 
-    out.position = in0.position.xyz;
-    out.normal = (camera.view * vec4(normal, 0.0)).xyz;
-    out.tangent = (camera.view * vec4(tangent, 0.0)).xyz;
-    out.bitangent = (camera.view * vec4(bitangent, 0.0)).xyz;
+    out.position = position.xyz;
+    out.normal = normal;
+    out.tangent = tangent;
+    out.bitangent = bitangent;
     out.color = in0.color;
     out.uv0 = in0.uv0.xy;
     return out;
@@ -339,7 +339,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var normal = vertex_normal;
 
     // TODO: Rename these in the shadergen itself?
-    let a_Position = in.clip_position;
+    let a_Position = vec4(in.position, 0.0);
     let a_TexCoord0 = vec4(in.uv0, 0.0, 0.0);
     let a_TexCoord1 = vec4(0.0);
     let a_TexCoord2 = vec4(0.0);
@@ -348,6 +348,13 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let a_Binormal = vec4(vertex_bitangent, 0.0);
     let a_Color = in.color;
 
+    // TODO: Figure out how to initialize this.
+    let local_to_world_matrix = mat4x4(
+        vec4(0.0, 0.0, 1.0, 0.0),
+        vec4(0.0, 1.0, 0.0, 0.0),
+        vec4(-1.0, 0.0, 0.0, 0.0),
+        vec4(0.0, 0.0, 0.0, 1.0)
+    );
     var out_color = vec4(0.0);
 
     // Replaced with generated code.

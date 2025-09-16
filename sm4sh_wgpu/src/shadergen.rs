@@ -69,10 +69,9 @@ fn expr_wgsl(expr: &OutputExpr<Operation>) -> Option<String> {
 }
 
 fn value_wgsl(value: &Value) -> Option<String> {
-    // TODO: Fill in defaults for unknown constant buffers.
-    // TODO: Remap attribute names to the expected values.
     match value {
-        Value::Constant(f) => Some(format!("{f:?}")),
+        Value::Int(i) => Some(format!("{i:?}")),
+        Value::Float(f) => Some(format!("{f:?}")),
         Value::Parameter(p) => parameter_wgsl(p),
         Value::Texture(t) => texture_wgsl(t),
         Value::Attribute(a) => attribute_wgsl(a),
@@ -121,20 +120,19 @@ fn parameter_wgsl(p: &Parameter) -> Option<String> {
         "FB4" => parameter_wgsl_inner(p, "fb4"),
         "FB5" => parameter_wgsl_inner(p, "fb5"),
         "PerDraw" => match p.field.as_str() {
-            // TODO: This should be the parent bone transform?
             "LocalToWorldMatrix" => Some(format!(
-                "camera.view{}{}",
-                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                "local_to_world_matrix{}{}",
+                index_wgsl(p.index),
                 channel_wgsl(p.channel)
             )),
             "LocalToViewMatrix" => Some(format!(
                 "camera.view{}{}",
-                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                index_wgsl(p.index),
                 channel_wgsl(p.channel)
             )),
             "LocalToProjectionMatrix" => Some(format!(
                 "camera.view_projection{}{}",
-                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                index_wgsl(p.index),
                 channel_wgsl(p.channel)
             )),
             _ => {
@@ -143,21 +141,19 @@ fn parameter_wgsl(p: &Parameter) -> Option<String> {
             }
         },
         "PerView" => match p.field.as_str() {
-            // TODO: This should include bone transform?
             "WorldToProjectionMatrix" => Some(format!(
                 "camera.view_projection{}{}",
-                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                index_wgsl(p.index),
                 channel_wgsl(p.channel)
             )),
-            // TODO: This should include bone transform?
             "WorldToViewMatrix" => Some(format!(
                 "camera.view{}{}",
-                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                index_wgsl(p.index),
                 channel_wgsl(p.channel)
             )),
             "ViewToProjectionMatrix" => Some(format!(
                 "camera.projection{}{}",
-                p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+                index_wgsl(p.index),
                 channel_wgsl(p.channel)
             )),
             _ => {
@@ -176,7 +172,7 @@ fn parameter_wgsl_inner(p: &Parameter, buffer_name: &str) -> Option<String> {
     Some(format!(
         "{buffer_name}.{}{}{}",
         p.field,
-        p.index.map(|i| format!("[{i}]")).unwrap_or_default(),
+        index_wgsl(p.index),
         channel_wgsl(p.channel)
     ))
 }
@@ -231,6 +227,10 @@ fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {
 
 fn arg(args: &[usize], i: usize) -> Option<String> {
     Some(format!("{VAR_PREFIX}{}", args.get(i)?))
+}
+
+fn index_wgsl(i: Option<usize>) -> String {
+    i.map(|i| format!("[{i}]")).unwrap_or_default()
 }
 
 fn channel_wgsl(c: Option<char>) -> String {
