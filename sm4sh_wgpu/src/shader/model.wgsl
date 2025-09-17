@@ -353,7 +353,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         vec4(0.0, 0.0, 1.0, 0.0),
         vec4(0.0, 1.0, 0.0, 0.0),
         vec4(-1.0, 0.0, 0.0, 0.0),
-        vec4(0.0, 0.0, 0.0, 1.0)
+        vec4(59.99999, 0.01, 0.0, 1.0)
     );
     var out_color = vec4(0.0);
 

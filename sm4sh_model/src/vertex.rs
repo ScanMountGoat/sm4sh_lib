@@ -276,7 +276,7 @@ pub fn read_vertices(
         offset1 += normals_size(flags);
 
         let bones = read_bones(buffer1, flags, offset1, stride1, count)?;
-        offset1 += bones_size(flags);
+        // offset1 += bones_size(flags);
 
         Ok(Vertices {
             positions,
@@ -351,7 +351,7 @@ pub fn write_vertices(
 
         if let Some(bones) = &vertices.bones {
             write_bones(buffer1, bones, offset1, stride1)?;
-            offset1 += bones_size(flags);
+            // offset1 += bones_size(flags);
         }
     } else {
         // buffer0: positions, vectors, bones, colors, uvs
