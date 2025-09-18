@@ -80,7 +80,8 @@ fn value_wgsl(value: &Value) -> Option<String> {
 
 fn texture_wgsl(t: &sm4sh_model::database::Texture) -> Option<String> {
     match t.name.as_str() {
-        "g_PCFTextureSampler" | "g_VSMTextureSampler" | "sampler0" | "sampler11" => None,
+        "g_PCFTextureSampler" | "sampler0" | "sampler11" | "Sampler11" => None,
+        "g_VSMTextureSampler" => Some("1.0".to_string()), // TODO: proper shadow rendering.
         "reflectionCubeSampler" => Some(format!(
             "textureSample({}, {}, vec3({}, {}, {})){}",
             t.name.to_snake().replace("_sampler", "_texture"),
@@ -161,6 +162,8 @@ fn parameter_wgsl(p: &Parameter) -> Option<String> {
                 None
             }
         },
+        "CB10" => None, // TODO: figure out why C10.xyzw is used
+        "CB11" => None, // TODO: figure out why C11.xyzw is used
         _ => {
             error!("Unrecognized uniform {p}");
             None

@@ -25,6 +25,9 @@ pub fn create_bind_group2(
     let mut normal_texture = None;
     let mut normal_sampler = None;
 
+    let mut normal2_texture = None;
+    let mut normal2_sampler = None;
+
     let mut reflection_texture = None;
     let mut reflection_sampler = None;
 
@@ -48,6 +51,10 @@ pub fn create_bind_group2(
                     "normalSampler" => {
                         normal_texture = hash_to_texture.get(&texture.hash);
                         normal_sampler = Some(device.create_sampler(&sampler(texture)));
+                    }
+                    "normal2Sampler" => {
+                        normal2_texture = hash_to_texture.get(&texture.hash);
+                        normal2_sampler = Some(device.create_sampler(&sampler(texture)));
                     }
                     "reflectionSampler" => {
                         reflection_texture = hash_to_texture.get(&texture.hash);
@@ -156,9 +163,14 @@ pub fn create_bind_group2(
             outline_param: vec4(0.25, 0.00, 0.00, 0.00),
             post_reflection_color: vec4(0.50, 0.50, 0.50, 0.20),
             MultiShadowMatrix: [Mat4::IDENTITY; 4], // TODO: fill in these values
-            ShadowMapMatrix: Mat4::IDENTITY,        // TODO: fill in these values
-            view: Mat4::IDENTITY,                   // TODO: fill in these values
-            eye: Mat4::IDENTITY,                    // TODO: fill in these values
+            ShadowMapMatrix: Mat4::from_cols_array_2d(&[
+                [0.00814, 0.00, 0.00, 0.00],
+                [0.00, -0.00504, -0.01631, 0.00],
+                [0.00, 0.01385, -0.00594, 0.00],
+                [0.49189, 0.67917, 1.09728, 1.00],
+            ]), // TODO: fill in these values
+            view: Mat4::ZERO,                       // TODO: fill in these values
+            eye: vec4(40.0, 47.40689, 37.02085, 1.0), // TODO: fill in these values
             constantColor: vec4(1.0, 1.0, 1.0, 1.0),
             lightMapPos: vec4(0.0, 0.0, 0.0, 0.0),
             reflectionGain: vec4(1.0, 1.0, 1.0, 1.0),
@@ -267,6 +279,8 @@ pub fn create_bind_group2(
             diffuse_sampler: diffuse_sampler.as_ref().unwrap_or(&sampler),
             light_map_texture: light_map_texture.unwrap_or(default_texture),
             light_map_sampler: light_map_sampler.as_ref().unwrap_or(&sampler),
+            normal2_texture: normal2_texture.unwrap_or(default_texture),
+            normal2_sampler: normal2_sampler.as_ref().unwrap_or(&sampler),
         },
     );
     bind_group2

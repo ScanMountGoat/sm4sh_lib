@@ -17,6 +17,8 @@ var<storage> skinning_transforms: array<mat4x4<f32>>;
 @group(1) @binding(1)
 var<storage> skinning_transforms_inv_transpose: array<mat4x4<f32>>;
 
+// TODO: Move all of these to the renderer and group(0)
+// TODO: Use snake_case
 // FB0 in shaders.
 struct Fb0 {
     depthOfField0: vec4<f32>,
@@ -46,7 +48,7 @@ struct Fb0 {
     MultiShadowMatrix: array<mat4x4<f32>, 4>,
     ShadowMapMatrix: mat4x4<f32>,
     view: mat4x4<f32>,
-    eye: mat4x4<f32>,
+    eye: vec4<f32>,
     constantColor: vec4<f32>,
     lightMapPos: vec4<f32>,
     reflectionGain: vec4<f32>,
@@ -219,6 +221,13 @@ var light_map_texture: texture_2d<f32>;
 @group(2) @binding(19)
 var light_map_sampler: sampler;
 
+// normalSampler in shaders.
+@group(2) @binding(20)
+var normal2_texture: texture_2d<f32>;
+
+@group(2) @binding(21)
+var normal2_sampler: sampler;
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) position: vec3<f32>,
@@ -317,6 +326,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = textureSample(color2_texture, color2_sampler, vec2(0.0));
     _unused = textureSample(diffuse_texture, diffuse_sampler, vec2(0.0));
     _unused = textureSample(light_map_texture, light_map_sampler, vec2(0.0));
+    _unused = textureSample(normal2_texture, normal2_sampler, vec2(0.0));
     _unused = uniforms.aoMinGain;
     _unused = fb0.lens_flare_param;
     _unused = fb1.ShadowMapParam;
@@ -326,16 +336,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = camera.projection[0];
     let REMOVE_END = 0.0;
 
-    // Normals are in view space, so the view vector is simple.
-    let view = vec3(0.0, 0.0, 1.0);
-
-    let normal_map_ao = textureSample(normal_texture, normal_sampler, in.uv0).rgba;
-    let normal_map = normal_map_ao.rgb;
-    var ao = 1.0;
     let vertex_tangent = normalize(in.tangent);
     let vertex_bitangent = normalize(in.bitangent);
     let vertex_normal = normalize(in.normal);
-    // TODO: How is gamma handled for in game shaders?
     var normal = vertex_normal;
 
     // TODO: Rename these in the shadergen itself?
@@ -355,6 +358,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         vec4(-1.0, 0.0, 0.0, 0.0),
         vec4(59.99999, 0.01, 0.0, 1.0)
     );
+
+    // TODO: How is gamma handled for in game shaders?
     var out_color = vec4(0.0);
 
     // Replaced with generated code.
