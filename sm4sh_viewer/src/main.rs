@@ -145,7 +145,7 @@ impl<'a> State<'a> {
             self.surface.configure(&self.device, &self.config);
 
             self.renderer
-                .resize(&self.device, new_size.width, new_size.height);
+                .resize(&self.device, &self.queue, new_size.width, new_size.height);
         }
     }
 

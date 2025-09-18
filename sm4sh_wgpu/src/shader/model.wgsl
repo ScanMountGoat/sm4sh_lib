@@ -10,14 +10,6 @@ struct Camera {
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 
-// PerModel values
-@group(1) @binding(0)
-var<storage> skinning_transforms: array<mat4x4<f32>>;
-
-@group(1) @binding(1)
-var<storage> skinning_transforms_inv_transpose: array<mat4x4<f32>>;
-
-// TODO: Move all of these to the renderer and group(0)
 // TODO: Use snake_case
 // FB0 in shaders.
 struct Fb0 {
@@ -63,7 +55,7 @@ struct Fb0 {
     effect_light_param2: vec4<f32>,
 }
 
-@group(2) @binding(0)
+@group(0) @binding(1)
 var<uniform> fb0: Fb0;
 
 // FB1 in shaders.
@@ -107,7 +99,7 @@ struct Fb1 {
     characterColor: vec4<f32>,
 }
 
-@group(2) @binding(1)
+@group(0) @binding(2)
 var<uniform> fb1: Fb1;
 
 // FB3 in shaders.
@@ -116,7 +108,7 @@ struct Fb3 {
     colrHdrRange: vec4<f32>
 }
 
-@group(2) @binding(2)
+@group(0) @binding(3)
 var<uniform> fb3: Fb3;
 
 // FB4 in shaders.
@@ -124,7 +116,7 @@ struct Fb4 {
     effect_light_entry: vec4<f32>
 }
 
-@group(2) @binding(3)
+@group(0) @binding(4)
 var<uniform> fb4: Fb4;
 
 // FB5 in shaders.
@@ -132,8 +124,16 @@ struct Fb5 {
     effect_light_area: vec4<u32>
 }
 
-@group(2) @binding(4)
+@group(0) @binding(5)
 var<uniform> fb5: Fb5;
+
+// PerModel values
+@group(1) @binding(0)
+var<storage> skinning_transforms: array<mat4x4<f32>>;
+
+@group(1) @binding(1)
+var<storage> skinning_transforms_inv_transpose: array<mat4x4<f32>>;
+
 
 // MC in shaders with only the used parameters.
 struct Uniforms {
@@ -355,7 +355,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let local_to_world_matrix = mat4x4(
         vec4(0.0, 0.0, 1.0, 0.0),
         vec4(0.0, 1.0, 0.0, 0.0),
-        vec4(-1.0, 0.0, 0.0, 0.0),
+        vec4(1.0, 0.0, 0.0, 0.0),
         vec4(59.99999, 0.01, 0.0, 1.0)
     );
 
