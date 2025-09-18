@@ -115,6 +115,7 @@ fn parameter_wgsl(p: &Parameter) -> Option<String> {
     // TODO: just convert case instead of matching names?
     match p.name.as_str() {
         "MC" => parameter_wgsl_inner(p, "uniforms"),
+        "MC_EFFECT" => parameter_wgsl_inner(p, "effect_uniforms"),
         "FB0" => parameter_wgsl_inner(p, "fb0"),
         "FB1" => parameter_wgsl_inner(p, "fb1"),
         "FB3" => parameter_wgsl_inner(p, "fb3"),

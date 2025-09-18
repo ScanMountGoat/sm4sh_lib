@@ -172,60 +172,79 @@ struct Uniforms {
 @group(2) @binding(5)
 var<uniform> uniforms: Uniforms;
 
-// colorSampler in shaders.
+// MC_EFFECT in shaders with only the used parameters.
+struct EffectUniforms {
+    angleFadeParams: vec4<f32>,
+    effColorGain: vec4<f32>,
+    effCombinerAlpha0: vec4<f32>,
+    effCombinerColor0: vec4<f32>,
+    effCombinerColor1: vec4<f32>,
+    effRotUV: vec4<f32>,
+    effScaleUV: vec4<f32>,
+    effSilhouetteColor: vec4<f32>,
+    effTransUV: vec4<f32>,
+    effUniverseParam: vec4<f32>,
+    normalParams: vec4<f32>,
+    normalSamplerAUV: vec4<f32>,
+}
+
 @group(2) @binding(6)
+var<uniform> effect_uniforms: EffectUniforms;
+
+// colorSampler in shaders.
+@group(2) @binding(7)
 var color_texture: texture_2d<f32>;
 
-@group(2) @binding(7)
+@group(2) @binding(8)
 var color_sampler: sampler;
 
 // normalSampler in shaders.
-@group(2) @binding(8)
+@group(2) @binding(9)
 var normal_texture: texture_2d<f32>;
 
-@group(2) @binding(9)
+@group(2) @binding(10)
 var normal_sampler: sampler;
 
 // reflectionSampler in shaders.
-@group(2) @binding(10)
+@group(2) @binding(11)
 var reflection_texture: texture_2d<f32>;
 
-@group(2) @binding(11)
+@group(2) @binding(12)
 var reflection_sampler: sampler;
 
 // reflectionCubeSampler in shaders.
-@group(2) @binding(12)
+@group(2) @binding(13)
 var reflection_cube_texture: texture_cube<f32>;
 
-@group(2) @binding(13)
+@group(2) @binding(14)
 var reflection_cube_sampler: sampler;
 
 // color2Sampler in shaders.
-@group(2) @binding(14)
+@group(2) @binding(15)
 var color2_texture: texture_2d<f32>;
 
-@group(2) @binding(15)
+@group(2) @binding(16)
 var color2_sampler: sampler;
 
 // diffuseSampler in shaders.
-@group(2) @binding(16)
+@group(2) @binding(17)
 var diffuse_texture: texture_2d<f32>;
 
-@group(2) @binding(17)
+@group(2) @binding(18)
 var diffuse_sampler: sampler;
 
 // lightMapSampler in shaders.
-@group(2) @binding(18)
+@group(2) @binding(19)
 var light_map_texture: texture_2d<f32>;
 
-@group(2) @binding(19)
+@group(2) @binding(20)
 var light_map_sampler: sampler;
 
 // normalSampler in shaders.
-@group(2) @binding(20)
+@group(2) @binding(21)
 var normal2_texture: texture_2d<f32>;
 
-@group(2) @binding(21)
+@group(2) @binding(22)
 var normal2_sampler: sampler;
 
 struct VertexOutput {
@@ -328,6 +347,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = textureSample(light_map_texture, light_map_sampler, vec2(0.0));
     _unused = textureSample(normal2_texture, normal2_sampler, vec2(0.0));
     _unused = uniforms.aoMinGain;
+    _unused = effect_uniforms.angleFadeParams;
     _unused = fb0.lens_flare_param;
     _unused = fb1.ShadowMapParam;
     _unused = fb3.colrHdrRange;

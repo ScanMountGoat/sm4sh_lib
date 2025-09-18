@@ -129,10 +129,31 @@ pub fn create_bind_group2(
         },
     );
 
+    // TODO: Use snake case for these uniforms?
+    // TODO: Are these initialized differently than MC uniforms?
+    let effect_uniforms = device.create_uniform_buffer(
+        "MC_EFFECT",
+        &crate::shader::model::EffectUniforms {
+            angleFadeParams: get_parameter(mesh, "NU_angleFadeParams").unwrap_or_default(),
+            effColorGain: get_parameter(mesh, "NU_effColorGain").unwrap_or_default(),
+            effCombinerAlpha0: get_parameter(mesh, "NU_effCombinerAlpha0").unwrap_or_default(),
+            effCombinerColor0: get_parameter(mesh, "NU_effCombinerColor0").unwrap_or_default(),
+            effCombinerColor1: get_parameter(mesh, "NU_effCombinerColor1").unwrap_or_default(),
+            effRotUV: get_parameter(mesh, "NU_effRotUV").unwrap_or_default(),
+            effScaleUV: get_parameter(mesh, "NU_effScaleUV").unwrap_or_default(),
+            effSilhouetteColor: get_parameter(mesh, "NU_effSilhouetteColor").unwrap_or_default(),
+            effTransUV: get_parameter(mesh, "NU_effTransUV").unwrap_or_default(),
+            effUniverseParam: get_parameter(mesh, "NU_effUniverseParam").unwrap_or_default(),
+            normalParams: get_parameter(mesh, "NU_normalParams").unwrap_or_default(),
+            normalSamplerAUV: get_parameter(mesh, "NU_normalSamplerAUV").unwrap_or_default(),
+        },
+    );
+
     let bind_group2 = crate::shader::model::bind_groups::BindGroup2::from_bindings(
         device,
         crate::shader::model::bind_groups::BindGroupLayout2 {
             uniforms: uniforms.as_entire_buffer_binding(),
+            effect_uniforms: effect_uniforms.as_entire_buffer_binding(),
             color_texture: color_texture.unwrap_or(default_texture),
             color_sampler: color_sampler.as_ref().unwrap_or(&sampler),
             normal_texture: normal_texture.unwrap_or(default_texture),
