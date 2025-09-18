@@ -258,7 +258,8 @@ struct VertexOutput {
 }
 
 struct PerMesh {
-    parent_bone: vec4<i32>
+    parent_bone: i32,
+    has_skinning: u32,
 }
 
 @group(3) @binding(0)
@@ -285,18 +286,23 @@ struct VertexInput0 {
 fn vs_main(in0: VertexInput0) -> VertexOutput {
     var out: VertexOutput;
 
-    var position = vec3(0.0);
-    var tangent = vec3(0.0);
-    var normal = vec3(0.0);
-    var bitangent = vec3(0.0);
-    if per_mesh.parent_bone.x != -1 {
-        let bone_index = per_mesh.parent_bone.x;
+    var position = in0.position.xyz;
+    var tangent = in0.tangent.xyz;
+    var normal = in0.normal.xyz;
+    var bitangent = in0.bitangent.xyz;
+    if per_mesh.parent_bone != -1 {
+        let bone_index = per_mesh.parent_bone;
 
         position = (skinning_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
         tangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
         bitangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
         normal = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
-    } else {
+    } else if per_mesh.has_skinning == 1u {
+        position = vec3(0.0);
+        tangent = vec3(0.0);
+        normal = vec3(0.0);
+        bitangent = vec3(0.0);
+
         for (var i = 0u; i < 4u; i += 1u) {
             let bone_index = in0.indices[i];
             let skin_weight = in0.weights[i];
@@ -379,13 +385,13 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
         vec4(59.99999, 0.01, 0.0, 1.0)
     );
 
-    // TODO: How is gamma handled for in game shaders?
     var out_color = vec4(0.0);
 
     // Replaced with generated code.
     let ASSIGN_VARS_GENERATED = 0.0;
     let ASSIGN_OUT_COLOR_GENERATED = 0.0;
 
+    // TODO: How is gamma handled for in game shaders?
     var out: FragmentOutput;
     out.color = out_color;
     return out;

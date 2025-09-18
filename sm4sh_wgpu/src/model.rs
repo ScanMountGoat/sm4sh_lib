@@ -207,12 +207,8 @@ fn create_mesh(
     let per_mesh = device.create_uniform_buffer(
         "PerMesh",
         &crate::shader::model::PerMesh {
-            parent_bone: ivec4(
-                group.parent_bone_index.map(|i| i as i32).unwrap_or(-1),
-                0,
-                0,
-                0,
-            ),
+            parent_bone: group.parent_bone_index.map(|i| i as i32).unwrap_or(-1),
+            has_skinning: group.meshes.iter().any(|m| m.vertices.bones.is_some()) as u32,
         },
     );
 
