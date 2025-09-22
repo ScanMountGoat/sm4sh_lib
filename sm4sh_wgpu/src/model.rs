@@ -116,6 +116,8 @@ pub fn load_model(
         },
     );
 
+    let mut shader_cache = BTreeMap::new();
+
     Model {
         groups: model
             .groups
@@ -134,6 +136,7 @@ pub fn load_model(
                             &default_cube_texture,
                             output_format,
                             shared_data,
+                            &mut shader_cache,
                         )
                     })
                     .collect(),
@@ -159,6 +162,7 @@ fn create_mesh(
     default_cube_texture: &wgpu::TextureView,
     output_format: wgpu::TextureFormat,
     shared_data: &SharedData,
+    shader_cache: &mut BTreeMap<Option<u32>, wgpu::ShaderModule>,
 ) -> Mesh {
     let mut vertices: Vec<_> = mesh
         .vertices
@@ -221,7 +225,7 @@ fn create_mesh(
         },
     );
 
-    let pipeline = model_pipeline(device, output_format, shared_data, mesh);
+    let pipeline = model_pipeline(device, output_format, shared_data, mesh, shader_cache);
 
     let is_transparent = mesh
         .material1

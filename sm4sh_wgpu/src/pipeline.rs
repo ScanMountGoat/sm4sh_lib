@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use sm4sh_model::{DstFactor, NudMesh, SrcFactor};
 
 use crate::{renderer::DEPTH_FORMAT, shadergen::ShaderWgsl, SharedData};
@@ -7,6 +9,7 @@ pub fn model_pipeline(
     output_format: wgpu::TextureFormat,
     shared_data: &SharedData,
     mesh: &NudMesh,
+    shader_cache: &mut BTreeMap<Option<u32>, wgpu::ShaderModule>,
 ) -> wgpu::RenderPipeline {
     let topology = match mesh.primitive_type {
         sm4sh_model::PrimitiveType::TriangleList => wgpu::PrimitiveTopology::TriangleList,
@@ -29,13 +32,17 @@ pub fn model_pipeline(
 
     // TODO: Generate code for other materials as well?
     let shader_id = mesh.material1.as_ref().map(|m| m.shader_id);
-    let program = shader_id.and_then(|id| shared_data.database.get_shader(id));
-    let shader_wgsl = ShaderWgsl::new(program);
-    let source = shader_wgsl.create_model_shader();
 
-    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(source)),
+    // Shader IDs are often used more than once for expression meshes or split meshes.
+    // Only compile unique shaders once to greatly reduce loading times.
+    let module = shader_cache.entry(shader_id).or_insert_with(|| {
+        let program = shader_id.and_then(|id| shared_data.database.get_shader(id));
+        let shader_wgsl = ShaderWgsl::new(program);
+        let source = shader_wgsl.create_model_shader();
+        device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(source)),
+        })
     });
 
     // TODO: alpha testing.
