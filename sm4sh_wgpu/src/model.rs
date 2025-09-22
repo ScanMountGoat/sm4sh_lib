@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
-use glam::{ivec4, vec4, Mat4, UVec4, Vec4, Vec4Swizzles};
+use glam::{vec4, Mat4, UVec4, Vec4, Vec4Swizzles};
 use sm4sh_model::{
     vertex::{Bones, Colors, Normals, Uvs},
-    NudModel, VbnSkeleton,
+    DstFactor, NudModel, SrcFactor, VbnSkeleton,
 };
 use wgpu::util::DeviceExt;
 
@@ -35,6 +35,8 @@ pub struct Mesh {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     vertex_index_count: u32,
+
+    is_transparent: bool,
 
     pipeline: wgpu::RenderPipeline,
 
@@ -221,6 +223,12 @@ fn create_mesh(
 
     let pipeline = model_pipeline(device, output_format, shared_data, mesh);
 
+    let is_transparent = mesh
+        .material1
+        .as_ref()
+        .map(|m| m.src_factor != SrcFactor::One || m.dst_factor != DstFactor::Zero)
+        .unwrap_or_default();
+
     Mesh {
         vertex_buffer,
         index_buffer,
@@ -228,6 +236,7 @@ fn create_mesh(
         bind_group2,
         bind_group3,
         pipeline,
+        is_transparent,
     }
 }
 
@@ -303,19 +312,19 @@ impl Model {
             ordered_float::OrderedFloat::from(distance)
         });
 
+        let (transparent, opaque): (Vec<_>, Vec<_>) = sorted
+            .into_iter()
+            .flat_map(|g| &g.meshes)
+            .partition(|m| m.is_transparent);
+
         self.bind_group1.set(render_pass);
 
-        for group in &sorted {
-            for mesh in &group.meshes {
-                render_pass.set_pipeline(&mesh.pipeline);
-                mesh.bind_group2.set(render_pass);
-                mesh.bind_group3.set(render_pass);
-
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..mesh.vertex_index_count, 0, 0..1);
-            }
+        for mesh in opaque {
+            mesh.draw(render_pass);
+        }
+        // Transparent meshes are rendered after opaque meshes for proper blending.
+        for mesh in transparent {
+            mesh.draw(render_pass);
         }
     }
 
@@ -345,6 +354,18 @@ impl Model {
             let transforms = animation.model_space_transforms(skeleton, frame);
             queue.write_storage_data(&self.bone_transforms, &transforms);
         }
+    }
+}
+
+impl Mesh {
+    fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>) {
+        render_pass.set_pipeline(&self.pipeline);
+        self.bind_group2.set(render_pass);
+        self.bind_group3.set(render_pass);
+
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.vertex_index_count, 0, 0..1);
     }
 }
 
