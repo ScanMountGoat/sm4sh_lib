@@ -1,6 +1,7 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use glsl_lang::{ast::TranslationUnit, parse::DefaultParse};
+use log::error;
 use rayon::prelude::*;
 use sm4sh_lib::{
     gx2::{Gx2PixelShader, Gx2VertexShader},
@@ -121,7 +122,7 @@ fn dump_shaders(nsh: &str, output: &str, gfd_tool: &str) -> anyhow::Result<()> {
     let nsh = Nsh::from_file(nsh_path)?;
 
     let output = Path::new(output);
-    std::fs::create_dir_all(output).unwrap();
+    std::fs::create_dir_all(output)?;
 
     let name = nsh_path.file_stem().unwrap().to_string_lossy().to_string();
 
@@ -138,7 +139,7 @@ fn dump_shaders(nsh: &str, output: &str, gfd_tool: &str) -> anyhow::Result<()> {
             std::fs::write(&binary_path, &gx2.program_binary)?;
 
             let txt_path = output.join(format!("{name}.{i}.vert.txt"));
-            dissassemble_shader(&binary_path, &txt_path, gfd_tool);
+            dissassemble_shader(&binary_path, &txt_path, gfd_tool)?;
 
             // Extract pixel shader.
             let gx2 = program.pixel_gx2()?;
@@ -149,20 +150,19 @@ fn dump_shaders(nsh: &str, output: &str, gfd_tool: &str) -> anyhow::Result<()> {
             std::fs::write(&binary_path, &gx2.program_binary)?;
 
             let txt_path = output.join(format!("{name}.{i}.frag.txt"));
-            dissassemble_shader(&binary_path, &txt_path, gfd_tool);
+            dissassemble_shader(&binary_path, &txt_path, gfd_tool)?;
             Ok(())
         })
 }
 
-fn dissassemble_shader(binary_path: &Path, txt_path: &Path, gfd_tool: &str) {
+fn dissassemble_shader(binary_path: &Path, txt_path: &Path, gfd_tool: &str) -> anyhow::Result<()> {
     std::process::Command::new(gfd_tool)
         .arg("disassemble")
         .arg(binary_path)
-        .stdout(File::create(txt_path).unwrap())
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
+        .stdout(File::create(txt_path)?)
+        .spawn()?
+        .wait()?;
+    Ok(())
 }
 
 fn match_shaders_to_nsh(
@@ -193,11 +193,7 @@ fn match_shaders_to_nsh(
     // In practice, IDs in order starting from 92000161 have increasing indices.
     // The gap between indices varies, so this needs to be precomputed using shader dumps.
     let mut text = String::new();
-    for (name, shader_id) in std::fs::read_to_string(shader_names)
-        .unwrap()
-        .lines()
-        .zip(ids)
-    {
+    for (name, shader_id) in std::fs::read_to_string(shader_names)?.lines().zip(ids) {
         let names: Vec<_> = name
             .split(",")
             .map(|n| n.trim().strip_prefix("shader_").unwrap())
@@ -205,14 +201,19 @@ fn match_shaders_to_nsh(
 
         for (name, tag) in names.iter().zip(["_vs", "_ps"]) {
             let path = Path::new(cemu_shader_dump).join(format!("{name}{tag}.bin"));
-            if let Ok(cemu_bytes) = std::fs::read(path) {
-                for (sm4sh_path, sm4sh_bytes) in &sm4sh_shaders {
-                    if sm4sh_bytes == &cemu_bytes {
-                        let sm4sh_name = sm4sh_path.file_stem().unwrap().to_string_lossy();
-                        writeln!(&mut text, "{shader_id:X?}, {name}, {sm4sh_name}")?;
-                        break;
-                    }
+            let cemu_bytes = std::fs::read(path)?;
+
+            if let Some(sm4sh_path) = sm4sh_shaders.iter().find_map(|(sm4sh_path, sm4sh_bytes)| {
+                if sm4sh_bytes == &cemu_bytes {
+                    Some(sm4sh_path)
+                } else {
+                    None
                 }
+            }) {
+                let sm4sh_name = sm4sh_path.file_stem().unwrap().to_string_lossy();
+                writeln!(&mut text, "{shader_id:08X?}, {name}, {sm4sh_name}")?;
+            } else {
+                error!("Unable to match {shader_id:08X} {name}{tag}");
             }
         }
     }
@@ -243,8 +244,7 @@ fn create_shader_database(
 ) -> anyhow::Result<()> {
     let folder = Path::new(nsh_shader_dump);
 
-    let programs = std::fs::read_to_string(shader_ids_shaders)
-        .unwrap()
+    let programs = std::fs::read_to_string(shader_ids_shaders)?
         .lines()
         .par_bridge()
         .map(|line| {
@@ -319,20 +319,20 @@ fn glsl_output_dependencies(frag: &str, output: &str) -> anyhow::Result<()> {
 
     // TODO: graphviz support
     let shader = shader_from_glsl(&vert, &fragment);
-    std::fs::write(output, shader_str(&shader))?;
+    std::fs::write(output, shader_str(&shader)?)?;
     Ok(())
 }
 
-pub fn shader_str(s: &crate::database::ShaderProgram) -> String {
+pub fn shader_str(s: &crate::database::ShaderProgram) -> anyhow::Result<String> {
     // Use a condensed representation similar to GLSL for nicer diffs.
     let mut output = String::new();
     for (k, v) in &s.output_dependencies {
         let mut visited = BTreeSet::new();
-        write_expr_dependencies_recursive(&mut output, s, *v, &mut visited);
-        writeln!(&mut output, "{k} = var{v};").unwrap();
-        writeln!(&mut output).unwrap();
+        write_expr_dependencies_recursive(&mut output, s, *v, &mut visited)?;
+        writeln!(&mut output, "{k} = var{v};")?;
+        writeln!(&mut output)?;
     }
-    output
+    Ok(output)
 }
 
 fn write_expr_dependencies_recursive(
@@ -340,23 +340,24 @@ fn write_expr_dependencies_recursive(
     s: &crate::database::ShaderProgram,
     i: usize,
     visited: &mut BTreeSet<usize>,
-) {
+) -> anyhow::Result<()> {
     // Write all values that this value depends on first.
     if visited.insert(i) {
         let expr = &s.exprs[i];
         match expr {
             xc3_shader::expr::OutputExpr::Value(xc3_shader::expr::Value::Texture(t)) => {
                 for arg in t.texcoords.iter() {
-                    write_expr_dependencies_recursive(output, s, *arg, visited);
+                    write_expr_dependencies_recursive(output, s, *arg, visited)?;
                 }
             }
             xc3_shader::expr::OutputExpr::Func { args, .. } => {
                 for arg in args.iter() {
-                    write_expr_dependencies_recursive(output, s, *arg, visited);
+                    write_expr_dependencies_recursive(output, s, *arg, visited)?;
                 }
             }
             xc3_shader::expr::OutputExpr::Value(_) => (),
         }
-        writeln!(output, "var{i} = {expr};").unwrap()
+        writeln!(output, "var{i} = {expr};")?;
     }
+    Ok(())
 }
