@@ -5,10 +5,10 @@ use std::{
 };
 
 use bilge::prelude::*;
-use binrw::{binread, helpers::until, BinRead, BinWrite};
+use binrw::{BinRead, BinWrite, binread, helpers::until};
 use xc3_write::{
-    strings::{StringSection, WriteOptions},
     Xc3Write, Xc3WriteOffsets,
+    strings::{StringSection, WriteOptions},
 };
 
 use crate::{parse_opt_ptr32, parse_ptr32_count, parse_string_ptr32, xc3_write_binwrite_impl};

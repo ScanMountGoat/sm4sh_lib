@@ -1,6 +1,6 @@
 use std::io::{Cursor, Seek, Write};
 
-use binrw::{helpers::until, BinRead, BinReaderExt, BinResult, BinWrite};
+use binrw::{BinRead, BinReaderExt, BinResult, BinWrite, helpers::until};
 
 use crate::{
     file_read_impl, file_write_full_impl,

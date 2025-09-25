@@ -5,8 +5,8 @@ use std::{
     path::Path,
 };
 use vertex::{
-    buffer0_stride, buffer1_stride, read_vertex_indices, read_vertices, triangle_strip_to_list,
-    write_vertex_indices, write_vertices, Vertices,
+    Vertices, buffer0_stride, buffer1_stride, read_vertex_indices, read_vertices,
+    triangle_strip_to_list, write_vertex_indices, write_vertices,
 };
 
 use binrw::BinResult;

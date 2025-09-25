@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use bilge::prelude::*;
 use binrw::{BinRead, BinReaderExt, BinResult, BinWrite, BinWriterExt, VecArgs};
-use glam::{vec2, Vec2, Vec3, Vec4};
+use glam::{Vec2, Vec3, Vec4, vec2};
 use half::f16;
 
 use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvType, VertexFlags};

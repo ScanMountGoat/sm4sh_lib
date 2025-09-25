@@ -108,7 +108,7 @@ impl SkinWeights {
 mod tests {
     use super::*;
 
-    use glam::{vec4, Vec4};
+    use glam::{Vec4, vec4};
 
     #[test]
     fn bone_indices_weights_no_influences() {
@@ -177,22 +177,26 @@ mod tests {
 
     #[test]
     fn bone_influences_empty() {
-        assert!(SkinWeights {
-            bone_indices: Vec::new(),
-            bone_weights: Vec::new(),
-        }
-        .to_influences(&[])
-        .is_empty());
+        assert!(
+            SkinWeights {
+                bone_indices: Vec::new(),
+                bone_weights: Vec::new(),
+            }
+            .to_influences(&[])
+            .is_empty()
+        );
     }
 
     #[test]
     fn bone_influences_zero_weights() {
-        assert!(SkinWeights {
-            bone_indices: vec![[0; 4], [0; 4]],
-            bone_weights: vec![Vec4::ZERO, Vec4::ZERO],
-        }
-        .to_influences(&["root".to_string()])
-        .is_empty());
+        assert!(
+            SkinWeights {
+                bone_indices: vec![[0; 4], [0; 4]],
+                bone_weights: vec![Vec4::ZERO, Vec4::ZERO],
+            }
+            .to_influences(&["root".to_string()])
+            .is_empty()
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
-use encase::{internal::WriteInto, ShaderSize, ShaderType, StorageBuffer, UniformBuffer};
-use glam::{vec2, Mat4, Vec4};
+use encase::{ShaderSize, ShaderType, StorageBuffer, UniformBuffer, internal::WriteInto};
+use glam::{Mat4, Vec4, vec2};
 use sm4sh_model::database::ShaderDatabase;
 use wgpu::util::DeviceExt;
 
@@ -12,7 +12,7 @@ mod shadergen;
 mod skeleton;
 mod texture;
 
-pub use model::{load_model, Mesh, Model};
+pub use model::{Mesh, Model, load_model};
 pub use renderer::Renderer;
 
 /// The features required by [Renderer].

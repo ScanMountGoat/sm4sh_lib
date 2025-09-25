@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use sm4sh_model::{DstFactor, NudMesh, SrcFactor};
 
-use crate::{renderer::DEPTH_FORMAT, shadergen::ShaderWgsl, SharedData};
+use crate::{SharedData, renderer::DEPTH_FORMAT, shadergen::ShaderWgsl};
 
 pub fn model_pipeline(
     device: &wgpu::Device,

@@ -1,5 +1,5 @@
-use binrw::{binread, BinRead, BinWrite};
-use image_dds::{ddsfile::Dds, Surface};
+use binrw::{BinRead, BinWrite, binread};
+use image_dds::{Surface, ddsfile::Dds};
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
 use crate::{parse_opt_ptr32, parse_ptr32_count, xc3_write_binwrite_impl};

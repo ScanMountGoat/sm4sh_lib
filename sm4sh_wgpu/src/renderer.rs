@@ -1,6 +1,6 @@
-use glam::{vec4, Mat4, UVec4, Vec4};
+use glam::{Mat4, UVec4, Vec4, vec4};
 
-use crate::{skeleton::BoneRenderer, CameraData, DeviceBufferExt, Model, QueueBufferExt};
+use crate::{CameraData, DeviceBufferExt, Model, QueueBufferExt, skeleton::BoneRenderer};
 
 pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 

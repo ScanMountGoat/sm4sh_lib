@@ -5,7 +5,7 @@ use std::{
 };
 
 use binrw::{BinReaderExt, BinResult};
-use glam::{vec3, EulerRot, Mat4, Quat, Vec3};
+use glam::{EulerRot, Mat4, Quat, Vec3, vec3};
 use sm4sh_lib::{
     omo::{Omo, OmoNode, PositionType, RotationType, ScaleType},
     pack::Pack,
@@ -528,9 +528,11 @@ mod tests {
             nodes: Vec::new(),
         };
 
-        assert!(animation
-            .model_space_transforms(&VbnSkeleton { bones: Vec::new() }, 0.0)
-            .is_empty());
+        assert!(
+            animation
+                .model_space_transforms(&VbnSkeleton { bones: Vec::new() }, 0.0)
+                .is_empty()
+        );
     }
 
     #[test]

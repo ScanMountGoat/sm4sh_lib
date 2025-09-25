@@ -1,7 +1,7 @@
 use binrw::{BinRead, BinWrite};
 use xc3_write::{
-    strings::{StringSectionUnique, WriteOptions},
     Xc3Write, Xc3WriteOffsets,
+    strings::{StringSectionUnique, WriteOptions},
 };
 
 use crate::{parse_count32_offset32, parse_string_ptr32, xc3_write_binwrite_impl};

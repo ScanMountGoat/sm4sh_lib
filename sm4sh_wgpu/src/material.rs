@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use log::error;
 
-use glam::{vec4, Vec4};
+use glam::{Vec4, vec4};
 use sm4sh_model::NudMesh;
 
 use crate::{DeviceBufferExt, SharedData};

@@ -1,15 +1,15 @@
 use std::collections::BTreeMap;
 
-use glam::{vec4, Mat4, UVec4, Vec4, Vec4Swizzles};
+use glam::{Mat4, UVec4, Vec4, Vec4Swizzles, vec4};
 use sm4sh_model::{
-    vertex::{Bones, Colors, Normals, Uvs},
     DstFactor, NudModel, SrcFactor, VbnSkeleton,
+    vertex::{Bones, Colors, Normals, Uvs},
 };
 use wgpu::util::DeviceExt;
 
 use crate::{
-    material::create_bind_group2, pipeline::model_pipeline, texture::create_texture, CameraData,
-    DeviceBufferExt, QueueBufferExt, SharedData,
+    CameraData, DeviceBufferExt, QueueBufferExt, SharedData, material::create_bind_group2,
+    pipeline::model_pipeline, texture::create_texture,
 };
 
 pub struct Model {

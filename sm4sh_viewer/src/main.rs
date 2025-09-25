@@ -3,13 +3,13 @@ use std::time::Instant;
 use anyhow::Context;
 use clap::Parser;
 use futures::executor::block_on;
-use glam::{vec3, Vec3};
+use glam::{Vec3, vec3};
 use log::{error, info};
 use sm4sh_model::{
-    animation::{load_animations, Animation},
+    animation::{Animation, load_animations},
     database::ShaderDatabase,
 };
-use sm4sh_wgpu::{load_model, CameraData, Model, Renderer, SharedData};
+use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData, load_model};
 use winit::{
     dpi::PhysicalPosition,
     event::*,

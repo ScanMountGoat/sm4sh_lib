@@ -1,4 +1,4 @@
-use binrw::{binread, BinRead, FilePtr32};
+use binrw::{BinRead, FilePtr32, binread};
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
 use crate::{parse_ptr32_count, parse_string_opt_ptr32, parse_string_ptr32};

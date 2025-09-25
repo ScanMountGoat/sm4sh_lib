@@ -1,5 +1,5 @@
 use bilge::prelude::*;
-use binrw::{binread, BinRead, BinWrite};
+use binrw::{BinRead, BinWrite, binread};
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
 use crate::{parse_ptr32_count, xc3_write_binwrite_impl};

@@ -1,7 +1,7 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use crate::parse_string_ptr32;
-use binrw::{binrw, BinRead, BinWrite};
+use binrw::{BinRead, BinWrite, binrw};
 use xc3_write::Offset;
 
 #[binrw]

@@ -1,7 +1,7 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use binrw::{
-    file_ptr::FilePtrArgs, BinRead, BinReaderExt, BinResult, Endian, FilePtr32, NullString, VecArgs,
+    BinRead, BinReaderExt, BinResult, Endian, FilePtr32, NullString, VecArgs, file_ptr::FilePtrArgs,
 };
 
 pub mod gx2;
