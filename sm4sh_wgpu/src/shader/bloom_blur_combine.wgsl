@@ -32,11 +32,10 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
 // TODO: Should this use compute instead?
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // TODO: port the logic from in game shader
     // TODO: Figure out the actual shader used from the nsh?
     let color1 = textureSample(color1, color_sampler, in.uv);
     let color2 = textureSample(color2, color_sampler, in.uv);
     let color3 = textureSample(color3, color_sampler, in.uv);
     let color4 = textureSample(color4, color_sampler, in.uv);
-    return (color1 + color2 + color3 + color4) / 4.0;
+    return (color1 + color2 * 2.0 + color3 * 4.0 + color4 * 8.0) / 15.0;
 }
