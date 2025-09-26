@@ -2,11 +2,14 @@ use std::collections::BTreeMap;
 
 use sm4sh_model::{DstFactor, NudMesh, SrcFactor};
 
-use crate::{SharedData, renderer::DEPTH_FORMAT, shadergen::ShaderWgsl};
+use crate::{
+    SharedData,
+    renderer::{COLOR_FORMAT, DEPTH_FORMAT},
+    shadergen::ShaderWgsl,
+};
 
 pub fn model_pipeline(
     device: &wgpu::Device,
-    output_format: wgpu::TextureFormat,
     shared_data: &SharedData,
     mesh: &NudMesh,
     shader_cache: &mut BTreeMap<Option<u32>, wgpu::ShaderModule>,
@@ -71,7 +74,7 @@ pub fn model_pipeline(
         fragment: Some(crate::shader::model::fragment_state(
             &module,
             &crate::shader::model::fs_main_entry([Some(wgpu::ColorTargetState {
-                format: output_format,
+                format: COLOR_FORMAT,
                 blend,
                 write_mask: wgpu::ColorWrites::all(),
             })]),

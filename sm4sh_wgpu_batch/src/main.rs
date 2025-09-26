@@ -79,7 +79,7 @@ fn main() -> anyhow::Result<()> {
         ..Default::default()
     }))?;
 
-    let surface_format = wgpu::TextureFormat::Rgba8UnormSrgb;
+    let surface_format = wgpu::TextureFormat::Rgba8Unorm;
     let renderer = Renderer::new(&device, WIDTH, HEIGHT, surface_format);
 
     // TODO: Frame each model individually?
@@ -138,13 +138,8 @@ fn main() -> anyhow::Result<()> {
 
                     match nud_model {
                         Ok(nud_model) => {
-                            let model = sm4sh_wgpu::load_model(
-                                &device,
-                                &queue,
-                                &nud_model,
-                                surface_format,
-                                &shared_data,
-                            );
+                            let model =
+                                sm4sh_wgpu::load_model(&device, &queue, &nud_model, &shared_data);
 
                             // Create a unique buffer to avoid mapping a buffer from multiple threads.
                             let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {

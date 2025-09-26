@@ -80,7 +80,7 @@ impl<'a> State<'a> {
         let size = window.inner_size();
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: wgpu::TextureFormat::Bgra8Unorm,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
@@ -102,7 +102,7 @@ impl<'a> State<'a> {
         let shared_data = SharedData::new(&device, database);
 
         let nud_model = sm4sh_model::load_model(&cli.file)?;
-        let model = load_model(&device, &queue, &nud_model, config.format, &shared_data);
+        let model = load_model(&device, &queue, &nud_model, &shared_data);
 
         let animations = cli
             .anim

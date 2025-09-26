@@ -396,10 +396,10 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     // TODO: Figure out how to initialize this.
     let local_to_world_matrix = mat4x4(
-        vec4(0.0, 0.0, 1.0, 0.0),
-        vec4(0.0, 1.0, 0.0, 0.0),
         vec4(1.0, 0.0, 0.0, 0.0),
-        vec4(59.99999, 0.01, 0.0, 1.0)
+        vec4(0.0, 1.0, 0.0, 0.0),
+        vec4(0.0, 0.0, 1.0, 0.0),
+        vec4(0.0, 0.0, 0.0, 1.0)
     );
 
     var out_color = vec4(0.0);
@@ -408,7 +408,6 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let ASSIGN_VARS_GENERATED = 0.0;
     let ASSIGN_OUT_COLOR_GENERATED = 0.0;
 
-    // TODO: How is gamma handled for in game shaders?
     var out: FragmentOutput;
     out.color = out_color;
     return out;

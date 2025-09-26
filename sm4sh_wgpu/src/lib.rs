@@ -16,8 +16,10 @@ pub use model::{Mesh, Model, load_model};
 pub use renderer::Renderer;
 
 /// The features required by [Renderer].
-pub const FEATURES: wgpu::Features =
-    wgpu::Features::TEXTURE_COMPRESSION_BC.union(wgpu::Features::POLYGON_MODE_LINE);
+pub const FEATURES: wgpu::Features = wgpu::Features::TEXTURE_COMPRESSION_BC
+    .union(wgpu::Features::POLYGON_MODE_LINE)
+    .union(wgpu::Features::TEXTURE_FORMAT_16BIT_NORM)
+    .union(wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
 
 trait DeviceBufferExt {
     fn create_uniform_buffer<T: ShaderType + WriteInto + ShaderSize>(

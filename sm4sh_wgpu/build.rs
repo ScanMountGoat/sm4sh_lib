@@ -3,6 +3,31 @@ use wgsl_to_wgpu::{MatrixVectorTypes, WriteOptions, create_shader_modules};
 fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();
     write_shader(
+        include_str!("src/shader/blit.wgsl"),
+        "src/shader/blit.wgsl",
+        format!("{out_dir}/blit.rs"),
+    );
+    write_shader(
+        include_str!("src/shader/bloom_add.wgsl"),
+        "src/shader/bloom_add.wgsl",
+        format!("{out_dir}/bloom_add.rs"),
+    );
+    write_shader(
+        include_str!("src/shader/bloom_blur_combine.wgsl"),
+        "src/shader/bloom_blur_combine.wgsl",
+        format!("{out_dir}/bloom_blur_combine.rs"),
+    );
+    write_shader(
+        include_str!("src/shader/bloom_blur.wgsl"),
+        "src/shader/bloom_blur.wgsl",
+        format!("{out_dir}/bloom_blur.rs"),
+    );
+    write_shader(
+        include_str!("src/shader/bloom_bright.wgsl"),
+        "src/shader/bloom_bright.wgsl",
+        format!("{out_dir}/bloom_bright.rs"),
+    );
+    write_shader(
         include_str!("src/shader/bone.wgsl"),
         "src/shader/bone.wgsl",
         format!("{out_dir}/bone.rs"),

@@ -48,7 +48,6 @@ pub fn load_model(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     model: &NudModel,
-    output_format: wgpu::TextureFormat,
     shared_data: &SharedData,
 ) -> Model {
     let default_texture = create_solid_texture(device, queue, [0u8; 4])
@@ -134,7 +133,6 @@ pub fn load_model(
                             &textures,
                             &default_texture,
                             &default_cube_texture,
-                            output_format,
                             shared_data,
                             &mut shader_cache,
                         )
@@ -160,7 +158,6 @@ fn create_mesh(
     hash_to_texture: &BTreeMap<u32, wgpu::TextureView>,
     default_texture: &wgpu::TextureView,
     default_cube_texture: &wgpu::TextureView,
-    output_format: wgpu::TextureFormat,
     shared_data: &SharedData,
     shader_cache: &mut BTreeMap<Option<u32>, wgpu::ShaderModule>,
 ) -> Mesh {
@@ -225,7 +222,7 @@ fn create_mesh(
         },
     );
 
-    let pipeline = model_pipeline(device, output_format, shared_data, mesh, shader_cache);
+    let pipeline = model_pipeline(device, shared_data, mesh, shader_cache);
 
     let is_transparent = mesh
         .material1
