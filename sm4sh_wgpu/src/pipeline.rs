@@ -40,7 +40,7 @@ pub fn model_pipeline(
     // Only compile unique shaders once to greatly reduce loading times.
     let module = shader_cache.entry(shader_id).or_insert_with(|| {
         let program = shader_id.and_then(|id| shared_data.database.get_shader(id));
-        let (alpha_test_ref_func) = mesh
+        let alpha_test_ref_func = mesh
             .material1
             .as_ref()
             .map(|m| (m.alpha_test_ref, m.alpha_func));
@@ -58,7 +58,7 @@ pub fn model_pipeline(
         label: label.as_deref(),
         layout: Some(&shared_data.model_layout),
         vertex: crate::shader::model::vertex_state(
-            &module,
+            module,
             &crate::shader::model::vs_main_entry(wgpu::VertexStepMode::Vertex),
         ),
         primitive: wgpu::PrimitiveState {
@@ -76,7 +76,7 @@ pub fn model_pipeline(
         }),
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(crate::shader::model::fragment_state(
-            &module,
+            module,
             &crate::shader::model::fs_main_entry([Some(wgpu::ColorTargetState {
                 format: COLOR_FORMAT,
                 blend,

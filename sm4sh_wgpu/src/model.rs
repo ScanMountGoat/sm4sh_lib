@@ -392,7 +392,7 @@ pub fn create_solid_texture(
             view_formats: &[],
         },
         wgpu::util::TextureDataOrder::LayerMajor,
-        &bytemuck::cast_slice(&[rgba; 4 * 4]),
+        bytemuck::cast_slice(&[rgba; 4 * 4]),
     )
 }
 

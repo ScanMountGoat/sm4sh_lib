@@ -237,7 +237,9 @@ fn render_screenshot(
         block_on(rx.receive()).unwrap().unwrap();
 
         let data = buffer_slice.get_mapped_range();
-        let buffer = image::RgbaImage::from_raw(WIDTH, HEIGHT, data.to_owned()).unwrap();
+        let mut buffer = image::RgbaImage::from_raw(WIDTH, HEIGHT, data.to_owned()).unwrap();
+        // Force opaque to match sm4sh_viewer.
+        buffer.pixels_mut().for_each(|rgba| rgba[3] = 255u8);
         buffer.save(output_path).unwrap();
     }
     output_buffer.unmap();
