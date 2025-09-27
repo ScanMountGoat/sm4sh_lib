@@ -166,7 +166,7 @@ pub fn create_bind_group2(
         },
     );
 
-    let bind_group2 = crate::shader::model::bind_groups::BindGroup2::from_bindings(
+    crate::shader::model::bind_groups::BindGroup2::from_bindings(
         device,
         crate::shader::model::bind_groups::BindGroupLayout2 {
             uniforms: uniforms.as_entire_buffer_binding(),
@@ -189,8 +189,7 @@ pub fn create_bind_group2(
             normal2_texture: normal2_texture.unwrap_or(default_texture),
             normal2_sampler: normal2_sampler.as_ref().unwrap_or(&sampler),
         },
-    );
-    bind_group2
+    )
 }
 
 fn sampler(texture: &sm4sh_model::NudTexture) -> wgpu::SamplerDescriptor<'_> {

@@ -205,8 +205,10 @@ pub struct Material {
     pub src_factor: SrcFactor,
     pub tex_count: u16,
     pub dst_factor: DstFactor,
+    /// The function used to determine what fragment alpha values pass the alpha test.
     pub alpha_func: AlphaFunc,
-    pub ref_alpha: u16,
+    /// The reference value for alpha testing calculated as `alpha_test_ref / 255.0`.
+    pub alpha_test_ref: u16,
     pub cull_mode: CullMode,
     pub unk2: u32,
     pub unk3: u32,

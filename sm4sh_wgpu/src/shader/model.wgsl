@@ -410,5 +410,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     var out: FragmentOutput;
     out.color = out_color;
+
+    let ALPHA_TEST_GENERATED = 0.0;
+
     return out;
 }

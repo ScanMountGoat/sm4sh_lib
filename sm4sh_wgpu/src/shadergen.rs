@@ -1,8 +1,12 @@
 use std::fmt::Write;
 
 use case::CaseExt;
+use indoc::formatdoc;
 use log::error;
-use sm4sh_model::database::{Operation, OutputExpr, Parameter, ShaderProgram, Value};
+use sm4sh_model::{
+    AlphaFunc,
+    database::{Operation, OutputExpr, Parameter, ShaderProgram, Value},
+};
 
 const OUT_VAR: &str = "RESULT";
 const VAR_PREFIX: &str = "VAR";
@@ -12,17 +16,26 @@ const VAR_PREFIX: &str = "VAR";
 pub struct ShaderWgsl {
     assignments: String,
     outputs: Vec<String>,
+    discard: String,
 }
 
 impl ShaderWgsl {
-    pub fn new(program: Option<&ShaderProgram>) -> Self {
+    pub fn new(
+        program: Option<&ShaderProgram>,
+        alpha_test_ref_func: Option<(u16, AlphaFunc)>,
+    ) -> Self {
         let (assignments, outputs) = program
             .map(|p| (generate_assignments_wgsl(p), generate_outputs_wgsl(p)))
+            .unwrap_or_default();
+
+        let discard = alpha_test_ref_func
+            .map(|(ref_value, func)| alpha_test(ref_value, func))
             .unwrap_or_default();
 
         Self {
             assignments,
             outputs,
+            discard,
         }
     }
 
@@ -34,6 +47,7 @@ impl ShaderWgsl {
             "let ASSIGN_OUT_COLOR_GENERATED = 0.0;",
             &self.outputs.join("\n").replace(OUT_VAR, "out_color"),
         );
+        source = source.replace("let ALPHA_TEST_GENERATED = 0.0;", &self.discard);
 
         // This section is only used for wgsl_to_wgpu reachability analysis and can be removed.
         if let (Some(start), Some(end)) = (
@@ -45,6 +59,29 @@ impl ShaderWgsl {
 
         source
     }
+}
+
+fn alpha_test(ref_value: u16, func: AlphaFunc) -> String {
+    // The function determines what alpha values pass the alpha test.
+    let ref_value = ref_value as f32 / 255.0;
+    match func {
+        AlphaFunc::Disabled => String::new(),
+        AlphaFunc::Never => "discard;".to_string(),
+        AlphaFunc::Less => alpha_test_inner(ref_value, "<"),
+        AlphaFunc::Eq => alpha_test_inner(ref_value, "=="),
+        AlphaFunc::Leq => alpha_test_inner(ref_value, "<="),
+        AlphaFunc::Neq => alpha_test_inner(ref_value, "!="),
+        AlphaFunc::Geq => alpha_test_inner(ref_value, ">="),
+        AlphaFunc::Always => String::new(),
+    }
+}
+
+fn alpha_test_inner(ref_value: f32, func: &str) -> String {
+    formatdoc! {"
+        if out_color.a {func} {ref_value:?} {{
+            discard;
+        }}
+    "}
 }
 
 fn generate_assignments_wgsl(program: &ShaderProgram) -> String {

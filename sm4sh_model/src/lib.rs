@@ -76,6 +76,7 @@ pub struct NudMaterial {
     pub src_factor: SrcFactor,
     pub dst_factor: DstFactor,
     pub alpha_func: AlphaFunc,
+    pub alpha_test_ref: u16,
     pub cull_mode: CullMode,
     pub textures: Vec<NudTexture>,
     pub properties: Vec<NudProperty>,
@@ -385,7 +386,7 @@ fn material(m: &NudMaterial) -> Material {
         tex_count: m.textures.len() as u16,
         dst_factor: m.dst_factor,
         alpha_func: m.alpha_func,
-        ref_alpha: 0,
+        alpha_test_ref: m.alpha_test_ref,
         cull_mode: m.cull_mode,
         unk2: 0,
         unk3: 0,
@@ -465,6 +466,7 @@ fn nud_material(material: &sm4sh_lib::nud::Material) -> NudMaterial {
         src_factor: material.src_factor,
         dst_factor: material.dst_factor,
         alpha_func: material.alpha_func,
+        alpha_test_ref: material.alpha_test_ref,
         cull_mode: material.cull_mode,
         textures: material
             .textures

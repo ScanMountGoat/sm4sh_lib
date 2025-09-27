@@ -40,7 +40,12 @@ pub fn model_pipeline(
     // Only compile unique shaders once to greatly reduce loading times.
     let module = shader_cache.entry(shader_id).or_insert_with(|| {
         let program = shader_id.and_then(|id| shared_data.database.get_shader(id));
-        let shader_wgsl = ShaderWgsl::new(program);
+        let (alpha_test_ref_func) = mesh
+            .material1
+            .as_ref()
+            .map(|m| (m.alpha_test_ref, m.alpha_func));
+
+        let shader_wgsl = ShaderWgsl::new(program, alpha_test_ref_func);
         let source = shader_wgsl.create_model_shader();
         device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -48,7 +53,6 @@ pub fn model_pipeline(
         })
     });
 
-    // TODO: alpha testing.
     let label = shader_id.map(|id| format!("{id:X}"));
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: label.as_deref(),
