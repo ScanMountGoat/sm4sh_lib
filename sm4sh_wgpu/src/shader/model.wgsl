@@ -133,6 +133,8 @@ var<storage> skinning_transforms: array<mat4x4<f32>>;
 @group(1) @binding(1)
 var<storage> skinning_transforms_inv_transpose: array<mat4x4<f32>>;
 
+@group(1) @binding(2)
+var<storage> bone_transforms: array<mat4x4<f32>>;
 
 // MC in shaders with only the used parameters.
 struct Uniforms {
@@ -278,6 +280,7 @@ struct VertexOutput {
 struct PerMesh {
     parent_bone: i32,
     has_skinning: u32,
+    is_nsc: u32,
 }
 
 @group(3) @binding(0)
@@ -312,10 +315,19 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
     if per_mesh.parent_bone != -1 {
         let bone_index = per_mesh.parent_bone;
 
-        position = (skinning_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
-        tangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
-        bitangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
-        normal = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
+        if per_mesh.is_nsc == 1u {
+            // Parenting with the parent transform.
+            position = (bone_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
+            tangent = (bone_transforms[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
+            bitangent = (bone_transforms[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
+            normal = (bone_transforms[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
+        } else {
+            // Parenting that assumes the base parent transform is already applied.
+            position = (skinning_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
+            tangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
+            bitangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
+            normal = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
+        }
     } else if per_mesh.has_skinning == 1u {
         position = vec3(0.0);
         tangent = vec3(0.0);

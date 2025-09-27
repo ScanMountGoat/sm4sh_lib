@@ -99,7 +99,9 @@ pub fn load_model(
     let bone_transforms = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("bone transforms buffer"),
         contents: bytemuck::cast_slice(&bone_transforms),
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        usage: wgpu::BufferUsages::VERTEX
+            | wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_DST,
     });
 
     let bone_count = model
@@ -114,6 +116,7 @@ pub fn load_model(
             skinning_transforms: skinning_transforms.as_entire_buffer_binding(),
             skinning_transforms_inv_transpose: skinning_transforms_inv_transpose
                 .as_entire_buffer_binding(),
+            bone_transforms: bone_transforms.as_entire_buffer_binding(),
         },
     );
 
@@ -215,6 +218,7 @@ fn create_mesh(
         &crate::shader::model::PerMesh {
             parent_bone: group.parent_bone_index.map(|i| i as i32).unwrap_or(-1),
             has_skinning: group.meshes.iter().any(|m| m.vertices.bones.is_some()) as u32,
+            is_nsc: group.name.contains("NSC") as u32,
         },
     );
 
