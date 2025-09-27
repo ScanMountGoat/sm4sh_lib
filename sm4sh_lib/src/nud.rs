@@ -270,16 +270,16 @@ pub enum DstFactor {
 }
 
 // TODO: retest these with renderdoc.
-#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq, Hash)]
 #[brw(repr(u16))]
 pub enum AlphaFunc {
     Disabled = 0x0,
     Never = 0x200,
     Less = 0x201,
-    Eq = 0x202,
-    Leq = 0x204,
-    Neq = 0x205,
-    Geq = 0x206,
+    Equal = 0x202,
+    Greater = 0x204,
+    NotEqual = 0x205,
+    GreaterEqual = 0x206,
     Always = 0x207,
     // TODO: Direct3D for pokken?
 }

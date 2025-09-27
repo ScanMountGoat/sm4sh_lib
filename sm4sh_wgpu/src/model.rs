@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-use glam::{Mat4, UVec4, Vec4, Vec4Swizzles, vec4};
+use glam::{Mat4, UVec4, Vec4, Vec4Swizzles};
 use sm4sh_model::{
     DstFactor, NudModel, SrcFactor, VbnSkeleton,
     vertex::{Bones, Colors, Normals, Uvs},
@@ -8,8 +8,10 @@ use sm4sh_model::{
 use wgpu::util::DeviceExt;
 
 use crate::{
-    CameraData, DeviceBufferExt, QueueBufferExt, SharedData, material::create_bind_group2,
-    pipeline::model_pipeline, texture::create_texture,
+    CameraData, DeviceBufferExt, QueueBufferExt, SharedData,
+    material::create_bind_group2,
+    pipeline::{ShaderKey, model_pipeline},
+    texture::create_texture,
 };
 
 pub struct Model {
@@ -115,7 +117,7 @@ pub fn load_model(
         },
     );
 
-    let mut shader_cache = BTreeMap::new();
+    let mut shader_cache = HashMap::new();
 
     Model {
         groups: model
@@ -159,7 +161,7 @@ fn create_mesh(
     default_texture: &wgpu::TextureView,
     default_cube_texture: &wgpu::TextureView,
     shared_data: &SharedData,
-    shader_cache: &mut BTreeMap<Option<u32>, wgpu::ShaderModule>,
+    shader_cache: &mut HashMap<Option<ShaderKey>, wgpu::ShaderModule>,
 ) -> Mesh {
     let mut vertices: Vec<_> = mesh
         .vertices

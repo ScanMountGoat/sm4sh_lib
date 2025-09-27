@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
-use sm4sh_model::{DstFactor, NudMesh, SrcFactor};
+use sm4sh_model::{AlphaFunc, DstFactor, NudMesh, SrcFactor};
 
 use crate::{
     SharedData,
@@ -8,11 +8,18 @@ use crate::{
     shadergen::ShaderWgsl,
 };
 
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub struct ShaderKey {
+    pub id: u32,
+    pub alpha_test_ref: u16,
+    pub alpha_func: AlphaFunc,
+}
+
 pub fn model_pipeline(
     device: &wgpu::Device,
     shared_data: &SharedData,
     mesh: &NudMesh,
-    shader_cache: &mut BTreeMap<Option<u32>, wgpu::ShaderModule>,
+    shader_cache: &mut HashMap<Option<ShaderKey>, wgpu::ShaderModule>,
 ) -> wgpu::RenderPipeline {
     let topology = match mesh.primitive_type {
         sm4sh_model::PrimitiveType::TriangleList => wgpu::PrimitiveTopology::TriangleList,
@@ -34,16 +41,17 @@ pub fn model_pipeline(
     });
 
     // TODO: Generate code for other materials as well?
-    let shader_id = mesh.material1.as_ref().map(|m| m.shader_id);
+    let key = mesh.material1.as_ref().map(|m| ShaderKey {
+        id: m.shader_id,
+        alpha_test_ref: m.alpha_test_ref,
+        alpha_func: m.alpha_func,
+    });
 
     // Shader IDs are often used more than once for expression meshes or split meshes.
     // Only compile unique shaders once to greatly reduce loading times.
-    let module = shader_cache.entry(shader_id).or_insert_with(|| {
-        let program = shader_id.and_then(|id| shared_data.database.get_shader(id));
-        let alpha_test_ref_func = mesh
-            .material1
-            .as_ref()
-            .map(|m| (m.alpha_test_ref, m.alpha_func));
+    let module = shader_cache.entry(key).or_insert_with(|| {
+        let program = key.and_then(|key| shared_data.database.get_shader(key.id));
+        let alpha_test_ref_func = key.as_ref().map(|m| (m.alpha_test_ref, m.alpha_func));
 
         let shader_wgsl = ShaderWgsl::new(program, alpha_test_ref_func);
         let source = shader_wgsl.create_model_shader();
@@ -53,7 +61,7 @@ pub fn model_pipeline(
         })
     });
 
-    let label = shader_id.map(|id| format!("{id:X}"));
+    let label = key.map(|key| format!("{:X}", key.id));
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: label.as_deref(),
         layout: Some(&shared_data.model_layout),

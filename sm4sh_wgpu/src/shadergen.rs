@@ -68,17 +68,17 @@ fn alpha_test(ref_value: u16, func: AlphaFunc) -> String {
         AlphaFunc::Disabled => String::new(),
         AlphaFunc::Never => "discard;".to_string(),
         AlphaFunc::Less => alpha_test_inner(ref_value, "<"),
-        AlphaFunc::Eq => alpha_test_inner(ref_value, "=="),
-        AlphaFunc::Leq => alpha_test_inner(ref_value, "<="),
-        AlphaFunc::Neq => alpha_test_inner(ref_value, "!="),
-        AlphaFunc::Geq => alpha_test_inner(ref_value, ">="),
+        AlphaFunc::Equal => alpha_test_inner(ref_value, "=="),
+        AlphaFunc::Greater => alpha_test_inner(ref_value, ">"),
+        AlphaFunc::NotEqual => alpha_test_inner(ref_value, "!="),
+        AlphaFunc::GreaterEqual => alpha_test_inner(ref_value, ">="),
         AlphaFunc::Always => String::new(),
     }
 }
 
 fn alpha_test_inner(ref_value: f32, func: &str) -> String {
     formatdoc! {"
-        if out_color.a {func} {ref_value:?} {{
+        if !(out_color.a {func} {ref_value:?}) {{
             discard;
         }}
     "}
