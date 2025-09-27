@@ -271,6 +271,8 @@ struct VertexOutput {
     @location(3) bitangent: vec3<f32>,
     @location(4) color: vec4<f32>,
     @location(5) uv0: vec2<f32>,
+    @location(6) uv1: vec2<f32>,
+    @location(7) uv2: vec2<f32>,
 }
 
 struct PerMesh {
@@ -295,7 +297,8 @@ struct VertexInput0 {
     @location(4) color: vec4<f32>,
     @location(5) indices: vec4<u32>,
     @location(6) weights: vec4<f32>,
-    @location(7) uv0: vec4<f32>,
+    @location(7) uv01: vec4<f32>,
+    @location(8) uv23: vec4<f32>,
 }
 
 @vertex
@@ -337,7 +340,9 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
     out.tangent = tangent;
     out.bitangent = bitangent;
     out.color = in0.color;
-    out.uv0 = in0.uv0.xy;
+    out.uv0 = in0.uv01.xy;
+    out.uv1 = in0.uv01.zw;
+    out.uv2 = in0.uv23.xy;
     return out;
 }
 
@@ -371,8 +376,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     // TODO: Rename these in the shadergen itself?
     let a_Position = vec4(in.position, 0.0);
     let a_TexCoord0 = vec4(in.uv0, 0.0, 0.0);
-    let a_TexCoord1 = vec4(0.0);
-    let a_TexCoord2 = vec4(0.0);
+    let a_TexCoord1 = vec4(in.uv1, 0.0, 0.0);
+    let a_TexCoord2 = vec4(in.uv2, 0.0, 0.0);
     let a_Normal = vec4(vertex_normal, 0.0);
     let a_Tangent = vec4(vertex_tangent, 0.0);
     let a_Binormal = vec4(vertex_bitangent, 0.0);

@@ -173,7 +173,8 @@ fn create_mesh(
             color: Vec4::splat(0.5),
             indices: UVec4::ZERO,
             weights: Vec4::ZERO,
-            uv0: Vec4::ZERO,
+            uv01: Vec4::ZERO,
+            uv23: Vec4::ZERO,
         })
         .collect();
 
@@ -274,11 +275,47 @@ fn set_normals(normals: &Normals, vertices: &mut [crate::shader::model::VertexIn
 
 fn set_uvs(uvs: &Uvs, vertices: &mut [crate::shader::model::VertexInput0]) {
     match uvs {
-        Uvs::Float16(items) => set_attribute(vertices, &items[0], |v, i| {
-            v.uv0 = vec4(i.u.to_f32(), i.v.to_f32(), 0.0, 0.0);
-        }),
+        Uvs::Float16(items) => {
+            let mut uvs = items.iter();
+            if let Some(uv) = uvs.next() {
+                set_attribute(vertices, uv, |v, i| {
+                    v.uv01.x = i.u.to_f32();
+                    v.uv01.y = i.v.to_f32();
+                });
+            }
+            if let Some(uv) = uvs.next() {
+                set_attribute(vertices, uv, |v, i| {
+                    v.uv01.z = i.u.to_f32();
+                    v.uv01.w = i.v.to_f32();
+                });
+            }
+            if let Some(uv) = uvs.next() {
+                set_attribute(vertices, uv, |v, i| {
+                    v.uv23.x = i.u.to_f32();
+                    v.uv23.y = i.v.to_f32();
+                });
+            }
+        }
         Uvs::Float32(items) => {
-            set_attribute(vertices, &items[0], |v, i| v.uv0 = vec4(i.u, i.v, 0.0, 0.0));
+            let mut uvs = items.iter();
+            if let Some(uv) = uvs.next() {
+                set_attribute(vertices, uv, |v, i| {
+                    v.uv01.x = i.u;
+                    v.uv01.y = i.v;
+                });
+            }
+            if let Some(uv) = uvs.next() {
+                set_attribute(vertices, uv, |v, i| {
+                    v.uv01.z = i.u;
+                    v.uv01.w = i.v;
+                });
+            }
+            if let Some(uv) = uvs.next() {
+                set_attribute(vertices, uv, |v, i| {
+                    v.uv23.x = i.u;
+                    v.uv23.y = i.v;
+                });
+            }
         }
     }
 }
