@@ -3,6 +3,8 @@ struct Camera {
     view: mat4x4<f32>,
     projection: mat4x4<f32>,
     view_projection: mat4x4<f32>,
+    view_rot_inv_billboard: mat4x4<f32>,
+    view_rot_inv_billboard_y: mat4x4<f32>,
     position: vec4<f32>,
     resolution: vec2<f32>
 }
@@ -281,6 +283,8 @@ struct PerMesh {
     parent_bone: i32,
     has_skinning: u32,
     is_nsc: u32,
+    billboard: u32,
+    billboard_y: u32,
 }
 
 @group(3) @binding(0)
@@ -312,21 +316,37 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
     var tangent = in0.tangent.xyz;
     var normal = in0.normal.xyz;
     var bitangent = in0.bitangent.xyz;
+
+    if per_mesh.billboard == 1u {
+        // These matrices have no translation, so the fourth component technically doesn't matter.
+        if per_mesh.billboard_y == 1u {
+            position = (camera.view_rot_inv_billboard_y * vec4(position, 1.0)).xyz;
+            tangent = (camera.view_rot_inv_billboard_y * vec4(tangent, 0.0)).xyz;
+            bitangent = (camera.view_rot_inv_billboard_y * vec4(bitangent, 0.0)).xyz;
+            normal = (camera.view_rot_inv_billboard_y * vec4(normal, 0.0)).xyz;
+        } else {
+            position = (camera.view_rot_inv_billboard * vec4(position, 1.0)).xyz;
+            tangent = (camera.view_rot_inv_billboard * vec4(tangent, 0.0)).xyz;
+            bitangent = (camera.view_rot_inv_billboard * vec4(bitangent, 0.0)).xyz;
+            normal = (camera.view_rot_inv_billboard * vec4(normal, 0.0)).xyz;
+        }
+    }
+
     if per_mesh.parent_bone != -1 {
         let bone_index = per_mesh.parent_bone;
 
         if per_mesh.is_nsc == 1u {
             // Parenting with the parent transform.
-            position = (bone_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
-            tangent = (bone_transforms[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
-            bitangent = (bone_transforms[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
-            normal = (bone_transforms[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
+            position = (bone_transforms[bone_index] * vec4(position, 1.0)).xyz;
+            tangent = (bone_transforms[bone_index] * vec4(tangent, 0.0)).xyz;
+            bitangent = (bone_transforms[bone_index] * vec4(bitangent, 0.0)).xyz;
+            normal = (bone_transforms[bone_index] * vec4(normal, 0.0)).xyz;
         } else {
             // Parenting that assumes the base parent transform is already applied.
-            position = (skinning_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
-            tangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.tangent.xyz, 0.0)).xyz;
-            bitangent = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.bitangent.xyz, 0.0)).xyz;
-            normal = (skinning_transforms_inv_transpose[bone_index] * vec4(in0.normal.xyz, 0.0)).xyz;
+            position = (skinning_transforms[bone_index] * vec4(position, 1.0)).xyz;
+            tangent = (skinning_transforms_inv_transpose[bone_index] * vec4(tangent, 0.0)).xyz;
+            bitangent = (skinning_transforms_inv_transpose[bone_index] * vec4(bitangent, 0.0)).xyz;
+            normal = (skinning_transforms_inv_transpose[bone_index] * vec4(normal, 0.0)).xyz;
         }
     } else if per_mesh.has_skinning == 1u {
         position = vec3(0.0);

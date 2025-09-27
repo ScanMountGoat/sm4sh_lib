@@ -1,5 +1,5 @@
 use encase::{ShaderSize, ShaderType, StorageBuffer, UniformBuffer, internal::WriteInto};
-use glam::{Mat4, Vec4, vec2};
+use glam::{Mat4, Vec4, vec2, vec4};
 use sm4sh_model::database::ShaderDatabase;
 use wgpu::util::DeviceExt;
 
@@ -115,10 +115,20 @@ pub struct CameraData {
 
 impl CameraData {
     fn to_shader_data(self) -> shader::model::Camera {
+        // Undo the view rotation without affecting translation.
+        let mut view_rot_inv_billboard = self.view.inverse();
+        *view_rot_inv_billboard.col_mut(3) = vec4(0.0, 0.0, 0.0, 1.0);
+
+        // Always point up for the y-axis.
+        let mut view_rot_inv_billboard_y = view_rot_inv_billboard;
+        *view_rot_inv_billboard_y.col_mut(1) = vec4(0.0, 1.0, 0.0, 0.0);
+
         crate::shader::model::Camera {
             view: self.view,
             projection: self.projection,
             view_projection: self.view_projection,
+            view_rot_inv_billboard,
+            view_rot_inv_billboard_y,
             position: self.position,
             resolution: vec2(self.width as f32, self.height as f32),
         }
