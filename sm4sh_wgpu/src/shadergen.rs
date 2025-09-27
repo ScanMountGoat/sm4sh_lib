@@ -212,7 +212,7 @@ fn parameter_wgsl(p: &Parameter) -> Option<String> {
 fn parameter_wgsl_inner(p: &Parameter, buffer_name: &str) -> Option<String> {
     Some(format!(
         "{buffer_name}.{}{}{}",
-        p.field,
+        p.field.to_snake(),
         index_wgsl(p.index),
         channel_wgsl(p.channel)
     ))

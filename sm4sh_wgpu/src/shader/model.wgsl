@@ -10,13 +10,12 @@ struct Camera {
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 
-// TODO: Use snake_case
 // FB0 in shaders.
 struct Fb0 {
-    depthOfField0: vec4<f32>,
-    depthOfField1: vec4<f32>,
-    depthOfFieldTexSize: vec4<f32>,
-    projInvMatrix: mat4x4<f32>,
+    depth_of_field0: vec4<f32>,
+    depth_of_field1: vec4<f32>,
+    depth_of_field_tex_size: vec4<f32>,
+    proj_inv_matrix: mat4x4<f32>,
     refraction_param: vec4<f32>,
     proj_to_view: vec4<f32>,
     view_to_proj: vec4<f32>,
@@ -30,28 +29,28 @@ struct Fb0 {
     sun_shaft_blur_param: array<vec4<f32>, 4>,
     sun_shaft_composite_param: array<vec4<f32>, 2>,
     glare_abstract_param: vec4<f32>,
-    renderTargetTexSize: vec4<f32>,
+    render_target_tex_size: vec4<f32>,
     glare_fog_param: array<vec4<f32>, 2>,
     glare_simple_color: vec4<f32>,
-    pad0_FB0: vec4<f32>,
+    pad0_fb0: vec4<f32>,
     lens_flare_param: vec4<f32>,
     outline_param: vec4<f32>,
     post_reflection_color: vec4<f32>,
-    MultiShadowMatrix: array<mat4x4<f32>, 4>,
-    ShadowMapMatrix: mat4x4<f32>,
+    multi_shadow_matrix: array<mat4x4<f32>, 4>,
+    shadow_map_matrix: mat4x4<f32>,
     view: mat4x4<f32>,
     eye: vec4<f32>,
-    constantColor: vec4<f32>,
-    lightMapPos: vec4<f32>,
-    reflectionGain: vec4<f32>,
-    hdrConstant: vec4<f32>,
-    _g_fresnelColor: vec4<f32>,
+    constant_color: vec4<f32>,
+    light_map_pos: vec4<f32>,
+    reflection_gain: vec4<f32>,
+    hdr_constant: vec4<f32>,
+    _g_fresnel_color: vec4<f32>,
     effect_light_param0: vec4<f32>,
     effect_light_param1: vec4<f32>,
-    bgRotInv: mat4x4<f32>,
-    reflectionColor1: vec4<f32>,
-    reflectionColor2: vec4<f32>,
-    reflectionColor3: vec4<f32>,
+    bg_rot_inv: mat4x4<f32>,
+    reflection_color1: vec4<f32>,
+    reflection_color2: vec4<f32>,
+    reflection_color3: vec4<f32>,
     effect_light_param2: vec4<f32>,
 }
 
@@ -60,43 +59,43 @@ var<uniform> fb0: Fb0;
 
 // FB1 in shaders.
 struct Fb1 {
-    lightMapMatrix: mat4x4<f32>,
-    blinkColor: vec4<f32>,
-    g_constantVolume: vec4<f32>,
-    g_constantOffset: vec4<f32>,
-    uvScrollCounter: vec4<f32>,
-    spycloakParams: vec4<f32>,
-    compressParam: vec4<f32>,
-    g_fresnelColor: vec4<f32>,
-    depthOffset: vec4<f32>,
-    outlineColor: vec4<f32>,
-    pad0_FB1: array<vec4<f32>, 3>,
-    lightMapColorGain: vec4<f32>,
-    lightMapColorOffset: vec4<f32>,
-    ceilingDir: vec4<f32>,
-    ceilingColor: vec4<f32>,
-    groundColor: vec4<f32>,
-    ambientColor: vec4<f32>,
-    lightDirColor1: vec4<f32>,
-    lightDirColor2: vec4<f32>,
-    lightDirColor3: vec4<f32>,
-    lightDir1: vec4<f32>,
-    lightDir2: vec4<f32>,
-    lightDir3: vec4<f32>,
-    fogColor: vec4<f32>,
-    g_fresnelOffset: vec4<f32>,
-    ShadowMapParam: vec4<f32>,
-    charShadowColor: vec4<f32>,
-    charShadowColor2: vec4<f32>,
-    softLightingParams2: vec4<f32>,
-    bgShadowColor: vec4<f32>,
-    g_iblColorGain: vec4<f32>,
-    g_iblColorOffset: vec4<f32>,
-    g_constantMin: vec4<f32>,
-    loupeShadowParams: vec4<f32>,
-    softLightColorGain: vec4<f32>,
-    softLightColorOffset: vec4<f32>,
-    characterColor: vec4<f32>,
+    light_map_matrix: mat4x4<f32>,
+    blink_color: vec4<f32>,
+    g_constant_volume: vec4<f32>,
+    g_constant_offset: vec4<f32>,
+    uv_scroll_counter: vec4<f32>,
+    spycloak_params: vec4<f32>,
+    compress_param: vec4<f32>,
+    g_fresnel_color: vec4<f32>,
+    depth_offset: vec4<f32>,
+    outline_color: vec4<f32>,
+    pad0_fb1: array<vec4<f32>, 3>,
+    light_map_color_gain: vec4<f32>,
+    light_map_color_offset: vec4<f32>,
+    ceiling_dir: vec4<f32>,
+    ceiling_color: vec4<f32>,
+    ground_color: vec4<f32>,
+    ambient_color: vec4<f32>,
+    light_dir_color1: vec4<f32>,
+    light_dir_color2: vec4<f32>,
+    light_dir_color3: vec4<f32>,
+    light_dir1: vec4<f32>,
+    light_dir2: vec4<f32>,
+    light_dir3: vec4<f32>,
+    fog_color: vec4<f32>,
+    g_fresnel_offset: vec4<f32>,
+    shadow_map_param: vec4<f32>,
+    char_shadow_color: vec4<f32>,
+    char_shadow_color2: vec4<f32>,
+    soft_lighting_params2: vec4<f32>,
+    bg_shadow_color: vec4<f32>,
+    g_ibl_color_gain: vec4<f32>,
+    g_ibl_color_offset: vec4<f32>,
+    g_constant_min: vec4<f32>,
+    loupe_shadow_params: vec4<f32>,
+    soft_light_color_gain: vec4<f32>,
+    soft_light_color_offset: vec4<f32>,
+    character_color: vec4<f32>,
 }
 
 @group(0) @binding(2)
@@ -104,8 +103,8 @@ var<uniform> fb1: Fb1;
 
 // FB3 in shaders.
 struct Fb3 {
-    hdrRange: vec4<f32>,
-    colrHdrRange: vec4<f32>
+    hdr_range: vec4<f32>,
+    colr_hdr_range: vec4<f32>
 }
 
 @group(0) @binding(3)
@@ -138,41 +137,41 @@ var<storage> skinning_transforms_inv_transpose: array<mat4x4<f32>>;
 // MC in shaders with only the used parameters.
 struct Uniforms {
     // NU_ parameters
-    alphaBlendParams: vec4<f32>,
-    angleFadeParams: vec4<f32>,
-    aoMinGain: vec4<f32>,
-    colorGain: vec4<f32>,
-    colorOffset: vec4<f32>,
-    colorSampler2UV: vec4<f32>,
-    colorSampler3UV: vec4<f32>,
-    colorSampler4UV: vec4<f32>,
-    colorSamplerUV: vec4<f32>,
-    colorStepUV: vec4<f32>,
-    customSoftLightParams: vec4<f32>,
-    diffuseColor: vec4<f32>,
-    dualNormalScrollParams: vec4<f32>,
-    finalColorGain: vec4<f32>,
-    finalColorGain2: vec4<f32>,
-    finalColorGain3: vec4<f32>,
-    fogParams: vec4<f32>,
-    fresnelColor: vec4<f32>,
-    fresnelParams: vec4<f32>,
-    normalParams: vec4<f32>,
-    normalSamplerAUV: vec4<f32>,
-    normalSamplerBUV: vec4<f32>,
-    reflectionColor: vec4<f32>,
-    reflectionParams: vec4<f32>,
-    rotatePivotUV: vec4<f32>,
-    softLightingParams: vec4<f32>,
-    specularColor: vec4<f32>,
-    specularColorGain: vec4<f32>,
-    specularParams: vec4<f32>,
-    testParam0: vec4<f32>,
-    testParam1: vec4<f32>,
-    testParam2: vec4<f32>,
-    testParam3: vec4<f32>,
-    translucentColor: vec4<f32>,
-    zOffset: vec4<f32>,
+    alpha_blend_params: vec4<f32>,
+    angle_fade_params: vec4<f32>,
+    ao_min_gain: vec4<f32>,
+    color_gain: vec4<f32>,
+    color_offset: vec4<f32>,
+    color_sampler2_u_v: vec4<f32>,
+    color_sampler3_u_v: vec4<f32>,
+    color_sampler4_u_v: vec4<f32>,
+    color_sampler_u_v: vec4<f32>,
+    color_step_u_v: vec4<f32>,
+    custom_soft_light_params: vec4<f32>,
+    diffuse_color: vec4<f32>,
+    dual_normal_scroll_params: vec4<f32>,
+    final_color_gain: vec4<f32>,
+    final_color_gain2: vec4<f32>,
+    final_color_gain3: vec4<f32>,
+    fog_params: vec4<f32>,
+    fresnel_color: vec4<f32>,
+    fresnel_params: vec4<f32>,
+    normal_params: vec4<f32>,
+    normal_sampler_a_u_v: vec4<f32>,
+    normal_sampler_b_u_v: vec4<f32>,
+    reflection_color: vec4<f32>,
+    reflection_params: vec4<f32>,
+    rotate_pivot_u_v: vec4<f32>,
+    soft_lighting_params: vec4<f32>,
+    specular_color: vec4<f32>,
+    specular_color_gain: vec4<f32>,
+    specular_params: vec4<f32>,
+    test_param0: vec4<f32>,
+    test_param1: vec4<f32>,
+    test_param2: vec4<f32>,
+    test_param3: vec4<f32>,
+    translucent_color: vec4<f32>,
+    z_offset: vec4<f32>,
 }
 
 @group(2) @binding(5)
@@ -180,29 +179,29 @@ var<uniform> uniforms: Uniforms;
 
 // MC_EFFECT in shaders with only the used parameters.
 struct EffectUniforms {
-    angleFadeParams: vec4<f32>,
-    effColorGain: vec4<f32>,
-    effCombinerAlpha0: vec4<f32>,
-    effCombinerColor0: vec4<f32>,
-    effCombinerColor1: vec4<f32>,
-    effDepthOffset: vec4<f32>,
-    effMTBlendAlpha: vec4<f32>,
-    effMTBlendParam0: vec4<f32>,
-    effMTBlendParam1: vec4<f32>,
-    effMTBlendParam2: vec4<f32>,
-    effRefractParam: vec4<f32>,
-    effRotUV: vec4<f32>,
-    effScaleUV: vec4<f32>,
-    effSilhouetteColor: vec4<f32>,
-    effSunShaftParams0: vec4<f32>,
-    effSunShaftParams1: vec4<f32>,
-    effTransUV: vec4<f32>,
-    effUniverseParam: vec4<f32>,
-    effYGradColorBottom: vec4<f32>,
-    effYGradColorTop: vec4<f32>,
-    effYGradParam: vec4<f32>,
-    normalParams: vec4<f32>,
-    normalSamplerAUV: vec4<f32>,
+    angle_fade_params: vec4<f32>,
+    eff_color_gain: vec4<f32>,
+    eff_combiner_alpha0: vec4<f32>,
+    eff_combiner_color0: vec4<f32>,
+    eff_combiner_color1: vec4<f32>,
+    eff_depth_offset: vec4<f32>,
+    eff_mt_blend_alpha: vec4<f32>,
+    eff_mt_blend_param0: vec4<f32>,
+    eff_mt_blend_param1: vec4<f32>,
+    eff_mt_blend_param2: vec4<f32>,
+    eff_refract_param: vec4<f32>,
+    eff_rot_u_v: vec4<f32>,
+    eff_scale_u_v: vec4<f32>,
+    eff_silhouette_color: vec4<f32>,
+    eff_sun_shaft_params0: vec4<f32>,
+    eff_sun_shaft_params1: vec4<f32>,
+    eff_trans_u_v: vec4<f32>,
+    eff_universe_param: vec4<f32>,
+    eff_y_grad_color_bottom: vec4<f32>,
+    eff_y_grad_color_top: vec4<f32>,
+    eff_y_grad_param: vec4<f32>,
+    normal_params: vec4<f32>,
+    normal_sampler_a_u_v: vec4<f32>,
 }
 
 @group(2) @binding(6)
@@ -342,21 +341,6 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
     return out;
 }
 
-// TODO: Port actual code from in game.
-fn apply_normal_map(normal_map: vec3<f32>, tangent: vec3<f32>, bitangent: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-    // Normal mapping is a change of basis using the TBN vectors.
-    let x = normal_map.x;
-    let y = normal_map.y;
-    let z = normal_map.z;
-    return normalize(tangent * x + bitangent * y + normal * z);
-}
-
-// Translated from Link's face fragment shader in RenderDoc with Cemu.
-fn diffuse_ao_blend(ao: f32, ao_min_gain: vec4<f32>) -> vec3<f32> {
-    // Calculate the effect of NU_aoMinGain on the ambient occlusion map.
-    return clamp((1.0 - ao_min_gain.rgb) * ao + ao_min_gain.rgb, vec3(0.0), vec3(1.0));
-}
-
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Required for wgsl_to_wgpu reachability analysis to include these resources.
@@ -369,11 +353,11 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = textureSample(diffuse_texture, diffuse_sampler, vec2(0.0));
     _unused = textureSample(light_map_texture, light_map_sampler, vec2(0.0));
     _unused = textureSample(normal2_texture, normal2_sampler, vec2(0.0));
-    _unused = uniforms.aoMinGain;
-    _unused = effect_uniforms.angleFadeParams;
+    _unused = uniforms.ao_min_gain;
+    _unused = effect_uniforms.angle_fade_params;
     _unused = fb0.lens_flare_param;
-    _unused = fb1.ShadowMapParam;
-    _unused = fb3.colrHdrRange;
+    _unused = fb1.shadow_map_param;
+    _unused = fb3.colr_hdr_range;
     _unused = fb4.effect_light_entry;
     _unused = vec4<f32>(fb5.effect_light_area);
     _unused = camera.projection[0];
