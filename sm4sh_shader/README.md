@@ -1,4 +1,7 @@
 # sm4sh_shader
+sm4sh_shader is a CLI tool for analyzing in game shaders and creating the shader database.
+
+The current implementation uses the shader graph analysis and query logic from [xc3_shader](https://github.com/ScanMountGoat/xc3_lib/tree/main/xc3_shader).
 
 ## Usage
 Creating a shader database requires running all the commands in the appropriate order.
