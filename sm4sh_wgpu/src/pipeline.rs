@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{LazyLock, Mutex},
+};
 
 use sm4sh_model::{AlphaFunc, DstFactor, NudMesh, SrcFactor};
 
@@ -15,11 +18,13 @@ pub struct ShaderKey {
     pub alpha_func: AlphaFunc,
 }
 
+static SHADERS: LazyLock<Mutex<HashMap<Option<ShaderKey>, wgpu::ShaderModule>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
 pub fn model_pipeline(
     device: &wgpu::Device,
     shared_data: &SharedData,
     mesh: &NudMesh,
-    shader_cache: &mut HashMap<Option<ShaderKey>, wgpu::ShaderModule>,
 ) -> wgpu::RenderPipeline {
     let topology = match mesh.primitive_type {
         sm4sh_model::PrimitiveType::TriangleList => wgpu::PrimitiveTopology::TriangleList,
@@ -49,24 +54,29 @@ pub fn model_pipeline(
 
     // Shader IDs are often used more than once for expression meshes or split meshes.
     // Only compile unique shaders once to greatly reduce loading times.
-    let module = shader_cache.entry(key).or_insert_with(|| {
-        let program = key.and_then(|key| shared_data.database.get_shader(key.id));
-        let alpha_test_ref_func = key.as_ref().map(|m| (m.alpha_test_ref, m.alpha_func));
+    let mut shaders = SHADERS.lock().unwrap();
+    let module = shaders
+        .entry(key)
+        .or_insert_with(|| {
+            let program = key.and_then(|key| shared_data.database.get_shader(key.id));
+            let alpha_test_ref_func = key.as_ref().map(|m| (m.alpha_test_ref, m.alpha_func));
 
-        let shader_wgsl = ShaderWgsl::new(program, alpha_test_ref_func);
-        let source = shader_wgsl.create_model_shader();
-        device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(source)),
+            let shader_wgsl = ShaderWgsl::new(program, alpha_test_ref_func);
+            let source = shader_wgsl.create_model_shader();
+            device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(source)),
+            })
         })
-    });
+        .clone();
+    drop(shaders);
 
     let label = key.map(|key| format!("{:X}", key.id));
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: label.as_deref(),
         layout: Some(&shared_data.model_layout),
         vertex: crate::shader::model::vertex_state(
-            module,
+            &module,
             &crate::shader::model::vs_main_entry(wgpu::VertexStepMode::Vertex),
         ),
         primitive: wgpu::PrimitiveState {
@@ -84,7 +94,7 @@ pub fn model_pipeline(
         }),
         multisample: wgpu::MultisampleState::default(),
         fragment: Some(crate::shader::model::fragment_state(
-            module,
+            &module,
             &crate::shader::model::fs_main_entry([Some(wgpu::ColorTargetState {
                 format: COLOR_FORMAT,
                 blend,

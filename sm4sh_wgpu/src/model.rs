@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use glam::{Mat4, UVec4, Vec4, Vec4Swizzles};
 use sm4sh_model::{
@@ -8,10 +8,8 @@ use sm4sh_model::{
 use wgpu::util::DeviceExt;
 
 use crate::{
-    CameraData, DeviceBufferExt, QueueBufferExt, SharedData,
-    material::create_bind_group2,
-    pipeline::{ShaderKey, model_pipeline},
-    texture::create_texture,
+    CameraData, DeviceBufferExt, QueueBufferExt, SharedData, material::create_bind_group2,
+    pipeline::model_pipeline, texture::create_texture,
 };
 
 pub struct Model {
@@ -120,8 +118,6 @@ pub fn load_model(
         },
     );
 
-    let mut shader_cache = HashMap::new();
-
     Model {
         groups: model
             .groups
@@ -139,7 +135,6 @@ pub fn load_model(
                             &default_texture,
                             &default_cube_texture,
                             shared_data,
-                            &mut shader_cache,
                         )
                     })
                     .collect(),
@@ -164,7 +159,6 @@ fn create_mesh(
     default_texture: &wgpu::TextureView,
     default_cube_texture: &wgpu::TextureView,
     shared_data: &SharedData,
-    shader_cache: &mut HashMap<Option<ShaderKey>, wgpu::ShaderModule>,
 ) -> Mesh {
     let mut vertices: Vec<_> = mesh
         .vertices
@@ -232,7 +226,7 @@ fn create_mesh(
         },
     );
 
-    let pipeline = model_pipeline(device, shared_data, mesh, shader_cache);
+    let pipeline = model_pipeline(device, shared_data, mesh);
 
     let is_transparent = mesh
         .material1
