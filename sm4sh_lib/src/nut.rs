@@ -1,4 +1,5 @@
 use binrw::{BinRead, BinWrite, binread};
+use bitflags::bitflags;
 use image_dds::{Surface, ddsfile::Dds};
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
@@ -37,7 +38,6 @@ pub struct Ntwu {
     pub textures: Vec<Texture>,
 }
 
-// TODO: Is caps2 like dds?
 #[binread]
 #[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(stream = r)]
@@ -58,7 +58,7 @@ pub struct Texture {
     pub width: u16,
     pub height: u16,
     pub unk5: u32, // TODO: 0 for ntp3?
-    pub caps2: u32,
+    pub caps2: Caps2,
 
     // TODO: NTP3 image data isn't aligned at all?
     // TODO: Separate type for non tiled texture?
@@ -85,6 +85,69 @@ pub struct Texture {
 
     pub ext: Ext,
     pub gidx: Gidx,
+}
+
+// Identical to flags used for DDS.
+// https://github.com/SiegeEngine/ddsfile/blob/3126d7694e42f7b6c84a19d550c5b61aeb8b5869/src/header.rs#L364-L391
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Caps2: u32 {
+        /// Required for a cube map
+        const CUBEMAP = 0x200;
+        /// Required when these surfaces are stored in a cubemap
+        const CUBEMAP_POSITIVEX = 0x400;
+        /// Required when these surfaces are stored in a cubemap
+        const CUBEMAP_NEGATIVEX = 0x800;
+        /// Required when these surfaces are stored in a cubemap
+        const CUBEMAP_POSITIVEY = 0x1000;
+        /// Required when these surfaces are stored in a cubemap
+        const CUBEMAP_NEGATIVEY = 0x2000;
+        /// Required when these surfaces are stored in a cubemap
+        const CUBEMAP_POSITIVEZ = 0x4000;
+        /// Required when these surfaces are stored in a cubemap
+        const CUBEMAP_NEGATIVEZ = 0x8000;
+        /// Required for a volume texture
+        const VOLUME = 0x200000;
+        /// Identical to setting all cubemap direction flags
+        const CUBEMAP_ALLFACES = Self::CUBEMAP_POSITIVEX.bits()
+            | Self::CUBEMAP_NEGATIVEX.bits()
+            | Self::CUBEMAP_POSITIVEY.bits()
+            | Self::CUBEMAP_NEGATIVEY.bits()
+            | Self::CUBEMAP_POSITIVEZ.bits()
+            | Self::CUBEMAP_NEGATIVEZ.bits();
+    }
+}
+
+impl BinRead for Caps2 {
+    type Args<'a> = ();
+
+    fn read_options<R: std::io::Read + std::io::Seek>(
+        reader: &mut R,
+        endian: binrw::Endian,
+        _args: Self::Args<'_>,
+    ) -> binrw::BinResult<Self> {
+        let pos = reader.stream_position()?;
+        let value = u32::read_options(reader, endian, ())?;
+        Self::from_bits(value).ok_or(binrw::Error::AssertFail {
+            pos,
+            message: format!("Invalid CAPS2 {value:X?}"),
+        })
+    }
+}
+
+impl Xc3Write for Caps2 {
+    type Offsets<'a>
+        = ()
+    where
+        Self: 'a;
+
+    fn xc3_write<W: std::io::Write + std::io::Seek>(
+        &self,
+        writer: &mut W,
+        endian: xc3_write::Endian,
+    ) -> xc3_write::Xc3Result<Self::Offsets<'_>> {
+        self.bits().xc3_write(writer, endian)
+    }
 }
 
 // TODO: Test these in game with renderdoc.
@@ -219,7 +282,6 @@ impl Texture {
     }
 
     pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, wiiu_swizzle::SwizzleError> {
-        // TODO: cube maps
         let mut data = self.deswizzle()?;
         if self.format == NutFormat::Rgb5A1Unorm {
             // image_dds only supports Bgr5A1Unorm.
@@ -230,7 +292,11 @@ impl Texture {
             width: self.width as u32,
             height: self.height as u32,
             depth: 1,
-            layers: 1,
+            layers: if self.caps2 == Caps2::CUBEMAP.union(Caps2::CUBEMAP_ALLFACES) {
+                6
+            } else {
+                1
+            },
             mipmaps: self.mipmap_count as u32,
             image_format: self.format.into(),
             data,

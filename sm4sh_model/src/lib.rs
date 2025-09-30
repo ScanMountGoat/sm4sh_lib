@@ -111,6 +111,7 @@ pub struct ImageTexture {
     pub width: u32,
     pub height: u32,
     pub mipmap_count: u32,
+    pub layers: u32,
     pub image_format: NutFormat,
     pub image_data: Vec<u8>,
 }
@@ -513,6 +514,7 @@ impl ImageTexture {
             width: surface.width,
             height: surface.height,
             mipmap_count: surface.mipmaps,
+            layers: surface.layers,
             image_format: surface.image_format.into(),
             image_data: surface.data.as_ref().to_vec(),
         }
