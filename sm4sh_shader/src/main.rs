@@ -8,6 +8,7 @@ use sm4sh_lib::{
     nsh::Nsh,
 };
 use sm4sh_model::database::{ShaderDatabase, ShaderProgram};
+use smol_str::SmolStr;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Write,
@@ -65,7 +66,7 @@ enum Commands {
         shader_ids_shaders: String,
         /// The folder containing the output of the annotate-shaders command.
         nsh_shader_dump: String,
-        /// The output JSON database.
+        /// The output database.
         output: String,
     },
     /// Find output dependencies for the given GLSL shader program.
@@ -249,7 +250,7 @@ fn create_shader_database(
         .par_bridge()
         .map(|line| {
             let parts: Vec<_> = line.split(",").map(|s| s.trim()).collect();
-            let shader_id = parts[0].to_string();
+            let shader_id = u32::from_str_radix(&parts[0], 16)?;
             let nsh_index: usize = parts[2].split(".").nth(1).unwrap().parse()?;
 
             let gx2_path = folder.join(format!("texas_cross.{nsh_index}.frag.gx2.bin"));
@@ -258,10 +259,11 @@ fn create_shader_database(
             let gx2_path = folder.join(format!("texas_cross.{nsh_index}.vert.gx2.bin"));
             let vert_gx2 = Gx2VertexShader::from_file(gx2_path)?;
 
-            let samplers = frag_gx2
+            // Sort string names in ascending order by their location.
+            let samplers: BTreeMap<_, _> = frag_gx2
                 .sampler_vars
                 .iter()
-                .map(|s| (s.location as usize, s.name.clone()))
+                .map(|s| (s.location, SmolStr::from(&s.name)))
                 .collect();
 
             // NU_ parameters are in the MC block.
@@ -269,7 +271,7 @@ fn create_shader_database(
             if let Some(block_index) = frag_gx2.uniform_blocks.iter().position(|b| b.name == "MC") {
                 for var in frag_gx2.uniform_vars.iter() {
                     if var.uniform_block_index == block_index as i32 {
-                        parameters.insert(var.offset as usize, var.name.clone());
+                        parameters.insert(var.offset, SmolStr::from(&var.name));
                     }
                 }
             }
@@ -284,10 +286,10 @@ fn create_shader_database(
 
             let program = shader_from_glsl(&vertex, &fragment);
 
-            let attributes = vert_gx2
+            let attributes: BTreeMap<_, _> = vert_gx2
                 .attributes
                 .iter()
-                .map(|a| (a.location as usize, a.name.clone()))
+                .map(|a| (a.location, SmolStr::from(&a.name)))
                 .collect();
 
             Ok((
@@ -295,17 +297,16 @@ fn create_shader_database(
                 ShaderProgram {
                     output_dependencies: program.output_dependencies,
                     exprs: program.exprs.into_iter().map(convert_expr).collect(),
-                    attributes,
-                    samplers,
-                    parameters,
+                    attributes: attributes.into_values().collect(),
+                    samplers: samplers.into_values().collect(),
+                    parameters: parameters.into_values().collect(),
                 },
             ))
         })
         .collect::<anyhow::Result<_>>()?;
 
-    let database = ShaderDatabase { programs };
-    let json = serde_json::to_string(&database)?;
-    std::fs::write(output, &json)?;
+    let database = ShaderDatabase::from_programs(programs);
+    database.save(output)?;
     Ok(())
 }
 

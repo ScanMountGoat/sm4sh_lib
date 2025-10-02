@@ -42,7 +42,7 @@ pub fn create_bind_group2(
 
     if let Some(material) = &mesh.material1 {
         if let Some(program) = shared_data.database.get_shader(material.shader_id) {
-            for ((_, s), texture) in program.samplers.iter().zip(&material.textures) {
+            for (s, texture) in program.samplers.iter().zip(&material.textures) {
                 match s.as_str() {
                     "colorSampler" => {
                         color_texture = hash_to_texture.get(&texture.hash);

@@ -1,16 +1,17 @@
 use std::{collections::BTreeMap, path::Path};
 
+use binrw::BinResult;
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
+use strum::FromRepr;
 pub use xc3_shader::expr::{Attribute, OutputExpr, Parameter, Texture, Value};
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct ShaderDatabase {
-    pub programs: BTreeMap<String, ShaderProgram>,
-}
+mod io;
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
+pub struct ShaderDatabase(io::ShaderDatabaseIndexed);
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct ShaderProgram {
     /// Indices into [exprs](#structfield.exprs) for values assigned to a fragment output.
     pub output_dependencies: IndexMap<SmolStr, usize>,
@@ -18,24 +19,36 @@ pub struct ShaderProgram {
     /// Unique exprs used for this program.
     pub exprs: Vec<OutputExpr<Operation>>,
 
-    pub attributes: BTreeMap<usize, String>,
-    pub samplers: BTreeMap<usize, String>,
-    pub parameters: BTreeMap<usize, String>,
+    // Used for validation.
+    pub attributes: Vec<SmolStr>,
+    pub samplers: Vec<SmolStr>,
+    pub parameters: Vec<SmolStr>,
 }
 
 impl ShaderDatabase {
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
-        // TODO: Avoid unwrap.
-        let json = std::fs::read_to_string(path).unwrap();
-        serde_json::from_str(&json).unwrap()
+    /// Load the database data from `path`.
+    pub fn from_file<P: AsRef<Path>>(path: P) -> BinResult<Self> {
+        // Keep the indexed database to improve load times and reduce memory usage.
+        io::ShaderDatabaseIndexed::from_file(path).map(Self)
     }
 
-    pub fn get_shader(&self, shader_id: u32) -> Option<&ShaderProgram> {
-        self.programs.get(&format!("{shader_id:X?}"))
+    /// Serialize and save the database data to `path`.
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> BinResult<()> {
+        self.0.save(path)?;
+        Ok(())
+    }
+
+    pub fn get_shader(&self, shader_id: u32) -> Option<ShaderProgram> {
+        self.0.get_shader(shader_id)
+    }
+
+    /// Create the internal database representation from non indexed data.
+    pub fn from_programs(programs: BTreeMap<u32, ShaderProgram>) -> Self {
+        Self(io::ShaderDatabaseIndexed::from_programs(programs))
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, FromRepr)]
 pub enum Operation {
     Add,
     Sub,

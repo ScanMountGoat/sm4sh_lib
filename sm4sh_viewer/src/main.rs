@@ -98,7 +98,7 @@ impl<'a> State<'a> {
         let camera = calculate_camera_data(size, translation, rotation_xyz);
         renderer.update_camera(&queue, &camera);
 
-        let database = ShaderDatabase::from_file(&cli.database);
+        let database = ShaderDatabase::from_file(&cli.database)?;
         let shared_data = SharedData::new(&device, database);
 
         let nud_model = sm4sh_model::load_model(&cli.file)?;
@@ -327,7 +327,7 @@ fn calculate_camera_data(
 struct Cli {
     /// The nud file
     file: String,
-    /// The shader database JSON file
+    /// The shader database file
     database: String,
     /// The animation file
     anim: Option<String>,

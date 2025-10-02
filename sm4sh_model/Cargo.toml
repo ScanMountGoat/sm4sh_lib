@@ -12,12 +12,13 @@ image_dds = { workspace = true, default-features = false, features = ["ddsfile"]
 glam.workspace = true
 approx.workspace = true
 log.workspace = true
-ordered-float = { workspace = true, features = ["serde"] }
-serde.workspace = true
-serde_json.workspace = true
-indexmap = { workspace = true, features = ["serde"] }
-smol_str = { workspace = true, features = ["serde"] }
-xc3_shader = { workspace = true, default-features = false, features = ["serde"] }
+ordered-float.workspace = true
+indexmap.workspace = true
+smol_str.workspace = true
+xc3_shader = { workspace = true, default-features = false }
+varint-rs = "2.2.0"
+ahash = "0.8.12"
+strum = { version = "0.26.3", features = ["derive"] }
 
 [dev-dependencies]
 hexlit = "0.5.5"

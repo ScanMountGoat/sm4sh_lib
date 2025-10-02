@@ -51,7 +51,7 @@ fn calculate_camera_data(
 struct Cli {
     /// The source folder to search recursively for models and save the final PNG renders.
     root_folder: String,
-    /// The shader database JSON file
+    /// The shader database file
     database: String,
 }
 
@@ -109,7 +109,7 @@ fn main() -> anyhow::Result<()> {
     let output = device.create_texture(&texture_desc);
     let output_view = output.create_view(&Default::default());
 
-    let database = ShaderDatabase::from_file(&cli.database);
+    let database = ShaderDatabase::from_file(&cli.database)?;
     let shared_data = SharedData::new(&device, database);
 
     // Load and render folders individually to save on memory.

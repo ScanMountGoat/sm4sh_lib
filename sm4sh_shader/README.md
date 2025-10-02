@@ -10,7 +10,7 @@ Creating a shader database requires running all the commands in the appropriate 
 sm4sh_shader dump-shaders "data/shader/texas_cross.nsh" "shader dump" "gfd-tool.exe"
 sm4sh_shader match-shaders "shader_ids.txt" "shader_cemu_names.txt" "data/shader/texas_cross.nsh" "shader_ids_shaders.txt"
 sm4sh_shader annotate-shaders "shader dump"
-sm4sh_shader shader-database "shader_ids_shaders.txt" "shader dump" "shaders.json"
+sm4sh_shader shader-database "shader_ids_shaders.txt" "shader dump" "shaders.bin"
 ```
 
 The Cemu names for each shader were dumped from RenderDoc using the following Python script. Enable Debug > Dump > Shaders prior to launching a game. Matching up the shader IDs to shader binaries requires a model.nud with one mesh draw call for each shader ID in ascending order.
