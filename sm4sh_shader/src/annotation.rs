@@ -422,13 +422,15 @@ fn uniform_array_indices_channel(
             )
         {
             // TODO: Add unit tests for this?
-            let new_index = (float_index - uniform_float_start) / size_in_floats;
-            // Matrix arrays also need an index for the column vector.
-            let second_index = (float_index - uniform_float_start - new_index * size_in_floats)
-                / element_size_in_floats;
             if var.count > 1 {
+                let new_index = (float_index - uniform_float_start) / size_in_floats;
+                // Matrix arrays also need an index for the column vector.
+                let second_index = (float_index - uniform_float_start - new_index * size_in_floats)
+                    / element_size_in_floats;
                 Some((vec![new_index, second_index], new_channel))
             } else {
+                // Just use the column index for matrices.
+                let new_index = (float_index - uniform_float_start) / element_size_in_floats;
                 Some((vec![new_index], new_channel))
             }
         } else {
