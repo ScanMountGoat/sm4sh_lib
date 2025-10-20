@@ -2,6 +2,7 @@ use std::path::Path;
 
 use clap::Parser;
 use futures::executor::block_on;
+use glam::{Vec3, Vec4, vec3};
 use log::error;
 use sm4sh_model::database::ShaderDatabase;
 use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData};
@@ -80,17 +81,6 @@ fn main() -> anyhow::Result<()> {
     }))?;
 
     let surface_format = wgpu::TextureFormat::Rgba8Unorm;
-    let renderer = Renderer::new(&device, WIDTH, HEIGHT, surface_format);
-
-    // TODO: Frame each model individually?
-
-    let camera = calculate_camera_data(
-        WIDTH,
-        HEIGHT,
-        glam::vec3(0.0, -8.0, -60.0),
-        glam::Vec3::ZERO,
-    );
-    renderer.update_camera(&queue, &camera);
 
     let texture_desc = TextureDescriptor {
         size: Extent3d {
@@ -133,6 +123,16 @@ fn main() -> anyhow::Result<()> {
         for i in 0..rayon::current_num_threads() {
             let paths = paths.iter().skip(i * n).take(n);
             s.spawn(|| {
+                let renderer = Renderer::new(&device, WIDTH, HEIGHT, surface_format);
+
+                // Create a unique buffer to avoid mapping a buffer from multiple threads.
+                let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                    size: WIDTH as u64 * HEIGHT as u64 * 4,
+                    usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                    label: None,
+                    mapped_at_creation: false,
+                });
+
                 for path in paths {
                     let nud_model = sm4sh_model::load_model(path);
 
@@ -141,15 +141,11 @@ fn main() -> anyhow::Result<()> {
                             let model =
                                 sm4sh_wgpu::load_model(&device, &queue, &nud_model, &shared_data);
 
-                            // Create a unique buffer to avoid mapping a buffer from multiple threads.
-                            let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                                size: WIDTH as u64 * HEIGHT as u64 * 4,
-                                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                                label: None,
-                                mapped_at_creation: false,
-                            });
+                            // Initialize the camera to frame the model.
+                            let camera = frame_bounds(model.bounding_sphere);
+                            renderer.update_camera(&queue, &camera);
 
-                            // Convert fighter/mario/model/body/c00/model.nud to mario_model_body_c00.
+                            // Convert data/fighter/mario/model/body/c00/model.nud to fighter_mario_model_body_c00.
                             let output_path = path
                                 .parent()
                                 .unwrap()
@@ -243,4 +239,13 @@ fn render_screenshot(
         buffer.save(output_path).unwrap();
     }
     output_buffer.unmap();
+}
+
+fn frame_bounds(bounding_sphere: Vec4) -> CameraData {
+    // Find the base of the triangle based on vertical FOV and bounding sphere "height".
+    // The aspect ratio is 1.0, so FOV_X is also FOV_Y.
+    let distance = bounding_sphere.w / FOV_Y.tan() * 2.0;
+    let translation = vec3(bounding_sphere.x, -bounding_sphere.y, -distance);
+    let rotation = Vec3::ZERO;
+    calculate_camera_data(WIDTH, HEIGHT, translation, rotation)
 }

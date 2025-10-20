@@ -21,6 +21,8 @@ pub struct Model {
     pub(crate) skinning_transforms_inv_transpose: wgpu::Buffer,
     pub(crate) bone_count: u32,
 
+    pub bounding_sphere: Vec4,
+
     bind_group1: crate::shader::model::bind_groups::BindGroup1,
 }
 
@@ -154,6 +156,7 @@ pub fn load_model(
         bone_count,
         skeleton: model.skeleton.clone(),
         bind_group1,
+        bounding_sphere: model.bounding_sphere,
     }
 }
 

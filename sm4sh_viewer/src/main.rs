@@ -3,7 +3,7 @@ use std::time::Instant;
 use anyhow::Context;
 use clap::Parser;
 use futures::executor::block_on;
-use glam::{Vec3, vec3};
+use glam::{Vec3, Vec4, vec3};
 use log::{error, info};
 use sm4sh_model::{
     animation::{Animation, load_animations},
@@ -92,17 +92,15 @@ impl<'a> State<'a> {
 
         let renderer = Renderer::new(&device, size.width, size.height, config.format);
 
-        // Initialize the camera transform.
-        let translation = vec3(0.0, -8.0, -50.0);
-        let rotation_xyz = Vec3::ZERO;
-        let camera = calculate_camera_data(size, translation, rotation_xyz);
-        renderer.update_camera(&queue, &camera);
-
         let database = ShaderDatabase::from_file(&cli.database)?;
         let shared_data = SharedData::new(&device, database);
 
         let nud_model = sm4sh_model::load_model(&cli.file)?;
         let model = load_model(&device, &queue, &nud_model, &shared_data);
+
+        // Initialize the camera transform.
+        let (translation, rotation_xyz, camera) = frame_bounds(size, model.bounding_sphere);
+        renderer.update_camera(&queue, &camera);
 
         let animations = cli
             .anim
@@ -292,6 +290,19 @@ impl<'a> State<'a> {
 
         window.set_title(&title);
     }
+}
+
+fn frame_bounds(
+    size: winit::dpi::PhysicalSize<u32>,
+    bounding_sphere: Vec4,
+) -> (Vec3, Vec3, CameraData) {
+    // Find the base of the triangle based on vertical FOV and bounding sphere "height".
+    // The aspect ratio is 1.0, so FOV_X is also FOV_Y.
+    let distance = bounding_sphere.w / FOV_Y.tan() * 2.0;
+    let translation = vec3(bounding_sphere.x, -bounding_sphere.y, -distance);
+    let rotation = Vec3::ZERO;
+    let camera = calculate_camera_data(size, translation, rotation);
+    (translation, rotation, camera)
 }
 
 fn calculate_camera_data(
