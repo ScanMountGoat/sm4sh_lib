@@ -67,8 +67,14 @@ pub fn load_model(
         .map(|t| {
             (
                 t.hash_id,
-                create_texture(device, queue, t)
-                    .create_view(&wgpu::TextureViewDescriptor::default()),
+                create_texture(device, queue, t).create_view(&wgpu::TextureViewDescriptor {
+                    dimension: if t.layers == 6 {
+                        Some(wgpu::TextureViewDimension::Cube)
+                    } else {
+                        Some(wgpu::TextureViewDimension::D2)
+                    },
+                    ..Default::default()
+                }),
             )
         })
         .collect();

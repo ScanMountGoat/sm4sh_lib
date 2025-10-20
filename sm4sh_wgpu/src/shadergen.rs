@@ -117,7 +117,14 @@ fn value_wgsl(value: &Value) -> Option<String> {
 
 fn texture_wgsl(t: &sm4sh_model::database::Texture) -> Option<String> {
     match t.name.as_str() {
-        "g_PCFTextureSampler" | "sampler0" | "Sampler11" | "samplerA" | "samplerB" => None,
+        "g_PCFTextureSampler"
+        | "sampler0"
+        | "Sampler11"
+        | "samplerA"
+        | "samplerB"
+        | "multiplicationSampler"
+        | "frameSampler" => None,
+        "colorSampler2" | "colorSampler3" => None, // TODO: load all color textures
         "g_VSMTextureSampler" => Some("1.0".to_string()), // TODO: proper shadow rendering.
         "reflectionCubeSampler" => Some(format!(
             "textureSample({}, {}, vec3({}, {}, {})){}",

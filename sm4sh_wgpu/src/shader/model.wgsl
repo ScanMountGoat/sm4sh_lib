@@ -225,6 +225,7 @@ var normal_texture: texture_2d<f32>;
 @group(2) @binding(10)
 var normal_sampler: sampler;
 
+// TODO: This can be a 2D or cube texture.
 // reflectionSampler in shaders.
 @group(2) @binding(11)
 var reflection_texture: texture_2d<f32>;
@@ -232,6 +233,7 @@ var reflection_texture: texture_2d<f32>;
 @group(2) @binding(12)
 var reflection_sampler: sampler;
 
+// TODO: This can be a 2D or cube texture.
 // reflectionCubeSampler in shaders.
 @group(2) @binding(13)
 var reflection_cube_texture: texture_cube<f32>;

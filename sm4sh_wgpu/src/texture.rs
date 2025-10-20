@@ -18,7 +18,7 @@ pub fn create_texture(
             size: wgpu::Extent3d {
                 width: texture.width,
                 height: texture.height,
-                depth_or_array_layers: 1,
+                depth_or_array_layers: texture.layers,
             },
             mip_level_count: 1,
             sample_count: 1,

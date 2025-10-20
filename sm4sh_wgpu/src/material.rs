@@ -57,11 +57,19 @@ pub fn create_bind_group2(
                         normal2_sampler = Some(device.create_sampler(&sampler(texture)));
                     }
                     "reflectionSampler" => {
-                        reflection_texture = hash_to_texture.get(&texture.hash);
-                        reflection_sampler = Some(device.create_sampler(&sampler(texture)));
+                        if let Some(view) = hash_to_texture.get(&texture.hash) {
+                            if view.texture().depth_or_array_layers() == 1 {
+                                reflection_texture = Some(view);
+                            }
+                            reflection_sampler = Some(device.create_sampler(&sampler(texture)));
+                        }
                     }
                     "reflectionCubeSampler" => {
-                        reflection_cube_texture = hash_to_texture.get(&texture.hash);
+                        if let Some(view) = hash_to_texture.get(&texture.hash) {
+                            if view.texture().depth_or_array_layers() == 6 {
+                                reflection_cube_texture = Some(view);
+                            }
+                        }
                         reflection_cube_sampler = Some(device.create_sampler(&sampler(texture)));
                     }
                     "color2Sampler" => {
@@ -176,8 +184,7 @@ pub fn create_bind_group2(
             normal_sampler: normal_sampler.as_ref().unwrap_or(&sampler),
             reflection_texture: reflection_texture.unwrap_or(default_texture),
             reflection_sampler: reflection_sampler.as_ref().unwrap_or(&sampler),
-            // TODO: Correctly initialize cube textures.
-            reflection_cube_texture: default_cube_texture,
+            reflection_cube_texture: reflection_cube_texture.unwrap_or(default_cube_texture),
             reflection_cube_sampler: reflection_cube_sampler.as_ref().unwrap_or(&sampler),
             color2_texture: color2_texture.unwrap_or(default_texture),
             color2_sampler: color2_sampler.as_ref().unwrap_or(&sampler),
