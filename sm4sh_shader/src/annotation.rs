@@ -296,30 +296,52 @@ fn uniform_block_var_index(
                 // TODO: Will array uniforms always have a uniform without brackets for the entire array?
                 if v.uniform_block_index == block_index as i32 && !v.name.contains("[") {
                     let (new_index, new_channel) =
-                        uniform_array_index_channel(i as usize, channel, v)?;
+                        uniform_array_indices_channel(i as usize, channel, v)?;
 
-                    let index = match new_index {
-                        UniformArrayIndex::Single => None,
-                        UniformArrayIndex::Index(new_index) => {
+                    let (index, field) = match &new_index[..] {
+                        [] => (None, SmolStr::from(&v.name)),
+                        [new_index] => {
                             // The new index expr might not be part of the graph yet.
-                            let new_index_expr = Expr::Int(new_index as i32);
-                            Some(
-                                graph
-                                    .exprs
-                                    .iter()
-                                    .position(|e| e == &new_index_expr)
-                                    .unwrap_or_else(|| {
-                                        let i = graph.exprs.len();
-                                        graph.exprs.push(new_index_expr);
-                                        i
-                                    }),
+                            let new_index_expr = Expr::Int(*new_index as i32);
+                            (
+                                Some(
+                                    graph
+                                        .exprs
+                                        .iter()
+                                        .position(|e| e == &new_index_expr)
+                                        .unwrap_or_else(|| {
+                                            let i = graph.exprs.len();
+                                            graph.exprs.push(new_index_expr);
+                                            i
+                                        }),
+                                ),
+                                SmolStr::from(&v.name),
                             )
                         }
+                        [new_index, column_index] => {
+                            // The new index expr might not be part of the graph yet.
+                            let column_index_expr = Expr::Int(*column_index as i32);
+                            (
+                                Some(
+                                    graph
+                                        .exprs
+                                        .iter()
+                                        .position(|e| e == &column_index_expr)
+                                        .unwrap_or_else(|| {
+                                            let i = graph.exprs.len();
+                                            graph.exprs.push(column_index_expr);
+                                            i
+                                        }),
+                                ),
+                                SmolStr::from(&format!("{}[{new_index}]", v.name)),
+                            )
+                        }
+                        _ => (None, SmolStr::from(&v.name)),
                     };
 
                     Some(Expr::Parameter {
                         name: SmolStr::from(&block.name),
-                        field: Some(SmolStr::from(&v.name)),
+                        field: Some(field),
                         index,
                         channel: Some(new_channel),
                     })
@@ -335,16 +357,11 @@ fn uniform_block_var_index(
     }
 }
 
-enum UniformArrayIndex {
-    Single,
-    Index(usize),
-}
-
-fn uniform_array_index_channel(
+fn uniform_array_indices_channel(
     buffer_index: usize,
     channel: Option<char>,
     var: &sm4sh_lib::gx2::UniformVar,
-) -> Option<(UniformArrayIndex, char)> {
+) -> Option<(Vec<usize>, char)> {
     // Treat matrices like vec4 arrays.
     // TODO: Is this correct for all types?
     let element_size_in_floats = match var.data_type {
@@ -357,6 +374,7 @@ fn uniform_array_index_channel(
         VarType::IVec2 => 2,
         VarType::IVec4 => 4,
         VarType::UVec4 => 4,
+        // TODO: These require two indices to select matrix and then column?
         VarType::Mat2x4 => 4,
         VarType::Mat3x4 => 4,
         VarType::Mat4 => 4,
@@ -395,6 +413,7 @@ fn uniform_array_index_channel(
     let new_channel_index = (float_index - uniform_float_start) % 4;
     let new_channel = ['x', 'y', 'z', 'w'][new_channel_index];
 
+    // TODO: Find a less convoluted way of calculating indices.
     if (uniform_float_start..uniform_float_end).contains(&float_index) {
         if var.count > 1
             || matches!(
@@ -403,10 +422,17 @@ fn uniform_array_index_channel(
             )
         {
             // TODO: Add unit tests for this?
-            let new_index = (float_index - uniform_float_start) / element_size_in_floats;
-            Some((UniformArrayIndex::Index(new_index), new_channel))
+            let new_index = (float_index - uniform_float_start) / size_in_floats;
+            // Matrix arrays also need an index for the column vector.
+            let second_index = (float_index - uniform_float_start - new_index * size_in_floats)
+                / element_size_in_floats;
+            if var.count > 1 {
+                Some((vec![new_index, second_index], new_channel))
+            } else {
+                Some((vec![new_index], new_channel))
+            }
         } else {
-            Some((UniformArrayIndex::Single, new_channel))
+            Some((Vec::new(), new_channel))
         }
     } else {
         None
