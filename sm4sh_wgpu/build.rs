@@ -37,6 +37,11 @@ fn main() {
         "src/shader/model.wgsl",
         format!("{out_dir}/model.rs"),
     );
+    write_shader(
+        include_str!("src/shader/variance_shadow.wgsl"),
+        "src/shader/variance_shadow.wgsl",
+        format!("{out_dir}/variance_shadow.rs"),
+    );
 }
 
 fn write_shader(wgsl_source: &str, wgsl_path: &str, output_path: String) {

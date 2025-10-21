@@ -28,3 +28,7 @@ pub mod bone {
 pub mod model {
     include!(concat!(env!("OUT_DIR"), "/model.rs"));
 }
+#[allow(dead_code)]
+pub mod variance_shadow {
+    include!(concat!(env!("OUT_DIR"), "/variance_shadow.rs"));
+}

@@ -6,6 +6,8 @@ use crate::{CameraData, DeviceBufferExt, Model, QueueBufferExt, skeleton::BoneRe
 pub(crate) const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Snorm;
 pub(crate) const BLOOM_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg11b10Ufloat;
 pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+pub(crate) const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+pub(crate) const VARIANCE_SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Unorm;
 
 pub struct Renderer {
     camera_buffer: wgpu::Buffer,
@@ -21,6 +23,8 @@ pub struct Renderer {
     bloom_blur_pipeline: wgpu::RenderPipeline,
 
     blit_pipeline: wgpu::RenderPipeline,
+
+    variance_shadow_pipeline: wgpu::RenderPipeline,
 }
 
 impl Renderer {
@@ -84,6 +88,7 @@ impl Renderer {
         let bloom_blur_pipeline = bloom_blur_pipeline(device, BLOOM_FORMAT);
         let bloom_bright_pipeline = bloom_bright_pipeline(device, BLOOM_FORMAT);
         let blit_pipeline = blit_pipeline(device, output_format);
+        let variance_shadow_pipeline = variance_shadow_pipeline(device);
 
         Self {
             camera_buffer,
@@ -97,6 +102,7 @@ impl Renderer {
             bloom_bright_pipeline,
             bloom_blur_combine_pipeline,
             bloom_blur_pipeline,
+            variance_shadow_pipeline,
         }
     }
 
@@ -107,6 +113,8 @@ impl Renderer {
         model: &Model,
         camera: &CameraData,
     ) {
+        // TODO: model shadow depth pass
+        self.variance_shadow_pass(encoder);
         self.model_pass(encoder, model, camera);
         self.bloom_bright_pass(encoder);
         self.bloom_blur_pass(
@@ -132,6 +140,31 @@ impl Renderer {
         self.bloom_blur_combine_pass(encoder);
         self.bloom_add_pass(encoder);
         self.blit_pass(encoder, output_view);
+    }
+
+    fn variance_shadow_pass(&self, encoder: &mut wgpu::CommandEncoder) {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Variance Shadow Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &self.textures.variance_shadow_map,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
+                },
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        pass.set_pipeline(&self.variance_shadow_pipeline);
+        crate::shader::variance_shadow::set_bind_groups(
+            &mut pass,
+            &self.textures.variance_shadow_bind_group,
+        );
+        pass.draw(0..3, 0..1);
     }
 
     fn model_pass(&self, encoder: &mut wgpu::CommandEncoder, model: &Model, camera: &CameraData) {
@@ -427,6 +460,29 @@ fn blit_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgpu::Re
     })
 }
 
+fn variance_shadow_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
+    let module = crate::shader::variance_shadow::create_shader_module(device);
+    let layout = crate::shader::variance_shadow::create_pipeline_layout(device);
+
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Variance Shadow Pipeline"),
+        layout: Some(&layout),
+        vertex: crate::shader::variance_shadow::vertex_state(
+            &module,
+            &crate::shader::variance_shadow::vs_main_entry(),
+        ),
+        fragment: Some(crate::shader::variance_shadow::fragment_state(
+            &module,
+            &crate::shader::variance_shadow::fs_main_entry([Some(VARIANCE_SHADOW_FORMAT.into())]),
+        )),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 fn fb0(width: f32, height: f32) -> crate::shader::model::Fb0 {
     crate::shader::model::Fb0 {
         depth_of_field0: vec4(0.0, 0.0, 0.0, 0.0),
@@ -532,7 +588,13 @@ fn fb1() -> crate::shader::model::Fb1 {
 pub struct Textures {
     color: wgpu::TextureView,
     depth: wgpu::TextureView,
+
     blit_bind_group: crate::shader::blit::bind_groups::BindGroup0,
+
+    shadow_map: wgpu::TextureView,
+    variance_shadow_map: wgpu::TextureView,
+    variance_shadow_bind_group: crate::shader::variance_shadow::bind_groups::BindGroup0,
+
     bloom_add_bindgroup: crate::shader::bloom_add::bind_groups::BindGroup0,
 
     bloom_bright: wgpu::TextureView,
@@ -666,6 +728,23 @@ impl Textures {
             },
         );
 
+        let shadow_map = create_texture(device, 1024, 1024, "shadow map", SHADOW_FORMAT);
+        let variance_shadow_map = create_texture(
+            device,
+            512,
+            512,
+            "variance shadow map",
+            VARIANCE_SHADOW_FORMAT,
+        );
+        let variance_shadow_bind_group =
+            crate::shader::variance_shadow::bind_groups::BindGroup0::from_bindings(
+                device,
+                crate::shader::variance_shadow::bind_groups::BindGroupLayout0 {
+                    depth: &shadow_map,
+                    depth_sampler: &sampler,
+                },
+            );
+
         Self {
             color,
             depth,
@@ -682,6 +761,9 @@ impl Textures {
             bloom_blur4_bindgroup,
             bloom_blur_combine_bindgroup,
             bloom_add_bindgroup,
+            shadow_map,
+            variance_shadow_map,
+            variance_shadow_bind_group,
         }
     }
 }
