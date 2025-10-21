@@ -1,11 +1,11 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use futures::executor::block_on;
-use glam::{Vec3, Vec4, vec3};
+use glam::{Mat4, Vec3, Vec4, vec3};
 use log::error;
 use sm4sh_model::database::ShaderDatabase;
-use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData};
+use sm4sh_wgpu::{CameraData, Renderer, SharedData};
 use wgpu::{
     DeviceDescriptor, Extent3d, PowerPreference, RequestAdapterOptions, TextureDescriptor,
     TextureDimension, TextureUsages,
@@ -18,19 +18,14 @@ const Z_FAR: f32 = 100000.0;
 const WIDTH: u32 = 512;
 const HEIGHT: u32 = 512;
 
-fn calculate_camera_data(
-    width: u32,
-    height: u32,
-    translation: glam::Vec3,
-    rotation: glam::Vec3,
-) -> CameraData {
+fn calculate_camera_data(width: u32, height: u32, translation: Vec3, rotation: Vec3) -> CameraData {
     let aspect = width as f32 / height as f32;
 
-    let view = glam::Mat4::from_translation(translation)
-        * glam::Mat4::from_rotation_x(rotation.x)
-        * glam::Mat4::from_rotation_y(rotation.y);
+    let view = Mat4::from_translation(translation)
+        * Mat4::from_rotation_x(rotation.x)
+        * Mat4::from_rotation_y(rotation.y);
 
-    let projection = glam::Mat4::perspective_rh(FOV_Y, aspect, Z_NEAR, Z_FAR);
+    let projection = Mat4::perspective_rh(FOV_Y, aspect, Z_NEAR, Z_FAR);
 
     let view_projection = projection * view;
 
@@ -145,30 +140,36 @@ fn main() -> anyhow::Result<()> {
                             let camera = frame_bounds(model.bounding_sphere);
                             renderer.update_camera(&queue, &camera);
 
-                            // Convert data/fighter/mario/model/body/c00/model.nud to fighter_mario_model_body_c00.
-                            let output_path = path
-                                .parent()
-                                .unwrap()
-                                .strip_prefix(root_folder)
-                                .unwrap()
-                                .components()
-                                .map(|c| c.as_os_str().to_string_lossy())
-                                .collect::<Vec<_>>()
-                                .join("_");
-                            let output_path = root_folder.join(output_path).with_extension("png");
+                            let output_path = screenshot_path(root_folder, path);
 
-                            render_screenshot(
-                                &device,
-                                &renderer,
-                                &output_view,
-                                &model,
-                                &camera,
-                                &output,
-                                &output_buffer,
+                            // Render to a buffer to save as PNG.
+                            let mut encoder =
+                                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                    label: Some("Render Encoder"),
+                                });
+
+                            renderer.render_model(&mut encoder, &output_view, &model, &camera);
+
+                            encoder.copy_texture_to_buffer(
+                                wgpu::TexelCopyTextureInfo {
+                                    aspect: wgpu::TextureAspect::All,
+                                    texture: &output,
+                                    mip_level: 0,
+                                    origin: wgpu::Origin3d::ZERO,
+                                },
+                                wgpu::TexelCopyBufferInfo {
+                                    buffer: &output_buffer,
+                                    layout: wgpu::TexelCopyBufferLayout {
+                                        offset: 0,
+                                        bytes_per_row: Some(WIDTH * 4),
+                                        rows_per_image: Some(HEIGHT),
+                                    },
+                                },
                                 texture_desc.size,
-                                &queue,
-                                output_path,
                             );
+                            queue.submit([encoder.finish()]);
+
+                            save_screenshot(&device, &output_buffer, output_path);
                         }
                         Err(e) => {
                             error!("Error loading {path:?}: {e}");
@@ -183,43 +184,21 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn render_screenshot(
-    device: &wgpu::Device,
-    renderer: &Renderer,
-    output_view: &wgpu::TextureView,
-    model: &Model,
-    camera: &CameraData,
-    output: &wgpu::Texture,
-    output_buffer: &wgpu::Buffer,
-    size: wgpu::Extent3d,
-    queue: &wgpu::Queue,
-    output_path: std::path::PathBuf,
-) {
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("Render Encoder"),
-    });
+fn screenshot_path(root_folder: &Path, path: &Path) -> PathBuf {
+    // Convert data/fighter/mario/model/body/c00/model.nud to fighter_mario_model_body_c00.
+    let output_path = path
+        .parent()
+        .unwrap()
+        .strip_prefix(root_folder)
+        .unwrap()
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("_");
+    root_folder.join(output_path).with_extension("png")
+}
 
-    renderer.render_model(&mut encoder, output_view, model, camera);
-
-    encoder.copy_texture_to_buffer(
-        wgpu::TexelCopyTextureInfo {
-            aspect: wgpu::TextureAspect::All,
-            texture: output,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-        },
-        wgpu::TexelCopyBufferInfo {
-            buffer: output_buffer,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(WIDTH * 4),
-                rows_per_image: Some(HEIGHT),
-            },
-        },
-        size,
-    );
-    queue.submit([encoder.finish()]);
-
+fn save_screenshot(device: &wgpu::Device, output_buffer: &wgpu::Buffer, output_path: PathBuf) {
     // Save the output texture.
     // Adapted from WGPU Example https://github.com/gfx-rs/wgpu/tree/master/wgpu/examples/capture
     {

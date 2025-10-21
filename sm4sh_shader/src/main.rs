@@ -250,7 +250,7 @@ fn create_shader_database(
         .par_bridge()
         .map(|line| {
             let parts: Vec<_> = line.split(",").map(|s| s.trim()).collect();
-            let shader_id = u32::from_str_radix(&parts[0], 16)?;
+            let shader_id = u32::from_str_radix(parts[0], 16)?;
             let nsh_index: usize = parts[2].split(".").nth(1).unwrap().parse()?;
 
             let gx2_path = folder.join(format!("texas_cross.{nsh_index}.frag.gx2.bin"));

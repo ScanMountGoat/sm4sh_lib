@@ -158,7 +158,7 @@ fn sampler_2d_or_cube(
     texcoords: &[usize],
     channel: Option<char>,
 ) -> Option<String> {
-    match &texcoords[..] {
+    match texcoords {
         [u, v] => Some(format!(
             "textureSample({}, {}, vec2({VAR_PREFIX}{u}, {VAR_PREFIX}{v})){}",
             name_2d,

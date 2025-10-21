@@ -27,10 +27,6 @@ trait DeviceBufferExt {
         label: &str,
         contents: &T,
     ) -> wgpu::Buffer;
-
-    fn create_storage_buffer<T>(&self, label: &str, contents: &[T]) -> wgpu::Buffer
-    where
-        [T]: WriteInto + ShaderType;
 }
 
 impl DeviceBufferExt for wgpu::Device {
@@ -49,22 +45,8 @@ impl DeviceBufferExt for wgpu::Device {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         })
     }
-
-    fn create_storage_buffer<T>(&self, label: &str, data: &[T]) -> wgpu::Buffer
-    where
-        [T]: WriteInto + ShaderType,
-    {
-        let mut buffer = StorageBuffer::new(Vec::new());
-        buffer.write(data).unwrap();
-
-        // TODO: is it worth not adding COPY_DST to all buffers?
-        self.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(label),
-            contents: &buffer.into_inner(),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        })
-    }
 }
+
 trait QueueBufferExt {
     fn write_uniform_data<T: ShaderType + WriteInto + ShaderSize>(
         &self,
@@ -137,7 +119,6 @@ impl CameraData {
 
 pub struct SharedData {
     model_layout: wgpu::PipelineLayout,
-    model_shader: wgpu::ShaderModule,
     database: ShaderDatabase,
 }
 
@@ -146,7 +127,6 @@ impl SharedData {
         // TODO: Include database in binary?
         Self {
             model_layout: crate::shader::model::create_pipeline_layout(device),
-            model_shader: crate::shader::model::create_shader_module(device),
             database,
         }
     }
