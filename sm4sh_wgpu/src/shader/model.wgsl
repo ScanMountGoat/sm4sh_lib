@@ -231,42 +231,48 @@ var normal_sampler: sampler;
 var reflection_texture: texture_2d<f32>;
 
 @group(2) @binding(12)
+var reflection_texture_cube: texture_cube<f32>;
+
+@group(2) @binding(13)
 var reflection_sampler: sampler;
 
 // TODO: This can be a 2D or cube texture.
 // reflectionCubeSampler in shaders.
-@group(2) @binding(13)
+@group(2) @binding(14)
 var reflection_cube_texture: texture_cube<f32>;
 
-@group(2) @binding(14)
+@group(2) @binding(15)
+var reflection_cube_texture_2d: texture_2d<f32>;
+
+@group(2) @binding(16)
 var reflection_cube_sampler: sampler;
 
 // color2Sampler in shaders.
-@group(2) @binding(15)
+@group(2) @binding(17)
 var color2_texture: texture_2d<f32>;
 
-@group(2) @binding(16)
+@group(2) @binding(18)
 var color2_sampler: sampler;
 
 // diffuseSampler in shaders.
-@group(2) @binding(17)
+@group(2) @binding(19)
 var diffuse_texture: texture_2d<f32>;
 
-@group(2) @binding(18)
+@group(2) @binding(20)
 var diffuse_sampler: sampler;
 
 // lightMapSampler in shaders.
-@group(2) @binding(19)
+@group(2) @binding(21)
 var light_map_texture: texture_2d<f32>;
 
-@group(2) @binding(20)
+@group(2) @binding(22)
 var light_map_sampler: sampler;
 
 // normalSampler in shaders.
-@group(2) @binding(21)
+@group(2) @binding(23)
 var normal2_texture: texture_2d<f32>;
 
-@group(2) @binding(22)
+@group(2) @binding(24)
 var normal2_sampler: sampler;
 
 struct VertexOutput {
@@ -387,7 +393,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     var _unused = textureSample(color_texture, color_sampler, vec2(0.0));
     _unused = textureSample(normal_texture, normal_sampler, vec2(0.0));
     _unused = textureSample(reflection_texture, reflection_sampler, vec2(0.0));
+    _unused = textureSample(reflection_texture_cube, reflection_sampler, vec3(0.0));
     _unused = textureSample(reflection_cube_texture, reflection_cube_sampler, vec3(0.0));
+    _unused = textureSample(reflection_cube_texture_2d, reflection_cube_sampler, vec2(0.0));
     _unused = textureSample(color2_texture, color2_sampler, vec2(0.0));
     _unused = textureSample(diffuse_texture, diffuse_sampler, vec2(0.0));
     _unused = textureSample(light_map_texture, light_map_sampler, vec2(0.0));

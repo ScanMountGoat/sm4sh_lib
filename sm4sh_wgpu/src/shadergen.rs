@@ -126,15 +126,20 @@ fn texture_wgsl(t: &sm4sh_model::database::Texture) -> Option<String> {
         | "frameSampler" => None,
         "colorSampler2" | "colorSampler3" => None, // TODO: load all color textures
         "g_VSMTextureSampler" => Some("1.0".to_string()), // TODO: proper shadow rendering.
-        "reflectionCubeSampler" => Some(format!(
-            "textureSample({}, {}, vec3({}, {}, {})){}",
-            t.name.to_snake().replace("_sampler", "_texture"),
-            t.name.to_snake(),
-            arg(&t.texcoords, 0)?,
-            arg(&t.texcoords, 1)?,
-            arg(&t.texcoords, 2)?,
-            channel_wgsl(t.channel)
-        )),
+        "reflectionSampler" => sampler_2d_or_cube(
+            "reflection_texture",
+            "reflection_texture_cube",
+            "reflection_sampler",
+            &t.texcoords,
+            t.channel,
+        ),
+        "reflectionCubeSampler" => sampler_2d_or_cube(
+            "reflection_cube_texture_2d",
+            "reflection_cube_texture",
+            "reflection_cube_sampler",
+            &t.texcoords,
+            t.channel,
+        ),
         _ => Some(format!(
             "textureSample({}, {}, vec2({}, {})){}",
             t.name.to_snake().replace("_sampler", "_texture"),
@@ -143,6 +148,30 @@ fn texture_wgsl(t: &sm4sh_model::database::Texture) -> Option<String> {
             arg(&t.texcoords, 1)?,
             channel_wgsl(t.channel)
         )),
+    }
+}
+
+fn sampler_2d_or_cube(
+    name_2d: &str,
+    name_cube: &str,
+    name_sampler: &str,
+    texcoords: &[usize],
+    channel: Option<char>,
+) -> Option<String> {
+    match &texcoords[..] {
+        [u, v] => Some(format!(
+            "textureSample({}, {}, vec2({VAR_PREFIX}{u}, {VAR_PREFIX}{v})){}",
+            name_2d,
+            name_sampler,
+            channel_wgsl(channel)
+        )),
+        [u, v, w] => Some(format!(
+            "textureSample({}, {}, vec3({VAR_PREFIX}{u}, {VAR_PREFIX}{v}, {VAR_PREFIX}{w})){}",
+            name_cube,
+            name_sampler,
+            channel_wgsl(channel)
+        )),
+        _ => None,
     }
 }
 

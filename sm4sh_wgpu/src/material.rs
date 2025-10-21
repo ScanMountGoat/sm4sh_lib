@@ -28,10 +28,14 @@ pub fn create_bind_group2(
     let mut normal2_texture = None;
     let mut normal2_sampler = None;
 
+    // This texture is usually 2D but can also be a cube map.
     let mut reflection_texture = None;
+    let mut reflection_texture_cube = None;
     let mut reflection_sampler = None;
 
+    // This texture is usually a cube map but can also be 2D.
     let mut reflection_cube_texture = None;
+    let mut reflection_cube_texture_2d = None;
     let mut reflection_cube_sampler = None;
 
     let mut diffuse_texture = None;
@@ -58,7 +62,9 @@ pub fn create_bind_group2(
                     }
                     "reflectionSampler" => {
                         if let Some(view) = hash_to_texture.get(&texture.hash) {
-                            if view.texture().depth_or_array_layers() == 1 {
+                            if view.texture().depth_or_array_layers() == 6 {
+                                reflection_texture_cube = Some(view);
+                            } else {
                                 reflection_texture = Some(view);
                             }
                             reflection_sampler = Some(device.create_sampler(&sampler(texture)));
@@ -68,6 +74,8 @@ pub fn create_bind_group2(
                         if let Some(view) = hash_to_texture.get(&texture.hash) {
                             if view.texture().depth_or_array_layers() == 6 {
                                 reflection_cube_texture = Some(view);
+                            } else {
+                                reflection_cube_texture_2d = Some(view);
                             }
                         }
                         reflection_cube_sampler = Some(device.create_sampler(&sampler(texture)));
@@ -183,8 +191,10 @@ pub fn create_bind_group2(
             normal_texture: normal_texture.unwrap_or(default_texture),
             normal_sampler: normal_sampler.as_ref().unwrap_or(&sampler),
             reflection_texture: reflection_texture.unwrap_or(default_texture),
+            reflection_texture_cube: reflection_texture_cube.unwrap_or(default_cube_texture),
             reflection_sampler: reflection_sampler.as_ref().unwrap_or(&sampler),
             reflection_cube_texture: reflection_cube_texture.unwrap_or(default_cube_texture),
+            reflection_cube_texture_2d: reflection_cube_texture_2d.unwrap_or(default_texture),
             reflection_cube_sampler: reflection_cube_sampler.as_ref().unwrap_or(&sampler),
             color2_texture: color2_texture.unwrap_or(default_texture),
             color2_sampler: color2_sampler.as_ref().unwrap_or(&sampler),
