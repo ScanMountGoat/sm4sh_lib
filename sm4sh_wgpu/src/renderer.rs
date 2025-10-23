@@ -25,6 +25,12 @@ pub struct Renderer {
     blit_pipeline: wgpu::RenderPipeline,
 
     variance_shadow_pipeline: wgpu::RenderPipeline,
+
+    model_shadow_depth_pipeline: wgpu::RenderPipeline,
+
+    shadow_map: wgpu::TextureView,
+    variance_shadow_map: wgpu::TextureView,
+    variance_shadow_bind_group: crate::shader::variance_shadow::bind_groups::BindGroup0,
 }
 
 impl Renderer {
@@ -67,6 +73,38 @@ impl Renderer {
             },
         );
 
+        let shadow_map = create_texture(device, 1024, 1024, "shadow map", SHADOW_FORMAT);
+        let variance_shadow_map = create_texture(
+            device,
+            512,
+            512,
+            "variance shadow map",
+            VARIANCE_SHADOW_FORMAT,
+        );
+        let depth_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+        let variance_shadow_bind_group =
+            crate::shader::variance_shadow::bind_groups::BindGroup0::from_bindings(
+                device,
+                crate::shader::variance_shadow::bind_groups::BindGroupLayout0 {
+                    depth: &shadow_map,
+                    depth_sampler: &depth_sampler,
+                },
+            );
+
+        // g_VSMTextureSampler in shaders.
+        let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToBorder,
+            address_mode_v: wgpu::AddressMode::ClampToBorder,
+            address_mode_w: wgpu::AddressMode::ClampToBorder,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            border_color: Some(wgpu::SamplerBorderColor::OpaqueWhite),
+            ..Default::default()
+        });
         let model_bind_group0 = crate::shader::model::bind_groups::BindGroup0::from_bindings(
             device,
             crate::shader::model::bind_groups::BindGroupLayout0 {
@@ -76,6 +114,8 @@ impl Renderer {
                 fb3: fb3_buffer.as_entire_buffer_binding(),
                 fb4: fb4_buffer.as_entire_buffer_binding(),
                 fb5: fb5_buffer.as_entire_buffer_binding(),
+                g_vsm_texture: &variance_shadow_map,
+                g_vsm_sampler: &shadow_sampler,
             },
         );
 
@@ -89,6 +129,7 @@ impl Renderer {
         let bloom_bright_pipeline = bloom_bright_pipeline(device, BLOOM_FORMAT);
         let blit_pipeline = blit_pipeline(device, output_format);
         let variance_shadow_pipeline = variance_shadow_pipeline(device);
+        let model_shadow_depth_pipeline = model_shadow_depth_pipeline(device);
 
         Self {
             camera_buffer,
@@ -103,6 +144,10 @@ impl Renderer {
             bloom_blur_combine_pipeline,
             bloom_blur_pipeline,
             variance_shadow_pipeline,
+            model_shadow_depth_pipeline,
+            shadow_map,
+            variance_shadow_map,
+            variance_shadow_bind_group,
         }
     }
 
@@ -113,7 +158,7 @@ impl Renderer {
         model: &Model,
         camera: &CameraData,
     ) {
-        // TODO: model shadow depth pass
+        self.model_shadow_depth_pass(encoder, model);
         self.variance_shadow_pass(encoder);
         self.model_pass(encoder, model, camera);
         self.bloom_bright_pass(encoder);
@@ -142,11 +187,31 @@ impl Renderer {
         self.blit_pass(encoder, output_view);
     }
 
+    fn model_shadow_depth_pass(&self, encoder: &mut wgpu::CommandEncoder, model: &Model) {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Model Shadow Depth Pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.shadow_map,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        self.model_bind_group0.set(&mut pass);
+        model.draw_shadow_depth(&mut pass, &self.model_shadow_depth_pipeline);
+    }
+
     fn variance_shadow_pass(&self, encoder: &mut wgpu::CommandEncoder) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Variance Shadow Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.textures.variance_shadow_map,
+                view: &self.variance_shadow_map,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -162,7 +227,7 @@ impl Renderer {
         pass.set_pipeline(&self.variance_shadow_pipeline);
         crate::shader::variance_shadow::set_bind_groups(
             &mut pass,
-            &self.textures.variance_shadow_bind_group,
+            &self.variance_shadow_bind_group,
         );
         pass.draw(0..3, 0..1);
     }
@@ -483,6 +548,33 @@ fn variance_shadow_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
     })
 }
 
+fn model_shadow_depth_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
+    let module = crate::shader::model::create_shader_module(device);
+    let layout = crate::shader::model::create_pipeline_layout(device);
+
+    // TODO: does the shadow depth pipeline need to be mesh specific?
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Model Shadow Depth Pipeline"),
+        layout: Some(&layout),
+        vertex: crate::shader::model::vertex_state(
+            &module,
+            &crate::shader::model::vs_shadow_entry(wgpu::VertexStepMode::Vertex),
+        ),
+        fragment: None,
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: SHADOW_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::LessEqual,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview: None,
+        cache: None,
+    })
+}
+
 fn fb0(width: f32, height: f32) -> crate::shader::model::Fb0 {
     crate::shader::model::Fb0 {
         depth_of_field0: vec4(0.0, 0.0, 0.0, 0.0),
@@ -590,10 +682,6 @@ pub struct Textures {
     depth: wgpu::TextureView,
 
     blit_bind_group: crate::shader::blit::bind_groups::BindGroup0,
-
-    shadow_map: wgpu::TextureView,
-    variance_shadow_map: wgpu::TextureView,
-    variance_shadow_bind_group: crate::shader::variance_shadow::bind_groups::BindGroup0,
 
     bloom_add_bindgroup: crate::shader::bloom_add::bind_groups::BindGroup0,
 
@@ -728,23 +816,6 @@ impl Textures {
             },
         );
 
-        let shadow_map = create_texture(device, 1024, 1024, "shadow map", SHADOW_FORMAT);
-        let variance_shadow_map = create_texture(
-            device,
-            512,
-            512,
-            "variance shadow map",
-            VARIANCE_SHADOW_FORMAT,
-        );
-        let variance_shadow_bind_group =
-            crate::shader::variance_shadow::bind_groups::BindGroup0::from_bindings(
-                device,
-                crate::shader::variance_shadow::bind_groups::BindGroupLayout0 {
-                    depth: &shadow_map,
-                    depth_sampler: &sampler,
-                },
-            );
-
         Self {
             color,
             depth,
@@ -761,9 +832,6 @@ impl Textures {
             bloom_blur4_bindgroup,
             bloom_blur_combine_bindgroup,
             bloom_add_bindgroup,
-            shadow_map,
-            variance_shadow_map,
-            variance_shadow_bind_group,
         }
     }
 }

@@ -370,11 +370,26 @@ impl Model {
         self.bind_group1.set(render_pass);
 
         for mesh in opaque {
-            mesh.draw(render_pass);
+            mesh.draw(render_pass, &mesh.pipeline);
         }
         // Transparent meshes are rendered after opaque meshes for proper blending.
         for mesh in transparent {
-            mesh.draw(render_pass);
+            mesh.draw(render_pass, &mesh.pipeline);
+        }
+    }
+
+    pub fn draw_shadow_depth(
+        &self,
+        render_pass: &mut wgpu::RenderPass,
+        pipeline: &wgpu::RenderPipeline,
+    ) {
+        self.bind_group1.set(render_pass);
+
+        // TODO: Does render order matter for the depth pass?
+        for group in &self.groups {
+            for mesh in &group.meshes {
+                mesh.draw(render_pass, pipeline);
+            }
         }
     }
 
@@ -408,8 +423,8 @@ impl Model {
 }
 
 impl Mesh {
-    fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>) {
-        render_pass.set_pipeline(&self.pipeline);
+    fn draw(&self, render_pass: &mut wgpu::RenderPass<'_>, pipeline: &wgpu::RenderPipeline) {
+        render_pass.set_pipeline(pipeline);
         self.bind_group2.set(render_pass);
         self.bind_group3.set(render_pass);
 

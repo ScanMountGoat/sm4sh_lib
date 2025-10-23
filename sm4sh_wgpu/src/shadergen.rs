@@ -125,7 +125,6 @@ fn texture_wgsl(t: &sm4sh_model::database::Texture) -> Option<String> {
         | "multiplicationSampler"
         | "frameSampler" => None,
         "colorSampler2" | "colorSampler3" => None, // TODO: load all color textures
-        "g_VSMTextureSampler" => Some("1.0".to_string()), // TODO: proper shadow rendering.
         "reflectionSampler" => sampler_2d_or_cube(
             "reflection_texture",
             "reflection_texture_cube",
@@ -140,6 +139,14 @@ fn texture_wgsl(t: &sm4sh_model::database::Texture) -> Option<String> {
             &t.texcoords,
             t.channel,
         ),
+        "g_VSMTextureSampler" => Some(format!(
+            "textureSample({}, {}, vec2({}, {})){}",
+            "g_vsm_texture",
+            "g_vsm_sampler",
+            arg(&t.texcoords, 0)?,
+            arg(&t.texcoords, 1)?,
+            channel_wgsl(t.channel)
+        )),
         _ => Some(format!(
             "textureSample({}, {}, vec2({}, {})){}",
             t.name.to_snake().replace("_sampler", "_texture"),

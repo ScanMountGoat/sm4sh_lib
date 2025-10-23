@@ -128,6 +128,13 @@ struct Fb5 {
 @group(0) @binding(5)
 var<uniform> fb5: Fb5;
 
+// g_VSMTextureSampler in shaders.
+@group(0) @binding(6)
+var g_vsm_texture: texture_2d<f32>;
+
+@group(0) @binding(7)
+var g_vsm_sampler: sampler;
+
 // PerModel values
 @group(1) @binding(0)
 var<storage> skinning_transforms: array<mat4x4<f32>>;
@@ -317,6 +324,44 @@ struct VertexInput0 {
 }
 
 @vertex
+fn vs_shadow(in0: VertexInput0) -> @builtin(position) vec4<f32> {
+    var out: VertexOutput;
+
+    var position = in0.position.xyz;
+
+    if per_mesh.billboard == 1u {
+        // These matrices have no translation, so the fourth component technically doesn't matter.
+        if per_mesh.billboard_y == 1u {
+            position = (camera.view_rot_inv_billboard_y * vec4(position, 1.0)).xyz;
+        } else {
+            position = (camera.view_rot_inv_billboard * vec4(position, 1.0)).xyz;
+        }
+    }
+
+    if per_mesh.parent_bone != -1 {
+        let bone_index = per_mesh.parent_bone;
+
+        if per_mesh.is_nsc == 1u {
+            // Parenting with the parent transform.
+            position = (bone_transforms[bone_index] * vec4(position, 1.0)).xyz;
+        } else {
+            // Parenting that assumes the base parent transform is already applied.
+            position = (skinning_transforms[bone_index] * vec4(position, 1.0)).xyz;
+        }
+    } else if per_mesh.has_skinning == 1u {
+        position = vec3(0.0);
+        for (var i = 0u; i < 4u; i += 1u) {
+            let bone_index = in0.indices[i];
+            let skin_weight = in0.weights[i];
+
+            position += skin_weight * (skinning_transforms[bone_index] * vec4(in0.position.xyz, 1.0)).xyz;
+        }
+    }
+
+    return fb0.shadow_map_matrix * vec4(position, 1.0);
+}
+
+@vertex
 fn vs_main(in0: VertexInput0) -> VertexOutput {
     var out: VertexOutput;
 
@@ -400,6 +445,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = textureSample(diffuse_texture, diffuse_sampler, vec2(0.0));
     _unused = textureSample(light_map_texture, light_map_sampler, vec2(0.0));
     _unused = textureSample(normal2_texture, normal2_sampler, vec2(0.0));
+    _unused = textureSample(g_vsm_texture, g_vsm_sampler, vec2(0.0));
     _unused = uniforms.ao_min_gain;
     _unused = effect_uniforms.angle_fade_params;
     _unused = fb0.lens_flare_param;
