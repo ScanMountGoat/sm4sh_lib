@@ -6,7 +6,11 @@ use smol_str::SmolStr;
 use strum::FromRepr;
 pub use xc3_shader::expr::{Attribute, OutputExpr, Parameter, Texture, Value};
 
+use crate::database::uniforms::uniform_parameter_value;
+
 mod io;
+// TODO: Find a nicer way to handle uniform buffers.
+mod uniforms;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ShaderDatabase(io::ShaderDatabaseIndexed);
@@ -45,6 +49,13 @@ impl ShaderDatabase {
     /// Create the internal database representation from non indexed data.
     pub fn from_programs(programs: BTreeMap<u32, ShaderProgram>) -> Self {
         Self(io::ShaderDatabaseIndexed::from_programs(programs))
+    }
+}
+
+impl ShaderProgram {
+    pub fn parameter_value(&self, parameter: &Parameter) -> Option<f32> {
+        // TODO: Is there a better way to pass global parameters to consumers like Python?
+        uniform_parameter_value(self, parameter)
     }
 }
 
