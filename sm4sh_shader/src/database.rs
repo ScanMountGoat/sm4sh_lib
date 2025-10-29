@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 
 use glsl_lang::ast::TranslationUnit;
-use indexmap::{IndexMap, IndexSet};
 use log::error;
 use smol_str::SmolStr;
 use xc3_shader::{
@@ -15,6 +14,10 @@ use xc3_shader::{
 
 mod query;
 use query::*;
+
+// Faster than the default hash implementation.
+type IndexSet<T> = indexmap::IndexSet<T, ahash::RandomState>;
+type IndexMap<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ShaderProgram {
@@ -131,11 +134,13 @@ pub fn shader_from_glsl(vertex: &TranslationUnit, fragment: &TranslationUnit) ->
     // Create a combined graph that links vertex outputs to fragment inputs.
     // This effectively moves all shader logic to the fragment shader.
     // This simplifies generating shader code or material nodes in 3D applications.
-    let graph = merge_vertex_fragment(vert, &vert_attributes, frag, &frag_attributes);
+    let graph = merge_vertex_fragment(vert, &vert_attributes, frag, &frag_attributes, |_, e| {
+        e.clone()
+    });
 
-    let mut exprs = IndexSet::new();
-    let mut expr_to_index = IndexMap::new();
-    let mut output_dependencies = IndexMap::new();
+    let mut exprs = IndexSet::default();
+    let mut expr_to_index = IndexMap::default();
+    let mut output_dependencies = IndexMap::default();
     for output_name in frag_attributes.output_locations.left_values() {
         for c in "xyzw".chars() {
             let dependent_lines = graph.dependencies_recursive(output_name, Some(c), None);

@@ -18,3 +18,4 @@ smol_str.workspace = true
 indexmap.workspace = true
 indoc.workspace = true
 simple_logger.workspace = true
+ahash.workspace = true

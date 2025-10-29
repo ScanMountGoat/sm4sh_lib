@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, path::Path};
 
 use binrw::BinResult;
-use indexmap::IndexMap;
 use smol_str::SmolStr;
 use strum::FromRepr;
 pub use xc3_shader::expr::{Attribute, OutputExpr, Parameter, Texture, Value};
@@ -11,6 +10,9 @@ use crate::database::uniforms::uniform_parameter_value;
 mod io;
 // TODO: Find a nicer way to handle uniform buffers.
 mod uniforms;
+
+// Faster than the default hash implementation.
+type IndexMap<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ShaderDatabase(io::ShaderDatabaseIndexed);
