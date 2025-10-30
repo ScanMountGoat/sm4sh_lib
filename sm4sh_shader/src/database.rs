@@ -60,6 +60,9 @@ pub enum Operation {
     Greater,
     LessEqual,
     GreaterEqual,
+    NormalMapX,
+    NormalMapY,
+    NormalMapZ,
     Unk,
 }
 
@@ -79,7 +82,9 @@ impl xc3_shader::expr::Operation for Operation {
     fn query_operation_args<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Self, Vec<&'a Expr>)> {
         // TODO: Share these queries with xc3_shader?
         // TODO: Use queries to simplify operations
-        op_mix(graph, expr)
+        // TODO: Figure out why op_mix doesn't work with simplification.
+        // op_mix(graph, expr)
+        op_normal_map(graph, expr)
             .or_else(|| op_pow(graph, expr))
             .or_else(|| op_sqrt(graph, expr))
             .or_else(|| op_dot(graph, expr))
@@ -137,6 +142,7 @@ pub fn shader_from_glsl(vertex: &TranslationUnit, fragment: &TranslationUnit) ->
     let graph = merge_vertex_fragment(vert, &vert_attributes, frag, &frag_attributes, |_, e| {
         e.clone()
     });
+    let graph = graph.simplify();
 
     let mut exprs = IndexSet::default();
     let mut expr_to_index = IndexMap::default();
@@ -203,6 +209,9 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::Greater => Self::Greater,
             Operation::LessEqual => Self::LessEqual,
             Operation::GreaterEqual => Self::GreaterEqual,
+            Operation::NormalMapX => Self::NormalMapX,
+            Operation::NormalMapY => Self::NormalMapY,
+            Operation::NormalMapZ => Self::NormalMapZ,
             Operation::Unk => Self::Unk,
         }
     }

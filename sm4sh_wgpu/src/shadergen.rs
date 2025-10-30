@@ -305,6 +305,18 @@ fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {
         Operation::Fract => Some(format!("fract({})", arg0?)),
         Operation::IntBitsToFloat => Some(format!("bitcast<f32>({})", arg0?)),
         Operation::FloatBitsToInt => Some(format!("bitcast<i32>({})", arg0?)),
+        Operation::NormalMapX => Some(format!(
+            "apply_normal_map(vec3({}, {}, {}), a_Normal.xyz, a_Tangent.xyz, a_Binormal.xyz).x",
+            arg0?, arg1?, arg2?
+        )),
+        Operation::NormalMapY => Some(format!(
+            "apply_normal_map(vec3({}, {}, {}), a_Normal.xyz, a_Tangent.xyz, a_Binormal.xyz).y",
+            arg0?, arg1?, arg2?
+        )),
+        Operation::NormalMapZ => Some(format!(
+            "apply_normal_map(vec3({}, {}, {}), a_Normal.xyz, a_Tangent.xyz, a_Binormal.xyz).z",
+            arg0?, arg1?, arg2?
+        )),
         Operation::Unk => None,
     }
 }

@@ -431,6 +431,14 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
     return out;
 }
 
+fn apply_normal_map(normal_map: vec3<f32>, tangent: vec3<f32>, bitangent: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+    // Normal mapping is a change of basis using the TBN vectors.
+    let x = normal_map.x;
+    let y = normal_map.y;
+    let z = normal_map.z;
+    return normalize(tangent * x + bitangent * y + normal * z);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Required for wgsl_to_wgpu reachability analysis to include these resources.

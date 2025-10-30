@@ -93,6 +93,9 @@ pub enum Operation {
     Greater,
     LessEqual,
     GreaterEqual,
+    NormalMapX,
+    NormalMapY,
+    NormalMapZ,
     Unk,
 }
 

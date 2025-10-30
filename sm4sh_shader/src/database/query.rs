@@ -23,6 +23,55 @@ pub fn op_func<'a>(
     }
 }
 
+static OP_NORMAL_MAP_X: LazyLock<Graph> = LazyLock::new(|| {
+    // TBN matrix from texas_cross.105.frag.
+    // TODO: Check attribute channels and/or cross product to differentiate xyz.
+    // TODO: tangent.xyz = cross(bitangent.xyz, normal.xyz) * bitangent.w
+    // TODO: Attribute channels require eliminating transforms from vertex shader.
+    let query = indoc! {"
+        void main() {
+            normal_map_x = normal_map_x + -0.00196078;
+            normal_map_x = normal_map_x * 2.0;
+            normal_map_x = normal_map_x + -1.0;
+
+            normal_map_y = normal_map_y + -0.00196078;
+            normal_map_y = normal_map_y * 2.0;
+            normal_map_y = normal_map_y + -1.0;
+
+            normal_map_z = normal_map.z + -0.00196078;
+            normal_map_z = normal_map_z * 2.0;
+            normal_map_z = normal_map_z + -1.0;
+
+            // bitangent_w = bitangent.w;
+            tangent_x = bitangent_w * tangent_x;
+
+            // bitangent_x = bitangent.x;
+            inverse_length_bitangent = inversesqrt(bitangent_length);
+            normalize_bitangent_x = bitangent_x * inverse_length_bitangent;
+
+            // normal_x = normal.x;
+            inverse_length_normal = inversesqrt(normal_length);
+            normalize_normal_x = normal_x * inverse_length_normal;
+
+            result_x = normal_map_x * tangent_x;
+            result_y = fma(normal_map_y, normalize_bitangent_x, result_x);
+            result = fma(normal_map_z, normalize_normal_x, result_y);
+
+            inverse_length_result = inversesqrt(result_length);
+            result = result * inverse_length_result;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_normal_map<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+    let result = query_nodes(expr, graph, &OP_NORMAL_MAP_X)?;
+    let x = result.get("normal_map_x")?;
+    let y = result.get("normal_map_y")?;
+    let z = result.get("normal_map_z")?;
+    Some((Operation::NormalMapX, vec![x, y, z]))
+}
+
 static OP_MIX: LazyLock<Graph> = LazyLock::new(|| {
     let query = indoc! {"
         void main() {
@@ -31,7 +80,7 @@ static OP_MIX: LazyLock<Graph> = LazyLock::new(|| {
             result = fma(b_minus_a, ratio, a);
         }
     "};
-    Graph::parse_glsl(query).unwrap()
+    Graph::parse_glsl(query).unwrap().simplify()
 });
 
 static OP_MIX2: LazyLock<Graph> = LazyLock::new(|| {
@@ -43,12 +92,15 @@ static OP_MIX2: LazyLock<Graph> = LazyLock::new(|| {
             result = fma(b, ratio, a_inv_ratio);
         }
     "};
-    Graph::parse_glsl(query).unwrap()
+    Graph::parse_glsl(query).unwrap().simplify()
 });
 
 pub fn op_mix<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+    // TODO: This is matching things it shouldn't but only when simplified?
     let result =
         query_nodes(expr, graph, &OP_MIX).or_else(|| query_nodes(expr, graph, &OP_MIX2))?;
+    print!("{}", OP_MIX.simplify().to_glsl());
+    print!("{}", OP_MIX2.simplify().to_glsl());
     let a = result.get("a")?;
     let b = result.get("b")?;
     let ratio = result.get("ratio")?;
@@ -65,7 +117,7 @@ static OP_POW: LazyLock<Graph> = LazyLock::new(|| {
             a = exp2(a);
         }
     "};
-    Graph::parse_glsl(query).unwrap()
+    Graph::parse_glsl(query).unwrap().simplify()
 });
 
 static OP_POW2: LazyLock<Graph> = LazyLock::new(|| {
@@ -77,7 +129,7 @@ static OP_POW2: LazyLock<Graph> = LazyLock::new(|| {
             a = exp2(a);
         }
     "};
-    Graph::parse_glsl(query).unwrap()
+    Graph::parse_glsl(query).unwrap().simplify()
 });
 
 pub fn op_pow<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
@@ -96,11 +148,14 @@ static OP_SQRT: LazyLock<Graph> = LazyLock::new(|| {
             result = 1.0 / result;
         }
     "};
-    Graph::parse_glsl(query).unwrap()
+    Graph::parse_glsl(query).unwrap().simplify()
 });
 
-static OP_SQRT2: LazyLock<Graph> =
-    LazyLock::new(|| Graph::parse_glsl("void main() { result = sqrt(result); }").unwrap());
+static OP_SQRT2: LazyLock<Graph> = LazyLock::new(|| {
+    Graph::parse_glsl("void main() { result = sqrt(result); }")
+        .unwrap()
+        .simplify()
+});
 
 pub fn op_sqrt<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let result =
@@ -115,7 +170,7 @@ static OP_DOT4: LazyLock<Graph> = LazyLock::new(|| {
             result = dot(vec4(ax, ay, az, aw), vec4(bx, by, bz, bw));
         }
     "};
-    Graph::parse_glsl(query).unwrap()
+    Graph::parse_glsl(query).unwrap().simplify()
 });
 
 pub fn op_dot<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
@@ -145,8 +200,11 @@ pub fn ternary<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&
     }
 }
 
-static OP_DIV: LazyLock<Graph> =
-    LazyLock::new(|| Graph::parse_glsl("void main() { result = a / b; }").unwrap());
+static OP_DIV: LazyLock<Graph> = LazyLock::new(|| {
+    Graph::parse_glsl("void main() { result = a / b; }")
+        .unwrap()
+        .simplify()
+});
 
 static OP_DIV2: LazyLock<Graph> = LazyLock::new(|| {
     let query = indoc! {"
@@ -155,7 +213,7 @@ static OP_DIV2: LazyLock<Graph> = LazyLock::new(|| {
                 result = a * one_over_b;
             }
         "};
-    Graph::parse_glsl(query).unwrap()
+    Graph::parse_glsl(query).unwrap().simplify()
 });
 
 pub fn op_div<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
