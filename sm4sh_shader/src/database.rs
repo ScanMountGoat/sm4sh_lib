@@ -8,7 +8,6 @@ use xc3_shader::{
     graph::{
         BinaryOp, Expr, Graph, UnaryOp,
         glsl::{find_attribute_locations, merge_vertex_fragment},
-        query::assign_x_recursive,
     },
 };
 
@@ -120,8 +119,8 @@ impl xc3_shader::expr::Operation for Operation {
             })
     }
 
-    fn preprocess_expr<'a>(graph: &'a Graph, expr: &'a Expr) -> Cow<'a, Expr> {
-        Cow::Borrowed(assign_x_recursive(graph, expr))
+    fn preprocess_expr<'a>(_graph: &'a Graph, expr: &'a Expr) -> Cow<'a, Expr> {
+        Cow::Borrowed(expr)
     }
 
     fn preprocess_value_expr<'a>(_graph: &'a Graph, expr: &'a Expr) -> Cow<'a, Expr> {
@@ -139,9 +138,13 @@ pub fn shader_from_glsl(vertex: &TranslationUnit, fragment: &TranslationUnit) ->
     // Create a combined graph that links vertex outputs to fragment inputs.
     // This effectively moves all shader logic to the fragment shader.
     // This simplifies generating shader code or material nodes in 3D applications.
-    let graph = merge_vertex_fragment(vert, &vert_attributes, frag, &frag_attributes, |_, e| {
-        e.clone()
-    });
+    let graph = merge_vertex_fragment(
+        vert.simplify(),
+        &vert_attributes,
+        frag,
+        &frag_attributes,
+        modify_attributes,
+    );
     let graph = graph.simplify();
 
     let mut exprs = IndexSet::default();
@@ -215,4 +218,13 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::Unk => Self::Unk,
         }
     }
+}
+
+fn modify_attributes(graph: &Graph, expr: &Expr) -> Expr {
+    // Remove attribute transforms so queries can detect attribute channels.
+    let mut expr = expr;
+    if let Some(new_expr) = transform_normal(graph, expr) {
+        expr = new_expr;
+    }
+    expr.clone()
 }

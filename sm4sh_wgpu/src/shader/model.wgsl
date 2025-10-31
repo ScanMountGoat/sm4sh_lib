@@ -433,9 +433,11 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
 
 fn apply_normal_map(normal_map: vec3<f32>, tangent: vec3<f32>, bitangent: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
     // Normal mapping is a change of basis using the TBN vectors.
-    let x = normal_map.x;
-    let y = normal_map.y;
-    let z = normal_map.z;
+    // Adapted from texas_cross.105.frag.
+    let offset = 1.0 / (255.0 * 2.0);
+    let x = (normal_map.x + offset) * 2.0 - 1.0;
+    let y = (normal_map.y + offset) * 2.0 - 1.0;
+    let z = (normal_map.z + offset) * 2.0 - 1.0;
     return normalize(tangent * x + bitangent * y + normal * z);
 }
 

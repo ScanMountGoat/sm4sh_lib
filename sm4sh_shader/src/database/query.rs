@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use indoc::indoc;
+use indoc::{formatdoc, indoc};
 use xc3_shader::graph::{BinaryOp, Expr, Graph, UnaryOp, query::query_nodes};
 
 use crate::database::Operation;
@@ -23,13 +23,13 @@ pub fn op_func<'a>(
     }
 }
 
-static OP_NORMAL_MAP_X: LazyLock<Graph> = LazyLock::new(|| {
+fn op_normal_map_query(c: char) -> String {
     // TBN matrix from texas_cross.105.frag.
-    // TODO: Check attribute channels and/or cross product to differentiate xyz.
+    // TODO: Also check attribute channels and/or cross product to differentiate xyz.
     // TODO: tangent.xyz = cross(bitangent.xyz, normal.xyz) * bitangent.w
-    // TODO: Attribute channels require eliminating transforms from vertex shader.
-    let query = indoc! {"
-        void main() {
+    // TODO: binormal channels require eliminating transforms from vertex shader.
+    formatdoc! {"
+        void main() {{
             normal_map_x = normal_map_x + -0.00196078;
             normal_map_x = normal_map_x * 2.0;
             normal_map_x = normal_map_x + -1.0;
@@ -38,38 +38,178 @@ static OP_NORMAL_MAP_X: LazyLock<Graph> = LazyLock::new(|| {
             normal_map_y = normal_map_y * 2.0;
             normal_map_y = normal_map_y + -1.0;
 
-            normal_map_z = normal_map.z + -0.00196078;
+            normal_map_z = normal_map_z + -0.00196078;
             normal_map_z = normal_map_z * 2.0;
             normal_map_z = normal_map_z + -1.0;
 
             // bitangent_w = bitangent.w;
-            tangent_x = bitangent_w * tangent_x;
+            tangent = bitangent_w * tangent;
 
-            // bitangent_x = bitangent.x;
+            // bitangent = bitangent.{c};
             inverse_length_bitangent = inversesqrt(bitangent_length);
-            normalize_bitangent_x = bitangent_x * inverse_length_bitangent;
+            normalize_bitangent = bitangent * inverse_length_bitangent;
 
-            // normal_x = normal.x;
+            normal = normal.{c};
             inverse_length_normal = inversesqrt(normal_length);
-            normalize_normal_x = normal_x * inverse_length_normal;
+            normalize_normal = normal * inverse_length_normal;
 
-            result_x = normal_map_x * tangent_x;
-            result_y = fma(normal_map_y, normalize_bitangent_x, result_x);
-            result = fma(normal_map_z, normalize_normal_x, result_y);
+            result_x = normal_map_x * tangent;
+            result_y = fma(normal_map_y, normalize_bitangent, result_x);
+            result = fma(normal_map_z, normalize_normal, result_y);
 
             inverse_length_result = inversesqrt(result_length);
             result = result * inverse_length_result;
+        }}
+    "}
+}
+
+static OP_NORMAL_MAP_X: LazyLock<Graph> = LazyLock::new(|| {
+    let query = op_normal_map_query('x');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static OP_NORMAL_MAP_Y: LazyLock<Graph> = LazyLock::new(|| {
+    let query = op_normal_map_query('y');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static OP_NORMAL_MAP_Z: LazyLock<Graph> = LazyLock::new(|| {
+    let query = op_normal_map_query('z');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+pub fn op_normal_map<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+    let (op, result) = query_nodes(expr, graph, &OP_NORMAL_MAP_X)
+        .map(|r| (Operation::NormalMapX, r))
+        .or_else(|| query_nodes(expr, graph, &OP_NORMAL_MAP_Y).map(|r| (Operation::NormalMapY, r)))
+        .or_else(|| {
+            query_nodes(expr, graph, &OP_NORMAL_MAP_Z).map(|r| (Operation::NormalMapZ, r))
+        })?;
+    let x = result.get("normal_map_x")?;
+    let y = result.get("normal_map_y")?;
+    let z = result.get("normal_map_z")?;
+    Some((op, vec![x, y, z]))
+}
+
+// TODO: Reduce repetition in queries?
+static TRANSFORM_NORMAL_X: LazyLock<Graph> = LazyLock::new(|| {
+    // texas_cross.105.vert.
+    let query = indoc! {"
+        void main() {
+            R3.x = a_Normal_x;
+            R3.y = a_Normal_y;
+            R3.z = a_Normal_z;
+            R7.y = R3.z * PerDraw.LocalToWorldMatrix[2].z;
+            R126.w = R3.z * PerDraw.LocalToWorldMatrix[2].x;
+            R126.x = fma(R3.y, PerDraw.LocalToWorldMatrix[1].x, R126.w);
+            PS8 = R3.z * PerDraw.LocalToWorldMatrix[2].y;
+            R126.z = fma(R3.y, PerDraw.LocalToWorldMatrix[1].y, PS8);
+            R124.w = fma(R3.y, PerDraw.LocalToWorldMatrix[1].z, R7.y);
+            R127.x = fma(R3.x, PerDraw.LocalToWorldMatrix[0].x, R126.x);
+            R3_backup.x = R3.x;
+            R126.y = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].y, R126.z);
+            PV12.y = R126.y;
+            R127.z = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].z, R124.w);
+            PV12.z = R127.z;
+            temp13 = dot(vec4(R127.x, PV12.y, PV12.z, 0.0), vec4(R127.x, PV12.y, PV12.z, 0.0));
+            PV13.x = temp13;
+            R127.y = inversesqrt(PV13.x);
+            PS14 = R127.y;
+            R126_backup.y = R126.y;
+            R3.z = R127.z * PS14;
+            R1.w = R126_backup.y * PS14;
+            R4.y = R127.x * R127.y;
+            R124.w = FB0.bgRotInv[2].x * R3.z;
+            R124.w = fma(R1.w, FB0.bgRotInv[1].x, R124.w);
+            R17.x = fma(R4.y, FB0.bgRotInv[0].x, R124.w);
+            result = R17.x;
         }
     "};
     Graph::parse_glsl(query).unwrap().simplify()
 });
 
-pub fn op_normal_map<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
-    let result = query_nodes(expr, graph, &OP_NORMAL_MAP_X)?;
-    let x = result.get("normal_map_x")?;
-    let y = result.get("normal_map_y")?;
-    let z = result.get("normal_map_z")?;
-    Some((Operation::NormalMapX, vec![x, y, z]))
+static TRANSFORM_NORMAL_Y: LazyLock<Graph> = LazyLock::new(|| {
+    // texas_cross.105.vert.
+    let query = indoc! {"
+        void main() {
+            R3.x = a_Normal_x;
+            R3.y = a_Normal_y;
+            R3.z = a_Normal_z;
+            R7.y = R3.z * PerDraw.LocalToWorldMatrix[2].z;
+            R126.w = R3.z * PerDraw.LocalToWorldMatrix[2].x;
+            R126.x = fma(R3.y, PerDraw.LocalToWorldMatrix[1].x, R126.w);
+            PS8 = R3.z * PerDraw.LocalToWorldMatrix[2].y;
+            R126.z = fma(R3.y, PerDraw.LocalToWorldMatrix[1].y, PS8);
+            R124.w = fma(R3.y, PerDraw.LocalToWorldMatrix[1].z, R7.y);
+            R127.x = fma(R3.x, PerDraw.LocalToWorldMatrix[0].x, R126.x);
+            R3_backup.x = R3.x;
+            R126.y = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].y, R126.z);
+            PV12.y = R126.y;
+            R127.z = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].z, R124.w);
+            PV12.z = R127.z;
+            temp13 = dot(vec4(R127.x, PV12.y, PV12.z, 0.0), vec4(R127.x, PV12.y, PV12.z, 0.0));
+            PV13.x = temp13;
+            R127.y = inversesqrt(PV13.x);
+            PS14 = R127.y;
+            R126_backup.y = R126.y;
+            R3.z = R127.z * PS14;
+            R1.w = R126_backup.y * PS14;
+            R4.y = R127.x * R127.y;
+            R124.x = FB0.bgRotInv[2].y * R3.z;
+            R125.y = fma(R1.w, FB0.bgRotInv[1].y, R124.x);
+            R17.y = fma(R4.y, FB0.bgRotInv[0].y, R125.y);
+            result = R17.y;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+static TRANSFORM_NORMAL_Z: LazyLock<Graph> = LazyLock::new(|| {
+    // texas_cross.105.vert.
+    let query = indoc! {"
+        void main() {
+            R3.x = a_Normal_x;
+            R3.y = a_Normal_y;
+            R3.z = a_Normal_z;
+            R7.y = R3.z * PerDraw.LocalToWorldMatrix[2].z;
+            R126.w = R3.z * PerDraw.LocalToWorldMatrix[2].x;
+            R126.x = fma(R3.y, PerDraw.LocalToWorldMatrix[1].x, R126.w);
+            PS8 = R3.z * PerDraw.LocalToWorldMatrix[2].y;
+            R126.z = fma(R3.y, PerDraw.LocalToWorldMatrix[1].y, PS8);
+            R124.w = fma(R3.y, PerDraw.LocalToWorldMatrix[1].z, R7.y);
+            R127.x = fma(R3.x, PerDraw.LocalToWorldMatrix[0].x, R126.x);
+            R3_backup.x = R3.x;
+            R126.y = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].y, R126.z);
+            PV12.y = R126.y;
+            R127.z = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].z, R124.w);
+            PV12.z = R127.z;
+            temp13 = dot(vec4(R127.x, PV12.y, PV12.z, 0.0), vec4(R127.x, PV12.y, PV12.z, 0.0));
+            PV13.x = temp13;
+            R127.y = inversesqrt(PV13.x);
+            PS14 = R127.y;
+            R126_backup.y = R126.y;
+            R3.z = R127.z * PS14;
+            R1.w = R126_backup.y * PS14;
+            R4.y = R127.x * R127.y;
+            R126.x = FB0.bgRotInv[2].z * R3.z;
+            R126_backup.x = R126.x;
+            R1.y = fma(R1.w, FB0.bgRotInv[1].z, R126_backup.x);
+            R17.z = fma(R4.y, FB0.bgRotInv[0].z, R1.y);
+            result = R17.z;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn transform_normal<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&'a Expr> {
+    query_nodes(expr, graph, &TRANSFORM_NORMAL_X)
+        .and_then(|r| r.get("a_Normal_x").copied())
+        .or_else(|| {
+            query_nodes(expr, graph, &TRANSFORM_NORMAL_Y).and_then(|r| r.get("a_Normal_y").copied())
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &TRANSFORM_NORMAL_Z).and_then(|r| r.get("a_Normal_z").copied())
+        })
 }
 
 static OP_MIX: LazyLock<Graph> = LazyLock::new(|| {
