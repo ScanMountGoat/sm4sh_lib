@@ -96,6 +96,9 @@ pub enum Operation {
     NormalMapX,
     NormalMapY,
     NormalMapZ,
+    NormalizeX,
+    NormalizeY,
+    NormalizeZ,
     Unk,
 }
 

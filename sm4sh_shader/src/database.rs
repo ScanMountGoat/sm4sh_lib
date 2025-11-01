@@ -62,6 +62,9 @@ pub enum Operation {
     NormalMapX,
     NormalMapY,
     NormalMapZ,
+    NormalizeX,
+    NormalizeY,
+    NormalizeZ,
     Unk,
 }
 
@@ -84,6 +87,7 @@ impl xc3_shader::expr::Operation for Operation {
         // TODO: Figure out why op_mix doesn't work with simplification.
         // op_mix(graph, expr)
         op_normal_map(graph, expr)
+            .or_else(|| op_normalize(graph, expr))
             .or_else(|| op_pow(graph, expr))
             .or_else(|| op_sqrt(graph, expr))
             .or_else(|| op_dot(graph, expr))
@@ -215,6 +219,9 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::NormalMapX => Self::NormalMapX,
             Operation::NormalMapY => Self::NormalMapY,
             Operation::NormalMapZ => Self::NormalMapZ,
+            Operation::NormalizeX => Self::NormalizeX,
+            Operation::NormalizeY => Self::NormalizeY,
+            Operation::NormalizeZ => Self::NormalizeZ,
             Operation::Unk => Self::Unk,
         }
     }
@@ -222,8 +229,13 @@ impl From<Operation> for sm4sh_model::database::Operation {
 
 fn modify_attributes(graph: &Graph, expr: &Expr) -> Expr {
     // Remove attribute transforms so queries can detect attribute channels.
+    // TODO: keep track of what space each attribute is in like model, view, etc.
+    // TODO: replace with functions that transform to a specific space like world to view?
     let mut expr = expr;
-    if let Some(new_expr) = transform_normal(graph, expr) {
+    if let Some(new_expr) =
+        transform_normal(graph, expr).or_else(|| transform_binormal(graph, expr))
+    // .or_else(|| transform_position(graph, expr))
+    {
         expr = new_expr;
     }
     expr.clone()

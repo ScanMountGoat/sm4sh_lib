@@ -317,6 +317,18 @@ fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {
             "apply_normal_map(vec3({}, {}, {}), a_Tangent.xyz, a_Binormal.xyz, a_Normal.xyz).z",
             arg0?, arg1?, arg2?
         )),
+        Operation::NormalizeX => Some(format!(
+            "normalize(vec4({}, {}, {}, {})).x",
+            arg0?, arg1?, arg2?, arg3?
+        )),
+        Operation::NormalizeY => Some(format!(
+            "normalize(vec4({}, {}, {}, {})).y",
+            arg0?, arg1?, arg2?, arg3?
+        )),
+        Operation::NormalizeZ => Some(format!(
+            "normalize(vec4({}, {}, {}, {})).z",
+            arg0?, arg1?, arg2?, arg3?
+        )),
         Operation::Unk => None,
     }
 }
