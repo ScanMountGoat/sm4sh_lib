@@ -91,11 +91,10 @@ pub fn op_normal_map<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation,
     Some((op, vec![x, y, z]))
 }
 
-// TODO: Reduce repetition in queries?
-static TRANSFORM_NORMAL_X: LazyLock<Graph> = LazyLock::new(|| {
+fn transform_normal_query(c: char) -> String {
     // texas_cross.105.vert.
-    let query = indoc! {"
-        void main() {
+    formatdoc! {"
+        void main() {{
             R3.x = a_Normal_x;
             R3.y = a_Normal_y;
             R3.z = a_Normal_z;
@@ -119,89 +118,30 @@ static TRANSFORM_NORMAL_X: LazyLock<Graph> = LazyLock::new(|| {
             R3.z = R127.z * PS14;
             R1.w = R126_backup.y * PS14;
             R4.y = R127.x * R127.y;
-            R124.w = FB0.bgRotInv[2].x * R3.z;
-            R124.w = fma(R1.w, FB0.bgRotInv[1].x, R124.w);
-            R17.x = fma(R4.y, FB0.bgRotInv[0].x, R124.w);
+            R124.w = FB0.bgRotInv[2].{c} * R3.z;
+            R124.w = fma(R1.w, FB0.bgRotInv[1].{c}, R124.w);
+            R17.x = fma(R4.y, FB0.bgRotInv[0].{c}, R124.w);
             result = R17.x;
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
+        }}
+    "}
+}
+
+static TRANSFORM_NORMAL_X: LazyLock<Graph> = LazyLock::new(|| {
+    let query = transform_normal_query('x');
+    Graph::parse_glsl(&query).unwrap().simplify()
 });
 
 static TRANSFORM_NORMAL_Y: LazyLock<Graph> = LazyLock::new(|| {
-    // texas_cross.105.vert.
-    let query = indoc! {"
-        void main() {
-            R3.x = a_Normal_x;
-            R3.y = a_Normal_y;
-            R3.z = a_Normal_z;
-            R7.y = R3.z * PerDraw.LocalToWorldMatrix[2].z;
-            R126.w = R3.z * PerDraw.LocalToWorldMatrix[2].x;
-            R126.x = fma(R3.y, PerDraw.LocalToWorldMatrix[1].x, R126.w);
-            PS8 = R3.z * PerDraw.LocalToWorldMatrix[2].y;
-            R126.z = fma(R3.y, PerDraw.LocalToWorldMatrix[1].y, PS8);
-            R124.w = fma(R3.y, PerDraw.LocalToWorldMatrix[1].z, R7.y);
-            R127.x = fma(R3.x, PerDraw.LocalToWorldMatrix[0].x, R126.x);
-            R3_backup.x = R3.x;
-            R126.y = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].y, R126.z);
-            PV12.y = R126.y;
-            R127.z = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].z, R124.w);
-            PV12.z = R127.z;
-            temp13 = dot(vec4(R127.x, PV12.y, PV12.z, 0.0), vec4(R127.x, PV12.y, PV12.z, 0.0));
-            PV13.x = temp13;
-            R127.y = inversesqrt(PV13.x);
-            PS14 = R127.y;
-            R126_backup.y = R126.y;
-            R3.z = R127.z * PS14;
-            R1.w = R126_backup.y * PS14;
-            R4.y = R127.x * R127.y;
-            R124.x = FB0.bgRotInv[2].y * R3.z;
-            R125.y = fma(R1.w, FB0.bgRotInv[1].y, R124.x);
-            R17.y = fma(R4.y, FB0.bgRotInv[0].y, R125.y);
-            result = R17.y;
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
+    let query = transform_normal_query('y');
+    Graph::parse_glsl(&query).unwrap().simplify()
 });
 
 static TRANSFORM_NORMAL_Z: LazyLock<Graph> = LazyLock::new(|| {
-    // texas_cross.105.vert.
-    let query = indoc! {"
-        void main() {
-            R3.x = a_Normal_x;
-            R3.y = a_Normal_y;
-            R3.z = a_Normal_z;
-            R7.y = R3.z * PerDraw.LocalToWorldMatrix[2].z;
-            R126.w = R3.z * PerDraw.LocalToWorldMatrix[2].x;
-            R126.x = fma(R3.y, PerDraw.LocalToWorldMatrix[1].x, R126.w);
-            PS8 = R3.z * PerDraw.LocalToWorldMatrix[2].y;
-            R126.z = fma(R3.y, PerDraw.LocalToWorldMatrix[1].y, PS8);
-            R124.w = fma(R3.y, PerDraw.LocalToWorldMatrix[1].z, R7.y);
-            R127.x = fma(R3.x, PerDraw.LocalToWorldMatrix[0].x, R126.x);
-            R3_backup.x = R3.x;
-            R126.y = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].y, R126.z);
-            PV12.y = R126.y;
-            R127.z = fma(R3_backup.x, PerDraw.LocalToWorldMatrix[0].z, R124.w);
-            PV12.z = R127.z;
-            temp13 = dot(vec4(R127.x, PV12.y, PV12.z, 0.0), vec4(R127.x, PV12.y, PV12.z, 0.0));
-            PV13.x = temp13;
-            R127.y = inversesqrt(PV13.x);
-            PS14 = R127.y;
-            R126_backup.y = R126.y;
-            R3.z = R127.z * PS14;
-            R1.w = R126_backup.y * PS14;
-            R4.y = R127.x * R127.y;
-            R126.x = FB0.bgRotInv[2].z * R3.z;
-            R126_backup.x = R126.x;
-            R1.y = fma(R1.w, FB0.bgRotInv[1].z, R126_backup.x);
-            R17.z = fma(R4.y, FB0.bgRotInv[0].z, R1.y);
-            result = R17.z;
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
+    let query = transform_normal_query('z');
+    Graph::parse_glsl(&query).unwrap().simplify()
 });
 
-pub fn transform_normal<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&'a Expr> {
+pub fn local_to_world_normal<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&'a Expr> {
     query_nodes(expr, graph, &TRANSFORM_NORMAL_X)
         .and_then(|r| r.get("a_Normal_x").copied())
         .or_else(|| {
@@ -255,7 +195,7 @@ static TRANSFORM_BINORMAL_Z: LazyLock<Graph> = LazyLock::new(|| {
     Graph::parse_glsl(&query).unwrap().simplify()
 });
 
-pub fn transform_binormal<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&'a Expr> {
+pub fn local_to_world_binormal<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&'a Expr> {
     query_nodes(expr, graph, &TRANSFORM_BINORMAL_X)
         .and_then(|r| r.get("a_Binormal_x").copied())
         .or_else(|| {
@@ -431,7 +371,7 @@ static TRANSFORM_POSITION_Z: LazyLock<Graph> = LazyLock::new(|| {
     Graph::parse_glsl(query).unwrap().simplify()
 });
 
-pub fn transform_position<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&'a Expr> {
+pub fn local_to_view_position<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&'a Expr> {
     query_nodes(expr, graph, &TRANSFORM_POSITION_X)
         .and_then(|r| r.get("a_Position_x").copied())
         .or_else(|| {
@@ -471,8 +411,6 @@ pub fn op_mix<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'
     // TODO: This is matching things it shouldn't but only when simplified?
     let result =
         query_nodes(expr, graph, &OP_MIX).or_else(|| query_nodes(expr, graph, &OP_MIX2))?;
-    print!("{}", OP_MIX.simplify().to_glsl());
-    print!("{}", OP_MIX2.simplify().to_glsl());
     let a = result.get("a")?;
     let b = result.get("b")?;
     let ratio = result.get("ratio")?;

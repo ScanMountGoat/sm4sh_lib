@@ -85,8 +85,9 @@ impl xc3_shader::expr::Operation for Operation {
         // TODO: Share these queries with xc3_shader?
         // TODO: Use queries to simplify operations
         // TODO: Figure out why op_mix doesn't work with simplification.
-        // op_mix(graph, expr)
+        // TODO: query for view vector
         op_normal_map(graph, expr)
+            // .or_else(|| op_mix(graph, expr))
             .or_else(|| op_normalize(graph, expr))
             .or_else(|| op_pow(graph, expr))
             .or_else(|| op_sqrt(graph, expr))
@@ -233,8 +234,7 @@ fn modify_attributes(graph: &Graph, expr: &Expr) -> Expr {
     // TODO: replace with functions that transform to a specific space like world to view?
     let mut expr = expr;
     if let Some(new_expr) =
-        transform_normal(graph, expr).or_else(|| transform_binormal(graph, expr))
-    // .or_else(|| transform_position(graph, expr))
+        local_to_world_normal(graph, expr).or_else(|| local_to_world_binormal(graph, expr))
     {
         expr = new_expr;
     }
