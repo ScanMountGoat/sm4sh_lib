@@ -195,16 +195,54 @@ static TRANSFORM_BINORMAL_Z: LazyLock<Graph> = LazyLock::new(|| {
     Graph::parse_glsl(&query).unwrap().simplify()
 });
 
-pub fn local_to_world_binormal<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&'a Expr> {
+static TRANSFORM_BINORMAL_W: LazyLock<Graph> = LazyLock::new(|| {
+    // texas_cross.105.vert
+    let query = indoc! {"
+        void main() {
+            R1.x = a_Binormal_x;
+            R1.y = a_Binormal_y;
+            R1.z = a_Binormal_z;
+            R3.x = a_Normal_x;
+            R3.y = a_Normal_y;
+            R3.z = a_Normal_z;
+            R5.x = a_Tangent_x;
+            R5.y = a_Tangent_y;
+            R5.z = a_Tangent_z;
+            R126.z = R1.y * R3.z;
+            R1.w = R1.z * R3.x;
+            R125.x = fma(-R3.y, R1.z, R126.z);
+            R127.z = R1.x * R3.y;
+            R124.y = fma(-R3.z, R1.x, R1.w);
+            R3_backup.x = R3.x;
+            R3.x = fma(-R3_backup.x, R1.y, R127.z);
+            temp18 = dot(vec4(R5.x, R5.y, R5.z, 0.0), vec4(R125.x, R124.y, R3.x, 0.0));
+            PV18.x = temp18;
+            R1.z = PV18.x > 0.0 ? 1.0 : 0.0;
+            R3.w = 0.0 > PV18.x ? 1.0 : 0.0;
+            R15.w = R1.z + -R3.w;
+            result = R15.w;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn local_to_world_binormal(graph: &Graph, expr: &Expr) -> Option<Expr> {
     query_nodes(expr, graph, &TRANSFORM_BINORMAL_X)
-        .and_then(|r| r.get("a_Binormal_x").copied())
+        .and_then(|r| r.get("a_Binormal_x").copied().cloned())
         .or_else(|| {
             query_nodes(expr, graph, &TRANSFORM_BINORMAL_Y)
-                .and_then(|r| r.get("a_Binormal_y").copied())
+                .and_then(|r| r.get("a_Binormal_y").copied().cloned())
         })
         .or_else(|| {
             query_nodes(expr, graph, &TRANSFORM_BINORMAL_Z)
-                .and_then(|r| r.get("a_Binormal_z").copied())
+                .and_then(|r| r.get("a_Binormal_z").copied().cloned())
+        })
+        .or_else(|| {
+            // The sign can be calculated in consuming applications.
+            query_nodes(expr, graph, &TRANSFORM_BINORMAL_W).map(|_| Expr::Global {
+                name: "bitangent_sign".into(),
+                channel: None,
+            })
         })
 }
 

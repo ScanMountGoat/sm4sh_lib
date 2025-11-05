@@ -232,10 +232,11 @@ fn modify_attributes(graph: &Graph, expr: &Expr) -> Expr {
     // Remove attribute transforms so queries can detect attribute channels.
     // TODO: keep track of what space each attribute is in like model, view, etc.
     // TODO: replace with functions that transform to a specific space like world to view?
-    if let Some(new_expr) =
-        local_to_world_normal(graph, expr).or_else(|| local_to_world_binormal(graph, expr))
+    if let Some(new_expr) = local_to_world_normal(graph, expr)
+        .cloned()
+        .or_else(|| local_to_world_binormal(graph, expr))
     {
-        new_expr.clone()
+        new_expr
     } else if let Some(new_expr) = eye_vector(graph, expr) {
         new_expr
     } else {

@@ -287,7 +287,7 @@ struct VertexOutput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) tangent: vec3<f32>,
-    @location(3) bitangent: vec3<f32>,
+    @location(3) bitangent: vec4<f32>,
     @location(4) color: vec4<f32>,
     @location(5) uv0: vec2<f32>,
     @location(6) uv1: vec2<f32>,
@@ -361,6 +361,16 @@ fn vs_shadow(in0: VertexInput0) -> @builtin(position) vec4<f32> {
     return fb0.shadow_map_matrix * vec4(position, 1.0);
 }
 
+
+fn bitangent_w(tangent: vec3<f32>, bitangent: vec3<f32>, normal: vec3<f32>) -> f32 {
+    let cos_angle = dot(tangent, cross(bitangent, normal));
+    if cos_angle > 0 {
+        return 1.0;
+    } else {
+        return -1.0;
+    }
+}
+
 @vertex
 fn vs_main(in0: VertexInput0) -> VertexOutput {
     var out: VertexOutput;
@@ -420,10 +430,12 @@ fn vs_main(in0: VertexInput0) -> VertexOutput {
 
     out.clip_position = camera.view_projection * vec4(position, 1.0);
 
+    let bitangent_w = bitangent_w(in0.tangent.xyz, in0.bitangent.xyz, in0.normal.xyz);
+
     out.position = position.xyz;
     out.normal = normal;
     out.tangent = tangent;
-    out.bitangent = bitangent;
+    out.bitangent = vec4(bitangent, bitangent_w);
     out.color = in0.color;
     out.uv0 = in0.uv01.xy;
     out.uv1 = in0.uv01.zw;
@@ -474,10 +486,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = camera.projection[0];
     let REMOVE_END = 0.0;
 
-    let vertex_tangent = normalize(in.tangent);
-    let vertex_bitangent = normalize(in.bitangent);
-    let vertex_normal = normalize(in.normal);
-    var normal = vertex_normal;
+    let vertex_tangent = normalize(in.tangent.xyz);
+    let vertex_bitangent = normalize(in.bitangent.xyz);
+    let vertex_normal = normalize(in.normal.xyz);
 
     // TODO: Rename these in the shadergen itself?
     let a_Position = vec4(in.position, 0.0);
@@ -491,6 +502,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     // Calculated globals.
     let eye = eye_vector(in.position);
+    let bitangent_sign = in.bitangent.w;
 
     // TODO: Figure out how to initialize this.
     let local_to_world_matrix = mat4x4(
