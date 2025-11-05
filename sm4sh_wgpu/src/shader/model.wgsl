@@ -441,6 +441,14 @@ fn apply_normal_map(normal_map: vec3<f32>, tangent: vec3<f32>, bitangent: vec3<f
     return normalize(tangent * x + bitangent * y + normal * z);
 }
 
+fn eye_vector(position: vec3<f32>) -> vec4<f32> {
+    let view_position = camera.view * vec4(position, 1.0);
+    // TODO: recreate the calculation from in game?
+    let camera_position = camera.position;
+    let eye = normalize(camera_position.xyz - view_position.xyz);
+    return vec4(eye, 0.0);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Required for wgsl_to_wgpu reachability analysis to include these resources.
@@ -480,6 +488,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     let a_Tangent = vec4(vertex_tangent, 0.0);
     let a_Binormal = vec4(vertex_bitangent, 0.0);
     let a_Color = in.color;
+
+    // Calculated globals.
+    let eye = eye_vector(in.position);
 
     // TODO: Figure out how to initialize this.
     let local_to_world_matrix = mat4x4(

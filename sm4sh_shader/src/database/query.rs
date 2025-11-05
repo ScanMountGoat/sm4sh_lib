@@ -208,11 +208,10 @@ pub fn local_to_world_binormal<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&
         })
 }
 
-// TODO: Reduce repetition in queries?
-static TRANSFORM_POSITION_X: LazyLock<Graph> = LazyLock::new(|| {
+fn eye_vector_query(c: char) -> String {
     // texas_cross.105.vert.
-    let query = indoc! {"
-        void main() {
+    formatdoc! {"
+        void main() {{
             R4.x = a_Position_x;
             R4.y = a_Position_y;
             R4.z = a_Position_z;
@@ -252,135 +251,49 @@ static TRANSFORM_POSITION_X: LazyLock<Graph> = LazyLock::new(|| {
             temp37 = dot(vec4(R1.y, R2.w, R127.z, 0.0), vec4(PerView.WorldToViewMatrix[3].x, PerView.WorldToViewMatrix[3].y, PerView.WorldToViewMatrix[3].z, 0.0));
             PV37.x = temp37;
             R125.x = -PV37.x;
-            R127.y = R126.z * FB0.bgRotInv[2].x;
+            R127.y = R126.z * FB0.bgRotInv[2].{c};
             R125.x = -R8.x + R125.x;
             R127_backup.y = R127.y;
-            R125.z = fma(R125.w, FB0.bgRotInv[1].x, R127_backup.y);
-            R14.x = fma(R125.x, FB0.bgRotInv[0].x, R125.z);
+            R125.z = fma(R125.w, FB0.bgRotInv[1].{c}, R127_backup.y);
+            R14.x = fma(R125.x, FB0.bgRotInv[0].{c}, R125.z);
             result = R14.x;
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
+        }}
+    "}
+}
+
+static EYE_VECTOR_X: LazyLock<Graph> = LazyLock::new(|| {
+    let query = eye_vector_query('x');
+    Graph::parse_glsl(&query).unwrap().simplify()
 });
 
-static TRANSFORM_POSITION_Y: LazyLock<Graph> = LazyLock::new(|| {
-    // texas_cross.105.vert.
-    let query = indoc! {"
-        void main() {
-        R4.x = a_Position.x;
-            R4.y = a_Position.y;
-            R4.z = a_Position.z;
-            PV0.w = PerDraw.LocalToWorldMatrix[3].z * 1.0;
-            R127.w = fma(R4.z, PerDraw.LocalToWorldMatrix[2].z, PV0.w);
-            R125.z = fma(R4.y, PerDraw.LocalToWorldMatrix[1].z, R127.w);
-            R126.y = PerDraw.LocalToWorldMatrix[3].x * 1.0;
-            PV8.x = PerDraw.LocalToWorldMatrix[3].y * 1.0;
-            R123.x = fma(R4.z, PerDraw.LocalToWorldMatrix[2].y, PV8.x);
-            PV9.x = R123.x;
-            R123.y = fma(R4.z, PerDraw.LocalToWorldMatrix[2].x, R126.y);
-            PV9.y = R123.y;
-            R123.x = fma(R4.y, PerDraw.LocalToWorldMatrix[1].y, PV9.x);
-            PV10.x = R123.x;
-            R123.y = fma(R4.y, PerDraw.LocalToWorldMatrix[1].x, PV9.y);
-            PV10.y = R123.y;
-            R8.x = fma(R4.x, PerDraw.LocalToWorldMatrix[0].x, PV10.y);
-            R9.y = fma(R4.x, PerDraw.LocalToWorldMatrix[0].y, PV10.x);
-            R4.z = fma(R4.x, PerDraw.LocalToWorldMatrix[0].z, R125.z);
-            R124.w = PerView.WorldToViewMatrix[2].x;
-            R124.y = PerView.WorldToViewMatrix[2].y;
-            R127.z = PerView.WorldToViewMatrix[2].z;
-            R0.w = PerView.WorldToViewMatrix[1].x;
-            R8.y = PerView.WorldToViewMatrix[1].y;
-            R5.z = PerView.WorldToViewMatrix[1].z;
-            temp31 = dot(vec4(R124.w, R124.y, R127.z, 0.0), vec4(PerView.WorldToViewMatrix[3].x, PerView.WorldToViewMatrix[3].y, PerView.WorldToViewMatrix[3].z, 0.0));
-            PV31.x = temp31;
-            R1.y = PerView.WorldToViewMatrix[0].x;
-            R2.w = PerView.WorldToViewMatrix[0].y;
-            R5.y = -PV31.x;
-            temp34 = dot(vec4(R0.w, R8.y, R5.z, 0.0), vec4(PerView.WorldToViewMatrix[3].x, PerView.WorldToViewMatrix[3].y, PerView.WorldToViewMatrix[3].z, 0.0));
-            PV34.x = temp34;
-            R126.z = -R4.z + R5.y;
-            PV35.y = -PV34.x;
-            R127.z = PerView.WorldToViewMatrix[0].z;
-            R125.w = -R9.y + PV35.y;
-            temp37 = dot(vec4(R1.y, R2.w, R127.z, 0.0), vec4(PerView.WorldToViewMatrix[3].x, PerView.WorldToViewMatrix[3].y, PerView.WorldToViewMatrix[3].z, 0.0));
-            PV37.x = temp37;
-            R125.x = -PV37.x;
-            R125.z = R126.z * FB0.bgRotInv[2].y;
-            R125.x = -R8.x + R125.x;
-            R127.y = fma(R125.w, FB0.bgRotInv[1].y, R125.z);
-            R127_backup.y = R127.y;
-            R14.y = fma(R125.x, FB0.bgRotInv[0].y, R127_backup.y);
-            result = R14.y;
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
+static EYE_VECTOR_Y: LazyLock<Graph> = LazyLock::new(|| {
+    let query = eye_vector_query('y');
+    Graph::parse_glsl(&query).unwrap().simplify()
 });
 
-static TRANSFORM_POSITION_Z: LazyLock<Graph> = LazyLock::new(|| {
-    // texas_cross.105.vert.
-    let query = indoc! {"
-        void main() {
-            R4.x = a_Position_x;
-            R4.y = a_Position_y;
-            R4.z = a_Position_z;
-            PV0.w = PerDraw.LocalToWorldMatrix[3].z * 1.0;
-            R127.w = fma(R4.z, PerDraw.LocalToWorldMatrix[2].z, PV0.w);
-            R125.z = fma(R4.y, PerDraw.LocalToWorldMatrix[1].z, R127.w);
-            R126.y = PerDraw.LocalToWorldMatrix[3].x * 1.0;
-            PV8.x = PerDraw.LocalToWorldMatrix[3].y * 1.0;
-            R123.x = fma(R4.z, PerDraw.LocalToWorldMatrix[2].y, PV8.x);
-            PV9.x = R123.x;
-            R123.y = fma(R4.z, PerDraw.LocalToWorldMatrix[2].x, R126.y);
-            PV9.y = R123.y;
-            R123.x = fma(R4.y, PerDraw.LocalToWorldMatrix[1].y, PV9.x);
-            PV10.x = R123.x;
-            R123.y = fma(R4.y, PerDraw.LocalToWorldMatrix[1].x, PV9.y);
-            PV10.y = R123.y;
-            R8.x = fma(R4.x, PerDraw.LocalToWorldMatrix[0].x, PV10.y);
-            R9.y = fma(R4.x, PerDraw.LocalToWorldMatrix[0].y, PV10.x);
-            R4.z = fma(R4.x, PerDraw.LocalToWorldMatrix[0].z, R125.z);
-            R124.w = PerView.WorldToViewMatrix[2].x;
-            R124.y = PerView.WorldToViewMatrix[2].y;
-            R127.z = PerView.WorldToViewMatrix[2].z;
-            R0.w = PerView.WorldToViewMatrix[1].x;
-            R8.y = PerView.WorldToViewMatrix[1].y;
-            R5.z = PerView.WorldToViewMatrix[1].z;
-            temp31 = dot(vec4(R124.w, R124.y, R127.z, 0.0), vec4(PerView.WorldToViewMatrix[3].x, PerView.WorldToViewMatrix[3].y, PerView.WorldToViewMatrix[3].z, 0.0));
-            PV31.x = temp31;
-            R1.y = PerView.WorldToViewMatrix[0].x;
-            R2.w = PerView.WorldToViewMatrix[0].y;
-            R5.y = -PV31.x;
-            temp34 = dot(vec4(R0.w, R8.y, R5.z, 0.0), vec4(PerView.WorldToViewMatrix[3].x, PerView.WorldToViewMatrix[3].y, PerView.WorldToViewMatrix[3].z, 0.0));
-            PV34.x = temp34;
-            R126.z = -R4.z + R5.y;
-            PV35.y = -PV34.x;
-            R127.z = PerView.WorldToViewMatrix[0].z;
-            R125.w = -R9.y + PV35.y;
-            temp37 = dot(vec4(R1.y, R2.w, R127.z, 0.0), vec4(PerView.WorldToViewMatrix[3].x, PerView.WorldToViewMatrix[3].y, PerView.WorldToViewMatrix[3].z, 0.0));
-            PV37.x = temp37;
-            R125.x = -PV37.x;
-            R126_backup.z = R126.z;
-            R127.w = R126_backup.z * FB0.bgRotInv[2].z;
-            R125.x = -R8.x + R125.x;
-            R126.x = fma(R125.w, FB0.bgRotInv[1].z, R127.w);
-            R14.z = fma(R125.x, FB0.bgRotInv[0].z, R126.x);
-            result = R14.z;
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
+static EYE_VECTOR_Z: LazyLock<Graph> = LazyLock::new(|| {
+    let query = eye_vector_query('z');
+    Graph::parse_glsl(&query).unwrap().simplify()
 });
 
-pub fn local_to_view_position<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<&'a Expr> {
-    query_nodes(expr, graph, &TRANSFORM_POSITION_X)
-        .and_then(|r| r.get("a_Position_x").copied())
-        .or_else(|| {
-            query_nodes(expr, graph, &TRANSFORM_POSITION_Y)
-                .and_then(|r| r.get("a_Position_y").copied())
+pub fn eye_vector(graph: &Graph, expr: &Expr) -> Option<Expr> {
+    // The eye vector can easily be calculated in consuming code.
+    query_nodes(expr, graph, &EYE_VECTOR_X)
+        .map(|_| Expr::Global {
+            name: "eye".into(),
+            channel: Some('x'),
         })
         .or_else(|| {
-            query_nodes(expr, graph, &TRANSFORM_POSITION_Z)
-                .and_then(|r| r.get("a_Position_z").copied())
+            query_nodes(expr, graph, &EYE_VECTOR_Y).map(|_| Expr::Global {
+                name: "eye".into(),
+                channel: Some('y'),
+            })
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &EYE_VECTOR_Z).map(|_| Expr::Global {
+                name: "eye".into(),
+                channel: Some('z'),
+            })
         })
 }
 

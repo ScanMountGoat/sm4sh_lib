@@ -183,7 +183,8 @@ fn sampler_2d_or_cube(
 }
 
 fn attribute_wgsl(a: &sm4sh_model::database::Attribute) -> Option<String> {
-    if a.name.starts_with("a_") {
+    // Some "attributes" are the simplified result of queries like the eye vector.
+    if a.name.starts_with("a_") || a.name == "eye" {
         Some(format!("{}{}", a.name, channel_wgsl(a.channel)))
     } else {
         error!("Unrecognized attribute {a}");
