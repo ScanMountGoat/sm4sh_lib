@@ -9,6 +9,7 @@ use sm4sh_lib::{
 };
 use sm4sh_model::database::{ShaderDatabase, ShaderProgram};
 use smol_str::SmolStr;
+use xc3_shader::graph::glsl::glsl_dependencies;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Write,
@@ -76,6 +77,15 @@ enum Commands {
         /// The output txt file.
         output: String,
     },
+    /// Find all lines of GLSL code influencing the final assignment of a variable.
+    GlslDependencies {
+        /// The input GLSL file.
+        input: String,
+        /// The output GLSL file.
+        output: String,
+        /// The name of the variable to analyze.
+        var: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -112,6 +122,12 @@ fn main() -> anyhow::Result<()> {
         } => create_shader_database(&shader_ids_shaders, &nsh_shader_dump, &output)?,
         Commands::GlslOutputDependencies { frag, output } => {
             glsl_output_dependencies(&frag, &output)?
+        }
+        Commands::GlslDependencies { input, output, var } => {
+            let source = std::fs::read_to_string(input).unwrap();
+            let (var, channels) = var.split_once('.').unwrap_or((&var, ""));
+            let source_out = glsl_dependencies(&source, var, channels.chars().next());
+            std::fs::write(output, source_out).unwrap();
         }
     }
     println!("Finished in {:?}", start.elapsed());
