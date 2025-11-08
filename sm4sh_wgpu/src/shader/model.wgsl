@@ -461,6 +461,16 @@ fn eye_vector(position: vec3<f32>) -> vec4<f32> {
     return vec4(eye, 0.0);
 }
 
+fn light_position_vector(position: vec3<f32>) -> vec4<f32> {
+    let light_position = fb0.shadow_map_matrix * vec4(position, 1.0);
+    return light_position / light_position.w;
+}
+
+fn light_map_position_vector(position: vec3<f32>) -> vec4<f32> {
+    let light_map_position = fb1.light_map_matrix * vec4(position, 1.0);
+    return vec4(light_map_position.xy + fb0.light_map_pos.xy, 0.0, 0.0);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Required for wgsl_to_wgpu reachability analysis to include these resources.
@@ -502,7 +512,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
 
     // Calculated globals.
     let eye = eye_vector(in.position);
-    let bitangent_sign = in.bitangent.w;
+    let bitangent_sign = in.bitangent.w; // calculated in vertex shader
+    let light_position = light_position_vector(in.position);
+    let light_map_position = light_map_position_vector(in.position);
 
     // TODO: Figure out how to initialize this.
     let local_to_world_matrix = mat4x4(

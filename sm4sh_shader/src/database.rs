@@ -27,7 +27,7 @@ pub struct ShaderProgram {
     pub exprs: Vec<OutputExpr<Operation>>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Default)]
 pub enum Operation {
     Add,
     Sub,
@@ -65,13 +65,8 @@ pub enum Operation {
     NormalizeX,
     NormalizeY,
     NormalizeZ,
+    #[default]
     Unk,
-}
-
-impl Default for Operation {
-    fn default() -> Self {
-        Self::Unk
-    }
 }
 
 impl std::fmt::Display for Operation {
@@ -237,7 +232,10 @@ fn modify_attributes(graph: &Graph, expr: &Expr) -> Expr {
         .or_else(|| local_to_world_binormal(graph, expr))
     {
         new_expr
-    } else if let Some(new_expr) = eye_vector(graph, expr) {
+    } else if let Some(new_expr) = eye_vector(graph, expr)
+        .or_else(|| light_position(graph, expr))
+        .or_else(|| light_map_position(graph, expr))
+    {
         new_expr
     } else {
         expr.clone()

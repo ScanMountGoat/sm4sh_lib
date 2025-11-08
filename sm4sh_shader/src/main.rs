@@ -9,13 +9,13 @@ use sm4sh_lib::{
 };
 use sm4sh_model::database::{ShaderDatabase, ShaderProgram};
 use smol_str::SmolStr;
-use xc3_shader::graph::glsl::glsl_dependencies;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Write,
     fs::File,
     path::Path,
 };
+use xc3_shader::graph::glsl::glsl_dependencies;
 
 use crate::{
     annotation::annotate_shader,

@@ -335,6 +335,173 @@ pub fn eye_vector(graph: &Graph, expr: &Expr) -> Option<Expr> {
         })
 }
 
+fn light_position_query(c: char) -> String {
+    // texas_cross.105.vert.
+    formatdoc! {"
+        void main() {{
+            R4.x = a_Position_x;
+            R4.y = a_Position_y;
+            R4.z = a_Position_z;
+            R127.x = PerDraw.LocalToWorldMatrix[3].w * 1.0;
+            PV0.x = R127.x;
+            PV0.w = PerDraw.LocalToWorldMatrix[3].z * 1.0;
+            PV1.x = PV0.x;
+            R127.w = fma(R4.z, PerDraw.LocalToWorldMatrix[2].z, PV0.w);
+            R123.z = fma(R4.z, PerDraw.LocalToWorldMatrix[2].w, PV1.x);
+            PV2.z = R123.z;
+            R125.z = fma(R4.y, PerDraw.LocalToWorldMatrix[1].z, R127.w);
+            R124.z = fma(R4.y, PerDraw.LocalToWorldMatrix[1].w, PV2.z);
+            R126.y = PerDraw.LocalToWorldMatrix[3].x * 1.0;
+            PV8.x = PerDraw.LocalToWorldMatrix[3].y * 1.0;
+            R123.x = fma(R4.z, PerDraw.LocalToWorldMatrix[2].y, PV8.x);
+            PV9.x = R123.x;
+            R123.y = fma(R4.z, PerDraw.LocalToWorldMatrix[2].x, R126.y);
+            PV9.y = R123.y;
+            R123.x = fma(R4.y, PerDraw.LocalToWorldMatrix[1].y, PV9.x);
+            PV10.x = R123.x;
+            R123.y = fma(R4.y, PerDraw.LocalToWorldMatrix[1].x, PV9.y);
+            PV10.y = R123.y;
+            R8.x = fma(R4.x, PerDraw.LocalToWorldMatrix[0].x, PV10.y);
+            R9.y = fma(R4.x, PerDraw.LocalToWorldMatrix[0].y, PV10.x);
+            R4.z = fma(R4.x, PerDraw.LocalToWorldMatrix[0].z, R125.z);
+            R6.w = fma(R4.x, PerDraw.LocalToWorldMatrix[0].w, R124.z);
+            R7.x = R6.w * FB0.ShadowMapMatrix[3].w;
+            R126.w = R6.w * FB0.ShadowMapMatrix[3].{c};
+            R127.x = fma(R4.z, FB0.ShadowMapMatrix[2].w, R7.x);
+            R126.w = fma(R4.z, FB0.ShadowMapMatrix[2].{c}, R126.w);
+            R127.x = fma(R9.y, FB0.ShadowMapMatrix[1].w, R127.x);
+            R126.w = fma(R9.y, FB0.ShadowMapMatrix[1].{c}, R126.w);
+            R127.x = fma(R8.x, FB0.ShadowMapMatrix[0].w, R127.x);
+            R126.w = fma(R8.x, FB0.ShadowMapMatrix[0].{c}, R126.w);
+            R125.w = 1.0 / R127.x;
+            R16.x = R126.w * R125.w;
+            result = R16.x;
+        }}
+    "}
+}
+
+static LIGHT_POSITION_X: LazyLock<Graph> = LazyLock::new(|| {
+    let query = light_position_query('x');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static LIGHT_POSITION_Y: LazyLock<Graph> = LazyLock::new(|| {
+    let query = light_position_query('y');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static LIGHT_POSITION_Z: LazyLock<Graph> = LazyLock::new(|| {
+    let query = light_position_query('z');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+pub fn light_position(graph: &Graph, expr: &Expr) -> Option<Expr> {
+    // The position in light space for shadow mapping can easily be calculated in consuming code.
+    query_nodes(expr, graph, &LIGHT_POSITION_X)
+        .map(|_| Expr::Global {
+            name: "light_position".into(),
+            channel: Some('x'),
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &LIGHT_POSITION_Y).map(|_| Expr::Global {
+                name: "light_position".into(),
+                channel: Some('y'),
+            })
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &LIGHT_POSITION_Z).map(|_| Expr::Global {
+                name: "light_position".into(),
+                channel: Some('z'),
+            })
+        })
+}
+
+static LIGHT_MAP_POS_X: LazyLock<Graph> = LazyLock::new(|| {
+    // texas_cross.105.vert
+    let query = indoc! {"
+        void main() {
+            R4.x = a_Position_x;
+            R4.y = a_Position_y;
+            R4.z = a_Position_z;
+            PV0.w = PerDraw.LocalToWorldMatrix[3].z * 1.0;
+            R127.w = fma(R4.z, PerDraw.LocalToWorldMatrix[2].z, PV0.w);
+            R125.z = fma(R4.y, PerDraw.LocalToWorldMatrix[1].z, R127.w);
+            R126.y = PerDraw.LocalToWorldMatrix[3].x * 1.0;
+            PV8.x = PerDraw.LocalToWorldMatrix[3].y * 1.0;
+            R123.x = fma(R4.z, PerDraw.LocalToWorldMatrix[2].y, PV8.x);
+            PV9.x = R123.x;
+            R123.y = fma(R4.z, PerDraw.LocalToWorldMatrix[2].x, R126.y);
+            PV9.y = R123.y;
+            R123.x = fma(R4.y, PerDraw.LocalToWorldMatrix[1].y, PV9.x);
+            PV10.x = R123.x;
+            R123.y = fma(R4.y, PerDraw.LocalToWorldMatrix[1].x, PV9.y);
+            PV10.y = R123.y;
+            R8.x = fma(R4.x, PerDraw.LocalToWorldMatrix[0].x, PV10.y);
+            R9.y = fma(R4.x, PerDraw.LocalToWorldMatrix[0].y, PV10.x);
+            R4.z = fma(R4.x, PerDraw.LocalToWorldMatrix[0].z, R125.z);
+            PV14.w = FB1.lightMapMatrix[3].x * 1.0;
+            R126.y = fma(R4.z, FB1.lightMapMatrix[2].x, PV14.w);
+            R124.w = fma(R9.y, FB1.lightMapMatrix[1].x, R126.y);
+            R2.y = fma(R8.x, FB1.lightMapMatrix[0].x, R124.w);
+            R2.y = FB0.lightMapPos.x + R2.y;
+            R3.z = R2.y;
+            result = R3.z;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+static LIGHT_MAP_POS_Y: LazyLock<Graph> = LazyLock::new(|| {
+    // texas_cross.105.vert
+    let query = indoc! {"
+        void main() {
+            R4.x = a_Position_x;
+            R4.y = a_Position_y;
+            R4.z = a_Position_z;
+            PV0.w = PerDraw.LocalToWorldMatrix[3].z * 1.0;
+            R127.w = fma(R4.z, PerDraw.LocalToWorldMatrix[2].z, PV0.w);
+            R125.z = fma(R4.y, PerDraw.LocalToWorldMatrix[1].z, R127.w);
+            R126.y = PerDraw.LocalToWorldMatrix[3].x * 1.0;
+            PV8.x = PerDraw.LocalToWorldMatrix[3].y * 1.0;
+            R123.x = fma(R4.z, PerDraw.LocalToWorldMatrix[2].y, PV8.x);
+            PV9.x = R123.x;
+            R123.y = fma(R4.z, PerDraw.LocalToWorldMatrix[2].x, R126.y);
+            PV9.y = R123.y;
+            R123.x = fma(R4.y, PerDraw.LocalToWorldMatrix[1].y, PV9.x);
+            PV10.x = R123.x;
+            R123.y = fma(R4.y, PerDraw.LocalToWorldMatrix[1].x, PV9.y);
+            PV10.y = R123.y;
+            R8.x = fma(R4.x, PerDraw.LocalToWorldMatrix[0].x, PV10.y);
+            R9.y = fma(R4.x, PerDraw.LocalToWorldMatrix[0].y, PV10.x);
+            R4.z = fma(R4.x, PerDraw.LocalToWorldMatrix[0].z, R125.z);
+            PV14.z = FB1.lightMapMatrix[3].y * 1.0;
+            R124.x = fma(R4.z, FB1.lightMapMatrix[2].y, PV14.z);
+            R127.z = fma(R9.y, FB1.lightMapMatrix[1].y, R124.x);
+            R3.x = fma(R8.x, FB1.lightMapMatrix[0].y, R127.z);
+            R3.x = FB0.lightMapPos.y + R3.x;
+            R3_backup.x = R3.x;
+            R3.w = R3_backup.x;
+            result = R3.w;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn light_map_position(graph: &Graph, expr: &Expr) -> Option<Expr> {
+    // The light map position can easily be calculated in consuming code.
+    query_nodes(expr, graph, &LIGHT_MAP_POS_X)
+        .map(|_| Expr::Global {
+            name: "light_map_position".into(),
+            channel: Some('x'),
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &LIGHT_MAP_POS_Y).map(|_| Expr::Global {
+                name: "light_map_position".into(),
+                channel: Some('y'),
+            })
+        })
+}
+
 static OP_MIX: LazyLock<Graph> = LazyLock::new(|| {
     let query = indoc! {"
         void main() {
