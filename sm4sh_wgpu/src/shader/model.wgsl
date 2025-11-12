@@ -471,6 +471,14 @@ fn light_map_position_vector(position: vec3<f32>) -> vec4<f32> {
     return vec4(light_map_position.xy + fb0.light_map_pos.xy, 0.0, 0.0);
 }
 
+fn sphere_map_coords(position: vec3<f32>, normal: vec3<f32>, param: f32) -> vec4<f32> {
+    let adjusted_normal = normalize(normal) + position * param;
+    let view_normal = (camera.view * vec4(adjusted_normal, 0.0)).xyz;
+    // The in game shaders use 1.0 - view_normal.y due to graphics API differences.
+    let coords = vec2(view_normal.x, view_normal.y);
+    return vec4((-param * 0.25 + 0.5) * coords + 0.5, 0.0, 0.0);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Required for wgsl_to_wgpu reachability analysis to include these resources.

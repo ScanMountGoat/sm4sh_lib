@@ -29,6 +29,8 @@ pub struct ShaderProgram {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Default)]
 pub enum Operation {
+    #[default]
+    Unk,
     Add,
     Sub,
     Mul,
@@ -65,8 +67,8 @@ pub enum Operation {
     NormalizeX,
     NormalizeY,
     NormalizeZ,
-    #[default]
-    Unk,
+    SphereMapCoordX,
+    SphereMapCoordY,
 }
 
 impl std::fmt::Display for Operation {
@@ -83,6 +85,7 @@ impl xc3_shader::expr::Operation for Operation {
         // TODO: query for view vector
         op_normal_map(graph, expr)
             // .or_else(|| op_mix(graph, expr))
+            .or_else(|| op_sphere_map_coords(graph, expr))
             .or_else(|| op_normalize(graph, expr))
             .or_else(|| op_pow(graph, expr))
             .or_else(|| op_sqrt(graph, expr))
@@ -182,6 +185,7 @@ pub fn convert_expr(e: OutputExpr<Operation>) -> OutputExpr<sm4sh_model::databas
 impl From<Operation> for sm4sh_model::database::Operation {
     fn from(value: Operation) -> Self {
         match value {
+            Operation::Unk => Self::Unk,
             Operation::Add => Self::Add,
             Operation::Sub => Self::Sub,
             Operation::Mul => Self::Mul,
@@ -218,7 +222,8 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::NormalizeX => Self::NormalizeX,
             Operation::NormalizeY => Self::NormalizeY,
             Operation::NormalizeZ => Self::NormalizeZ,
-            Operation::Unk => Self::Unk,
+            Operation::SphereMapCoordX => Self::SphereMapCoordX,
+            Operation::SphereMapCoordY => Self::SphereMapCoordY,
         }
     }
 }

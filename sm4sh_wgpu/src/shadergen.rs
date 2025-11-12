@@ -278,6 +278,7 @@ fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {
     let arg7 = arg(args, 7);
 
     match op {
+        Operation::Unk => None,
         Operation::Add => Some(format!("{} + {}", arg0?, arg1?)),
         Operation::Sub => Some(format!("{} - {}", arg0?, arg1?)),
         Operation::Mul => Some(format!("{} * {}", arg0?, arg1?)),
@@ -335,7 +336,14 @@ fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {
             "normalize(vec4({}, {}, {}, {})).z",
             arg0?, arg1?, arg2?, arg3?
         )),
-        Operation::Unk => None,
+        Operation::SphereMapCoordX => Some(format!(
+            "sphere_map_coords(a_Position.xyz, a_Normal.xyz, {}).x",
+            arg0?,
+        )),
+        Operation::SphereMapCoordY => Some(format!(
+            "sphere_map_coords(a_Position.xyz, a_Normal.xyz, {}).y",
+            arg0?,
+        )),
     }
 }
 

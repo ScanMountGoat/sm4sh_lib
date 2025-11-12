@@ -63,6 +63,7 @@ impl ShaderProgram {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, FromRepr)]
 pub enum Operation {
+    Unk,
     Add,
     Sub,
     Mul,
@@ -99,7 +100,8 @@ pub enum Operation {
     NormalizeX,
     NormalizeY,
     NormalizeZ,
-    Unk,
+    SphereMapCoordX,
+    SphereMapCoordY,
 }
 
 impl Default for Operation {

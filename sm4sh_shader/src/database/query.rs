@@ -502,6 +502,93 @@ pub fn light_map_position(graph: &Graph, expr: &Expr) -> Option<Expr> {
         })
 }
 
+static SPHERE_MAP_COORD_X: LazyLock<Graph> = LazyLock::new(|| {
+    // texas_cross.79.vert
+    // TODO: Is the param always MC.reflectionParams.y?
+    let query = indoc! {"
+        void main() {
+            R3.x = a_Normal_x;
+            R3.y = a_Normal_y;
+            R3.z = a_Normal_z;
+            R4.x = a_Position_x;
+            R4.y = a_Position_y;
+            R4.z = a_Position_z;
+            temp12 = dot(vec4(R3.x, R3.y, R3.z, 0.0), vec4(R3.x, R3.y, R3.z, 0.0));
+            PV12.x = temp12;
+            R6.z = inversesqrt(PV12.x);
+            PV36.x = R4.y * param;
+            PV36.y = R4.x * param;
+            PV36.w = R4.z * param;
+            R3_backup.x = R3.x;
+            R3.x = fma(R3.z, R6.z, PV36.w);
+            R3.y = fma(R3.y, R6.z, PV36.x);
+            R3.z = fma(R3_backup.x, R6.z, PV36.y);
+            R4.w = fma(-param, 0.25, 0.5);
+            PV43.z = PerDraw.LocalToViewMatrix[2].x * R3.x;
+            R123.x = fma(R3.y, PerDraw.LocalToViewMatrix[1].x, PV43.z);
+            PV44.x = R123.x;
+            R123.x = fma(R3.z, PerDraw.LocalToViewMatrix[0].x, PV44.x);
+            PV45.x = R123.x;
+            R127.x = R4.w * PV45.x;
+            R127_backup.x = R127.x;
+            PS48 = R127_backup.x + 0.5;
+            R13.z = PS48;
+            result = R13.z;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+static SPHERE_MAP_COORD_Y: LazyLock<Graph> = LazyLock::new(|| {
+    // texas_cross.79.vert
+    // TODO: Is the param always MC.reflectionParams.y?
+    let query = indoc! {"
+        void main() {
+            R3.x = a_Normal_x;
+            R3.y = a_Normal_y;
+            R3.z = a_Normal_z;
+            R4.x = a_Position_x;
+            R4.y = a_Position_y;
+            R4.z = a_Position_z;
+            temp12 = dot(vec4(R3.x, R3.y, R3.z, 0.0), vec4(R3.x, R3.y, R3.z, 0.0));
+            PV12.x = temp12;
+            R6.z = inversesqrt(PV12.x);
+            PV36.x = R4.y * param;
+            PV36.y = R4.x * param;
+            PV36.w = R4.z * param;
+            R3_backup.x = R3.x;
+            R3.x = fma(R3.z, R6.z, PV36.w);
+            R3.y = fma(R3.y, R6.z, PV36.x);
+            R3.z = fma(R3_backup.x, R6.z, PV36.y);
+            R4.w = fma(-param, 0.25, 0.5);
+            PV43.y = PerDraw.LocalToViewMatrix[2].y * R3.x;
+            R123.w = fma(R3.y, PerDraw.LocalToViewMatrix[1].y, PV43.y);
+            PV44.w = R123.w;
+            R123.y = fma(R3.z, PerDraw.LocalToViewMatrix[0].y, PV44.w);
+            PV45.y = R123.y;
+            R126.w = R4.w * PV45.y;
+            R124.z = -R126.w + 0.5;
+            R124_backup.z = R124.z;
+            R13.w = R124_backup.z;
+            result = R13.w;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_sphere_map_coords<'a>(
+    graph: &'a Graph,
+    expr: &'a Expr,
+) -> Option<(Operation, Vec<&'a Expr>)> {
+    // The sphere map coordinates can easily be calculated in consuming code.
+    query_nodes(expr, graph, &SPHERE_MAP_COORD_X)
+        .and_then(|r| Some((Operation::SphereMapCoordX, vec![r.get("param").copied()?])))
+        .or_else(|| {
+            query_nodes(expr, graph, &SPHERE_MAP_COORD_Y)
+                .and_then(|r| Some((Operation::SphereMapCoordY, vec![r.get("param").copied()?])))
+        })
+}
+
 static OP_MIX: LazyLock<Graph> = LazyLock::new(|| {
     let query = indoc! {"
         void main() {
