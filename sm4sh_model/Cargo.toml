@@ -18,7 +18,7 @@ smol_str.workspace = true
 xc3_shader = { workspace = true, default-features = false }
 varint-rs = "2.2.0"
 ahash.workspace = true
-strum = { version = "0.26.3", features = ["derive"] }
+strum = { version = "0.27.2", features = ["derive"] }
 case.workspace = true
 
 [dev-dependencies]

@@ -208,7 +208,7 @@ fn save_screenshot(device: &wgpu::Device, output_buffer: &wgpu::Buffer, output_p
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
             tx.send(result).unwrap();
         });
-        device.poll(wgpu::PollType::Wait).unwrap();
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
         block_on(rx.receive()).unwrap().unwrap();
 
         let data = buffer_slice.get_mapped_range();

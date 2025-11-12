@@ -5,10 +5,10 @@ edition = "2024"
 
 [dependencies]
 bytemuck = { version = "1.21.0", features = ["derive"] }
-encase = { version = "0.11.2", features = ["glam"] }
+encase = "0.12.0"
 sm4sh_model = { path = "../sm4sh_model" }
 wgpu.workspace = true
-glam = { workspace = true, features = ["bytemuck"] }
+glam = { workspace = true, features = ["bytemuck", "encase"] }
 ordered-float.workspace = true
 log.workspace = true
 smol_str.workspace = true
@@ -17,4 +17,4 @@ indexmap.workspace = true
 case.workspace = true
 
 [build-dependencies]
-wgsl_to_wgpu = "0.15.1"
+wgsl_to_wgpu = "0.16.0"
