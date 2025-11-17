@@ -293,10 +293,19 @@ fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {
         Operation::Sqrt => Some(format!("sqrt({})", arg0?)),
         Operation::InverseSqrt => Some(format!("inverseSqrt({})", arg0?)),
         Operation::Fma => Some(format!("{} * {} + {}", arg0?, arg1?, arg2?)),
-        Operation::Dot4 => Some(format!(
-            "dot(vec4({}, {}, {}, {}), vec4({}, {}, {}, {}))",
-            arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, arg7?
-        )),
+        Operation::Dot => {
+            if args.len() == 6 {
+                Some(format!(
+                    "dot(vec3({}, {}, {}), vec3({}, {}, {}))",
+                    arg0?, arg1?, arg2?, arg3?, arg4?, arg5?
+                ))
+            } else {
+                Some(format!(
+                    "dot(vec4({}, {}, {}, {}), vec4({}, {}, {}, {}))",
+                    arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, arg7?
+                ))
+            }
+        }
         Operation::Sin => Some(format!("sin({})", arg0?)),
         Operation::Cos => Some(format!("cos({})", arg0?)),
         Operation::Exp2 => Some(format!("exp2({})", arg0?)),

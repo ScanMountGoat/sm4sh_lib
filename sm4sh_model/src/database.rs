@@ -61,8 +61,9 @@ impl ShaderProgram {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, FromRepr)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, FromRepr, Default)]
 pub enum Operation {
+    #[default]
     Unk,
     Add,
     Sub,
@@ -78,7 +79,7 @@ pub enum Operation {
     Sqrt,
     InverseSqrt,
     Fma,
-    Dot4,
+    Dot,
     Sin,
     Cos,
     Exp2,
@@ -102,12 +103,6 @@ pub enum Operation {
     NormalizeZ,
     SphereMapCoordX,
     SphereMapCoordY,
-}
-
-impl Default for Operation {
-    fn default() -> Self {
-        Self::Unk
-    }
 }
 
 impl std::fmt::Display for Operation {

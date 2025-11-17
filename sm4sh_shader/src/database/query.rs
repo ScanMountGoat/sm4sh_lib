@@ -688,20 +688,45 @@ static OP_DOT4: LazyLock<Graph> = LazyLock::new(|| {
     Graph::parse_glsl(query).unwrap().simplify()
 });
 
+static OP_DOT3: LazyLock<Graph> = LazyLock::new(|| {
+    let query = indoc! {"
+        void main() {
+            result = ax * bx;
+            result = fma(ay, by, result);
+            result = fma(az, bz, result);
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
 pub fn op_dot<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
-    let result = query_nodes(expr, graph, &OP_DOT4)?;
+    query_nodes(expr, graph, &OP_DOT4)
+        .and_then(|result| {
+            let ax = *result.get("ax")?;
+            let ay = *result.get("ay")?;
+            let az = *result.get("az")?;
+            let aw = *result.get("aw")?;
 
-    let ax = result.get("ax")?;
-    let ay = result.get("ay")?;
-    let az = result.get("az")?;
-    let aw = result.get("aw")?;
+            let bx = *result.get("bx")?;
+            let by = *result.get("by")?;
+            let bz = *result.get("bz")?;
+            let bw = *result.get("bw")?;
 
-    let bx = result.get("bx")?;
-    let by = result.get("by")?;
-    let bz = result.get("bz")?;
-    let bw = result.get("bw")?;
+            Some((Operation::Dot, vec![ax, ay, az, aw, bx, by, bz, bw]))
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &OP_DOT3).and_then(|result| {
+                let ax = *result.get("ax")?;
+                let ay = *result.get("ay")?;
+                let az = *result.get("az")?;
 
-    Some((Operation::Dot4, vec![ax, ay, az, aw, bx, by, bz, bw]))
+                let bx = *result.get("bx")?;
+                let by = *result.get("by")?;
+                let bz = *result.get("bz")?;
+
+                Some((Operation::Dot, vec![ax, ay, az, bx, by, bz]))
+            })
+        })
 }
 
 pub fn ternary<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
