@@ -353,6 +353,13 @@ fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {
             "sphere_map_coords(a_Position.xyz, a_Normal.xyz, {}).y",
             arg0?,
         )),
+        // TODO: Don't assume attributes are already in world space.
+        Operation::LocalToWorldPointX => arg0,
+        Operation::LocalToWorldPointY => arg1,
+        Operation::LocalToWorldPointZ => arg2,
+        Operation::LocalToWorldVectorX => arg0,
+        Operation::LocalToWorldVectorY => arg1,
+        Operation::LocalToWorldVectorZ => arg2,
     }
 }
 

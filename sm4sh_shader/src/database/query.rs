@@ -589,6 +589,149 @@ pub fn op_sphere_map_coords<'a>(
         })
 }
 
+fn local_to_world_point_query(c: char) -> String {
+    // texas_cross.105.vert.
+    // PerDraw.LocalToWorldMatrix * vec4(attribute.xyz, 1.0)
+    formatdoc! {"
+        void main() {{
+            attribute_x = attribute_x;
+            attribute_y = attribute_y;
+            attribute_z = attribute_z;
+            result = PerDraw.LocalToWorldMatrix[3].{c} * 1.0;
+            result = fma(attribute_z, PerDraw.LocalToWorldMatrix[2].{c}, result);
+            result = fma(attribute_y, PerDraw.LocalToWorldMatrix[1].{c}, result);
+            result = fma(attribute_x, PerDraw.LocalToWorldMatrix[0].{c}, result);
+        }}
+    "}
+}
+
+static LOCAL_TO_WORLD_POINT_X: LazyLock<Graph> = LazyLock::new(|| {
+    let query = local_to_world_point_query('x');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static LOCAL_TO_WORLD_POINT_Y: LazyLock<Graph> = LazyLock::new(|| {
+    let query = local_to_world_point_query('y');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static LOCAL_TO_WORLD_POINT_Z: LazyLock<Graph> = LazyLock::new(|| {
+    let query = local_to_world_point_query('z');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+pub fn op_local_to_world_point<'a>(
+    graph: &'a Graph,
+    expr: &'a Expr,
+) -> Option<(Operation, Vec<&'a Expr>)> {
+    query_nodes(expr, graph, &LOCAL_TO_WORLD_POINT_X)
+        .and_then(|r| {
+            Some((
+                Operation::LocalToWorldPointX,
+                vec![
+                    r.get("attribute_x").copied()?,
+                    r.get("attribute_y").copied()?,
+                    r.get("attribute_z").copied()?,
+                ],
+            ))
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &LOCAL_TO_WORLD_POINT_Y).and_then(|r| {
+                Some((
+                    Operation::LocalToWorldPointY,
+                    vec![
+                        r.get("attribute_x").copied()?,
+                        r.get("attribute_y").copied()?,
+                        r.get("attribute_z").copied()?,
+                    ],
+                ))
+            })
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &LOCAL_TO_WORLD_POINT_Z).and_then(|r| {
+                Some((
+                    Operation::LocalToWorldPointZ,
+                    vec![
+                        r.get("attribute_x").copied()?,
+                        r.get("attribute_y").copied()?,
+                        r.get("attribute_z").copied()?,
+                    ],
+                ))
+            })
+        })
+}
+
+fn local_to_world_vector_query(c: char) -> String {
+    // texas_cross.105.vert.
+    // PerDraw.LocalToWorldMatrix * vec4(attribute.xyz, 0.0)
+    formatdoc! {"
+        void main() {{
+            attribute_x = attribute_x;
+            attribute_y = attribute_y;
+            attribute_z = attribute_z;
+            result = attribute_z * PerDraw.LocalToWorldMatrix[2].{c};
+            result = fma(attribute_y, PerDraw.LocalToWorldMatrix[1].{c}, result);
+            result = fma(attribute_x, PerDraw.LocalToWorldMatrix[0].{c}, result);
+        }}
+    "}
+}
+
+static LOCAL_TO_WORLD_VECTOR_X: LazyLock<Graph> = LazyLock::new(|| {
+    let query = local_to_world_vector_query('x');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static LOCAL_TO_WORLD_VECTOR_Y: LazyLock<Graph> = LazyLock::new(|| {
+    let query = local_to_world_vector_query('y');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static LOCAL_TO_WORLD_VECTOR_Z: LazyLock<Graph> = LazyLock::new(|| {
+    let query = local_to_world_vector_query('z');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+pub fn op_local_to_world_vector<'a>(
+    graph: &'a Graph,
+    expr: &'a Expr,
+) -> Option<(Operation, Vec<&'a Expr>)> {
+    query_nodes(expr, graph, &LOCAL_TO_WORLD_VECTOR_X)
+        .and_then(|r| {
+            Some((
+                Operation::LocalToWorldVectorX,
+                vec![
+                    r.get("attribute_x").copied()?,
+                    r.get("attribute_y").copied()?,
+                    r.get("attribute_z").copied()?,
+                ],
+            ))
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &LOCAL_TO_WORLD_VECTOR_Y).and_then(|r| {
+                Some((
+                    Operation::LocalToWorldVectorY,
+                    vec![
+                        r.get("attribute_x").copied()?,
+                        r.get("attribute_y").copied()?,
+                        r.get("attribute_z").copied()?,
+                    ],
+                ))
+            })
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &LOCAL_TO_WORLD_VECTOR_Z).and_then(|r| {
+                Some((
+                    Operation::LocalToWorldVectorZ,
+                    vec![
+                        r.get("attribute_x").copied()?,
+                        r.get("attribute_y").copied()?,
+                        r.get("attribute_z").copied()?,
+                    ],
+                ))
+            })
+        })
+}
+
 static OP_MIX: LazyLock<Graph> = LazyLock::new(|| {
     let query = indoc! {"
         void main() {

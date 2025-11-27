@@ -103,6 +103,12 @@ pub enum Operation {
     NormalizeZ,
     SphereMapCoordX,
     SphereMapCoordY,
+    LocalToWorldPointX,
+    LocalToWorldPointY,
+    LocalToWorldPointZ,
+    LocalToWorldVectorX,
+    LocalToWorldVectorY,
+    LocalToWorldVectorZ,
 }
 
 impl std::fmt::Display for Operation {
