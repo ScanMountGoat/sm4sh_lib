@@ -36,7 +36,19 @@ pub mod vertex;
 pub fn load_model<P: AsRef<Path>>(path: P) -> BinResult<NudModel> {
     let path = path.as_ref();
     let nud = Nud::from_file(path)?;
-    let nut = Nut::from_file(path.with_file_name("model.nut")).ok();
+
+    // TODO: Better error reporting.
+    let nut_path = path.with_file_name("model.nut");
+    let nut = Nut::from_file(&nut_path).ok().or_else(|| {
+        // Some older nut files use zlib compression.
+        // This isn't used by any in game nut files but is supported by Smash Forge.
+        let bytes = std::fs::read(nut_path).ok()?;
+        let decompressed = zune_inflate::DeflateDecoder::new(&bytes)
+            .decode_zlib()
+            .ok()?;
+        Nut::from_bytes(&decompressed).ok()
+    });
+
     let vbn = Vbn::from_file(path.with_file_name("model.vbn")).ok();
     NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref())
 }

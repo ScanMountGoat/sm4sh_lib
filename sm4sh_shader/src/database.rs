@@ -69,6 +69,12 @@ pub enum Operation {
     NormalizeZ,
     SphereMapCoordX,
     SphereMapCoordY,
+    LocalToWorldPointX,
+    LocalToWorldPointY,
+    LocalToWorldPointZ,
+    LocalToWorldVectorX,
+    LocalToWorldVectorY,
+    LocalToWorldVectorZ,
 }
 
 impl std::fmt::Display for Operation {
@@ -79,13 +85,12 @@ impl std::fmt::Display for Operation {
 
 impl xc3_shader::expr::Operation for Operation {
     fn query_operation_args<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Self, Vec<&'a Expr>)> {
-        // TODO: Share these queries with xc3_shader?
-        // TODO: Use queries to simplify operations
         // TODO: Figure out why op_mix doesn't work with simplification.
-        // TODO: query for view vector
         op_normal_map(graph, expr)
             // .or_else(|| op_mix(graph, expr))
             .or_else(|| op_sphere_map_coords(graph, expr))
+            .or_else(|| op_local_to_world_point(graph, expr))
+            .or_else(|| op_local_to_world_vector(graph, expr))
             .or_else(|| op_normalize(graph, expr))
             .or_else(|| op_pow(graph, expr))
             .or_else(|| op_sqrt(graph, expr))
@@ -224,6 +229,12 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::NormalizeZ => Self::NormalizeZ,
             Operation::SphereMapCoordX => Self::SphereMapCoordX,
             Operation::SphereMapCoordY => Self::SphereMapCoordY,
+            Operation::LocalToWorldPointX => Self::LocalToWorldPointX,
+            Operation::LocalToWorldPointY => Self::LocalToWorldPointY,
+            Operation::LocalToWorldPointZ => Self::LocalToWorldPointZ,
+            Operation::LocalToWorldVectorX => Self::LocalToWorldVectorX,
+            Operation::LocalToWorldVectorY => Self::LocalToWorldVectorY,
+            Operation::LocalToWorldVectorZ => Self::LocalToWorldVectorZ,
         }
     }
 }

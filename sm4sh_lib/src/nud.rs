@@ -309,7 +309,7 @@ pub struct MaterialTexture {
     pub mip_detail: MipDetail,
     pub unk2: u8,
     pub unk3: u32,
-    pub unk4: u16,
+    pub unk4: u16, // TODO: 7680 for some textures?
 }
 
 // TODO: retest these with renderdoc.
