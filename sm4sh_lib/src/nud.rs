@@ -11,7 +11,10 @@ use xc3_write::{
     strings::{StringSection, WriteOptions},
 };
 
-use crate::{parse_opt_ptr32, parse_ptr32_count, parse_string_ptr32, xc3_write_binwrite_impl};
+use crate::{
+    arbitrary_bilge_impl, parse_opt_ptr32, parse_ptr32_count, parse_string_ptr32,
+    xc3_write_binwrite_impl,
+};
 
 // TODO: little endian for NDWD?
 // TODO: Better naming
@@ -136,7 +139,6 @@ pub struct Mesh {
 }
 
 #[bitsize(16)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[br(try_map = |x: u16| x.try_into().map_err(|e| format!("{e:?}")))]
 #[bw(map = |&x| u16::from(x))]
@@ -149,7 +151,6 @@ pub struct VertexFlags {
 }
 
 #[bitsize(16)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[br(try_map = |x: u16| x.try_into().map_err(|e| format!("{e:?}")))]
 #[bw(map = |&x| u16::from(x))]
@@ -565,3 +566,6 @@ fn align<W: Write>(writer: &mut W, size: u64, align: u64, pad: u8) -> Result<(),
     writer.write_all(&vec![pad; padding as usize])?;
     Ok(())
 }
+
+// Use an impl that doesn't panic on invalid input.
+arbitrary_bilge_impl!(u16, VertexFlags, VertexIndexFlags);

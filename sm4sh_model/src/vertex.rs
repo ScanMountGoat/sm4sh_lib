@@ -253,8 +253,10 @@ pub struct ColorByte {
     pub rgba: [u8; 4],
 }
 
-pub fn read_vertex_indices(buffer: &[u8], count: u16) -> BinResult<Vec<u16>> {
-    Cursor::new(buffer).read_be_args(VecArgs {
+pub fn read_vertex_indices(buffer: &[u8], offset: u32, count: u16) -> BinResult<Vec<u16>> {
+    let mut reader = Cursor::new(buffer);
+    reader.set_position(offset as u64);
+    reader.read_be_args(VecArgs {
         count: count as usize,
         inner: (),
     })
@@ -266,7 +268,9 @@ pub fn write_vertex_indices(buffer: &mut Cursor<Vec<u8>>, indices: &[u16]) -> Bi
 
 pub fn read_vertices(
     buffer0: &[u8],
+    buffer0_offset: u32,
     buffer1: &[u8],
+    buffer1_offset: u32,
     flags: VertexFlags,
     count: u16,
 ) -> BinResult<Vertices> {
@@ -276,7 +280,7 @@ pub fn read_vertices(
     // TODO: Is it better to do flags -> vec<Attribute> instead?
     if flags.bones() != BoneType::None {
         // buffer0: colors, uvs
-        let mut offset0 = 0;
+        let mut offset0 = buffer0_offset as u64;
 
         let colors = read_colors(buffer0, flags, offset0, stride0, count)?;
         offset0 += color_size(flags);
@@ -284,7 +288,7 @@ pub fn read_vertices(
         let uvs = read_uvs(buffer0, flags, &mut offset0, stride0, count)?;
 
         // buffer1: positions, vectors, bones,
-        let mut offset1 = 0;
+        let mut offset1 = buffer1_offset as u64;
 
         let positions = read_positions(buffer1, offset1, stride1, count)?;
         offset1 += 12;
@@ -304,7 +308,7 @@ pub fn read_vertices(
         })
     } else {
         // buffer0: positions, vectors, bones, colors, uvs
-        let mut offset0 = 0;
+        let mut offset0 = buffer0_offset as u64;
 
         let positions = read_positions(buffer0, offset0, stride0, count)?;
         offset0 += 12;
@@ -808,7 +812,7 @@ mod tests {
         // data/fighter/mario/model/body/c00/model.nud, Mario_FaceN_VIS_O_OBJ, 0
         let buffer = hex!(00000001 00020000 00020003);
 
-        let indices = read_vertex_indices(&buffer, 6).unwrap();
+        let indices = read_vertex_indices(&buffer, 0, 6).unwrap();
         assert_eq!(vec![0, 1, 2, 0, 2, 3], indices);
 
         let mut new_buffer = Cursor::new(Vec::new());
@@ -841,7 +845,7 @@ mod tests {
             NormalType::NormalsFloat16,
             BoneType::None,
         );
-        let vertices = read_vertices(&buffer0, &[], vertex_flags, 2).unwrap();
+        let vertices = read_vertices(&buffer0, 0, &[], 0, vertex_flags, 2).unwrap();
 
         // Check read.
         assert_eq!(
@@ -938,7 +942,7 @@ mod tests {
             BoneType::Byte,
         );
 
-        let vertices = read_vertices(&buffer0, &buffer1, flags, 2).unwrap();
+        let vertices = read_vertices(&buffer0, 0, &buffer1, 0, flags, 2).unwrap();
 
         // Check read.
         assert_eq!(

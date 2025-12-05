@@ -161,16 +161,18 @@ impl NudModel {
         for g in &nud.mesh_groups {
             let mut meshes = Vec::new();
             for mesh in &g.meshes {
-                // TODO: Avoid potential indexing panics.
                 let vertices = read_vertices(
-                    &nud.vertex_buffer0[mesh.vertex_buffer0_offset as usize..],
-                    &nud.vertex_buffer1[mesh.vertex_buffer1_offset as usize..],
+                    &nud.vertex_buffer0,
+                    mesh.vertex_buffer0_offset,
+                    &nud.vertex_buffer1,
+                    mesh.vertex_buffer1_offset,
                     mesh.vertex_flags,
                     mesh.vertex_count,
                 )?;
 
                 let vertex_indices = read_vertex_indices(
-                    &nud.index_buffer[mesh.vertex_indices_offset as usize..],
+                    &nud.index_buffer,
+                    mesh.vertex_indices_offset,
                     mesh.vertex_index_count,
                 )?;
 

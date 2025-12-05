@@ -263,3 +263,18 @@ macro_rules! file_write_impl {
 }
 
 file_write_impl!(binrw::Endian::Big, nsh::Nsh, vbn::Vbn);
+
+macro_rules! arbitrary_bilge_impl {
+    ($value_type:ty, $($type:ty),*) => {
+        $(
+            #[cfg(feature = "arbitrary")]
+            impl<'a> arbitrary::Arbitrary<'a> for $type {
+                fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+                    let value: $value_type = u.arbitrary()?;
+                    Self::try_from(value).map_err(|_| arbitrary::Error::IncorrectFormat)
+                }
+            }
+        )*
+    };
+}
+pub(crate) use arbitrary_bilge_impl;
