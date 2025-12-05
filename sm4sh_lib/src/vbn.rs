@@ -2,6 +2,7 @@ use binrw::{BinRead, BinWrite, NullString};
 
 // TODO: Better naming
 // TODO: Find a better way to detect endianness.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub enum Vbn {
     #[brw(magic(b" NBV"))]
@@ -11,6 +12,7 @@ pub enum Vbn {
     Be(#[brw(big)] VbnInner),
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct VbnInner {
     pub version: u32,
@@ -23,6 +25,7 @@ pub struct VbnInner {
     pub transforms: Vec<BoneTransform>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct Bone {
     #[br(map = |x: NullString| x.to_string())]
@@ -34,6 +37,7 @@ pub struct Bone {
     pub bone_id: u32,           // TODO: hash?
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct BoneTransform {
     pub translation: [f32; 3],
@@ -41,6 +45,7 @@ pub struct BoneTransform {
     pub scale: [f32; 3],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u32))]
 pub enum BoneType {

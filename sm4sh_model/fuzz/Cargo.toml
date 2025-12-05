@@ -1,0 +1,32 @@
+[package]
+name = "sm4sh_model_fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.0", features = ["derive"] }
+sm4sh_lib = { path = "../../sm4sh_lib", features = ["arbitrary"] }
+sm4sh_model = { path = "..", features = ["arbitrary"] }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "nud_model_from_nud"
+path = "fuzz_targets/nud_model_from_nud.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "nud_model_to_nud"
+path = "fuzz_targets/nud_model_to_nud.rs"
+test = false
+doc = false
+bench = false

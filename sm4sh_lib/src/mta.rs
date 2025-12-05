@@ -3,6 +3,7 @@ use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
 use crate::{parse_ptr32_count, parse_string_opt_ptr32, parse_string_ptr32};
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets)]
 pub enum Mta {
     Mta2(Mta2),
@@ -10,6 +11,7 @@ pub enum Mta {
     Mta4(Mta4),
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"MTA2"))]
 #[xc3(magic(b"MTA2"))]
@@ -34,6 +36,7 @@ pub struct Mta2 {
     pub unks: [u32; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"MTA3"))]
 #[xc3(magic(b"MTA3"))]
@@ -58,6 +61,7 @@ pub struct Mta3 {
     pub unks: [u32; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"MTA4"))]
 #[xc3(magic(b"MTA4"))]
@@ -82,6 +86,7 @@ pub struct Mta4 {
     pub unks: [u32; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct MatEntry2 {
     #[br(parse_with = parse_string_ptr32)]
@@ -105,6 +110,7 @@ pub struct MatEntry2 {
     pub pattern_entries: Vec<EntryOffset<PatternEntry>>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 pub struct MatEntry4 {
     #[br(parse_with = parse_string_ptr32)]
@@ -134,6 +140,7 @@ pub struct MatEntry4 {
     pub mat_hash2: u32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct MatData {
     #[br(parse_with = parse_string_ptr32)]
@@ -152,6 +159,7 @@ pub struct MatData {
     pub data: Vec<MatDataValue>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(import_raw(value_count: u32))]
 pub struct MatDataValue {
@@ -159,6 +167,7 @@ pub struct MatDataValue {
     pub values: Vec<f32>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct VisEntry {
     #[br(parse_with = parse_string_ptr32)]
@@ -172,6 +181,7 @@ pub struct VisEntry {
     pub data: VisEntryData,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct VisEntryData {
     pub frame_count: u32,
@@ -183,6 +193,7 @@ pub struct VisEntryData {
     pub keyframes: Vec<VisKeyFrame>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct VisKeyFrame {
     pub frame_num: u16,
@@ -191,6 +202,7 @@ pub struct VisKeyFrame {
 }
 
 #[binread]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(stream = r)]
 pub struct PatternEntry {
@@ -215,12 +227,14 @@ pub struct PatternEntry {
     pub unks: Vec<u8>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct PatternKeyFrame {
     pub tex_id: u32,
     pub frame_num: u32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct EntryOffset<T>
 where

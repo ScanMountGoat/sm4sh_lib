@@ -1,5 +1,6 @@
 use binrw::{BinRead, BinWrite};
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct Jtb {
     pub count1: u16,

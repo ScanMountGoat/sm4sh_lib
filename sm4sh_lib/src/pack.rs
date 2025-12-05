@@ -5,6 +5,7 @@ use binrw::{BinRead, BinWrite, binrw};
 use xc3_write::Offset;
 
 #[binrw]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 #[brw(magic(b"KCAP"))]
 pub struct Pack {
@@ -37,9 +38,11 @@ pub struct Pack {
     pub items: Vec<PackItem>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead)]
 struct StringPtr(#[br(parse_with = parse_string_ptr32)] String);
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct PackItem {
     pub name: String,

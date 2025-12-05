@@ -21,6 +21,10 @@ ahash.workspace = true
 strum = { version = "0.27.2", features = ["derive"] }
 case.workspace = true
 zune-inflate = "0.2.54"
+arbitrary = { workspace = true, features = ["derive"], optional = true }
 
 [dev-dependencies]
 hexlit = "0.5.5"
+
+[features]
+arbitrary = ["dep:arbitrary", "sm4sh_lib/arbitrary", "indexmap/arbitrary", "ordered-float/arbitrary", "glam/arbitrary", "half/arbitrary"]

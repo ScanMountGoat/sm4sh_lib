@@ -6,6 +6,7 @@ use xc3_write::{
 
 use crate::{parse_count32_offset32, parse_string_ptr32, xc3_write_binwrite_impl};
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 pub struct Gx2VertexShader {
     pub registers: Gx2VertexShaderRegisters,
@@ -40,6 +41,7 @@ pub struct Gx2VertexShader {
     pub r_buffer: [u32; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct Gx2VertexShaderRegisters {
     pub sq_pgm_resources_vs: u32,
@@ -56,6 +58,7 @@ pub struct Gx2VertexShaderRegisters {
     pub vgt_hos_reuse_depth: u32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 pub struct Gx2PixelShader {
     pub registers: Gx2PixelShaderRegisters,
@@ -83,6 +86,7 @@ pub struct Gx2PixelShader {
     pub r_buffer: [u32; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct Gx2PixelShaderRegisters {
     pub sq_pgm_resources_ps: u32,
@@ -97,6 +101,7 @@ pub struct Gx2PixelShaderRegisters {
     pub spi_input_z: u32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct UniformBlock {
     #[br(parse_with = parse_string_ptr32)]
@@ -106,6 +111,7 @@ pub struct UniformBlock {
     pub size: u32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct UniformVar {
     #[br(parse_with = parse_string_ptr32)]
@@ -119,6 +125,7 @@ pub struct UniformVar {
     pub uniform_block_index: i32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct Attribute {
     #[br(parse_with = parse_string_ptr32)]
@@ -129,6 +136,7 @@ pub struct Attribute {
     pub location: u32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct SamplerVar {
     #[br(parse_with = parse_string_ptr32)]
@@ -138,6 +146,7 @@ pub struct SamplerVar {
     pub location: u32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy, Hash)]
 #[brw(repr(u32))]
 pub enum ShaderMode {
@@ -145,6 +154,7 @@ pub enum ShaderMode {
     UniformBlock = 1,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy, Hash)]
 #[brw(repr(u32))]
 pub enum VarType {
@@ -162,6 +172,7 @@ pub enum VarType {
     Mat4 = 29,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy, Hash)]
 #[brw(repr(u32))]
 pub enum SamplerType {

@@ -1,6 +1,7 @@
 use binrw::{BinRead, BinWrite};
 
 // TODO: Find a better way to detect endianness.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[br(little)]
 #[brw(magic(b" BWS"))]
@@ -12,6 +13,7 @@ pub struct Sb {
     pub entries: Vec<SbEntry>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct SbEntry {
     pub hash: u32,

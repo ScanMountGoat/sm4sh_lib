@@ -7,6 +7,7 @@ use crate::{
     gx2::{Gx2PixelShader, Gx2VertexShader},
 };
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"NSP3"))]
 pub struct Nsh {
@@ -24,12 +25,14 @@ pub struct Nsh {
     pub programs: Vec<ShaderProgram>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct ShaderProgram {
     pub vertex: Gfx2Shader,
     pub pixel: Gfx2Shader,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct Gfx2Shader {
     pub gfx2: Gfx2,
@@ -37,6 +40,7 @@ pub struct Gfx2Shader {
     pub extra_data: Vec<u8>, // TODO: non empty for every other gfx2?
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"Gfx2"))]
 pub struct Gfx2 {
@@ -52,6 +56,7 @@ pub struct Gfx2 {
     pub blocks: Vec<Block>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"BLK{"))]
 pub struct Block {
@@ -67,6 +72,7 @@ pub struct Block {
     pub data: Vec<u8>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[brw(repr(u32))]
 pub enum BlockType {
@@ -84,6 +90,7 @@ pub enum BlockType {
     TextureMipmapData = 13,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"}BLK"))]
 pub struct RelocationInfo {

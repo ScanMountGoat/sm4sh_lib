@@ -53,6 +53,7 @@ pub fn load_model<P: AsRef<Path>>(path: P) -> BinResult<NudModel> {
     NudModel::from_nud(&nud, nut.as_ref(), vbn.as_ref())
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudModel {
     pub groups: Vec<NudMeshGroup>,
@@ -61,6 +62,7 @@ pub struct NudModel {
     pub skeleton: Option<VbnSkeleton>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudMeshGroup {
     pub name: String,
@@ -70,6 +72,7 @@ pub struct NudMeshGroup {
     pub parent_bone_index: Option<usize>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudMesh {
     // Assume meshes have unique vertex data.
@@ -82,6 +85,7 @@ pub struct NudMesh {
     pub material4: Option<NudMaterial>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudMaterial {
     pub shader_id: u32,
@@ -94,6 +98,7 @@ pub struct NudMaterial {
     pub properties: Vec<NudProperty>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudTexture {
     pub hash: u32,
@@ -105,18 +110,21 @@ pub struct NudTexture {
     pub mip_detail: MipDetail,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct NudProperty {
     pub name: String,
     pub values: Vec<f32>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub enum PrimitiveType {
     TriangleList,
     TriangleStrip,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct ImageTexture {
     pub hash_id: u32,
@@ -128,11 +136,13 @@ pub struct ImageTexture {
     pub image_data: Vec<u8>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct VbnSkeleton {
     pub bones: Vec<VbnBone>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct VbnBone {
     pub name: String,

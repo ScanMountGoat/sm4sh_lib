@@ -9,6 +9,7 @@ use sm4sh_lib::nud::{BoneType, ColorType, NormalType, UvType, VertexFlags};
 
 // TODO: Is it possible to rebuild the vertex buffers from this?
 // TODO: Find a simpler representation after looking at more game data like pokken.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct Vertices {
     pub positions: Vec<Vec3>,
@@ -37,6 +38,7 @@ impl Vertices {
     }
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub enum Normals {
     None(Vec<f32>),
@@ -88,12 +90,14 @@ impl Normals {
     // structs <-> attribute arrays
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct NormalsFloat32 {
     pub unk1: f32,
     pub normal: [f32; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct NormalsTangentBitangentFloat32 {
     pub unk1: f32,
@@ -103,6 +107,7 @@ pub struct NormalsTangentBitangentFloat32 {
     pub tangent: [f32; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct NormalsFloat16 {
     #[br(map = |x: [u16; 4]| x.map(f16::from_bits))]
@@ -110,6 +115,7 @@ pub struct NormalsFloat16 {
     pub normal: [f16; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct NormalsTangentBitangentFloat16 {
     #[br(map = |x: [u16; 4]| x.map(f16::from_bits))]
@@ -125,6 +131,7 @@ pub struct NormalsTangentBitangentFloat16 {
     pub tangent: [f16; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct Bones {
     pub bone_indices: Vec<[u32; 4]>,
@@ -132,6 +139,7 @@ pub struct Bones {
     pub element_type: BoneElementType,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum BoneElementType {
     Float32,
@@ -139,12 +147,14 @@ pub enum BoneElementType {
     Byte,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct BonesFloat32 {
     pub bone_indices: [u32; 4],
     pub bone_weights: [f32; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct BonesFloat16 {
     pub bone_indices: [u16; 4],
@@ -154,12 +164,14 @@ pub struct BonesFloat16 {
     pub bone_weights: [f16; 4],
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct BonesByte {
     pub bone_indices: [u8; 4],
     pub bone_weights: [u8; 4], // TODO: unorm8?
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub enum Uvs {
     Float16(Vec<Vec<UvFloat16>>),
@@ -195,6 +207,7 @@ impl Uvs {
     }
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct UvFloat16 {
     #[br(map = f16::from_bits)]
@@ -206,24 +219,28 @@ pub struct UvFloat16 {
     pub v: f16,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct UvFloat32 {
     pub u: f32,
     pub v: f32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Clone)]
 pub struct Colors {
     pub colors: Vec<Vec4>,
     pub element_type: ColorElementType,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ColorElementType {
     Byte,
     Float16,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct ColorFloat16 {
     #[br(map = |x: [u16; 4]| x.map(f16::from_bits))]

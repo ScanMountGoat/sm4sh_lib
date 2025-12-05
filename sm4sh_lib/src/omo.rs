@@ -6,6 +6,7 @@ use crate::{parse_ptr32_count, xc3_write_binwrite_impl};
 
 // TODO: Better type and variable names.
 #[binread]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(magic(b"OMO "))]
 #[xc3(magic(b"OMO "))]
@@ -35,6 +36,7 @@ pub struct Omo {
     pub frames: Vec<Frame>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(import_raw(frame_size_bytes: u16))]
 pub struct Frame {
@@ -43,6 +45,7 @@ pub struct Frame {
     pub keys: Vec<u16>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct OmoNode {
     pub flags: OmoFlags,
@@ -53,6 +56,7 @@ pub struct OmoNode {
 
 // TODO: what does 0x1 do?
 #[bitsize(32)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[br(try_map = |x: u32| x.try_into().map_err(|e| format!("{e:?}")))]
 #[bw(map = |&x| u32::from(x))]

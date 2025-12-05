@@ -16,6 +16,7 @@ use crate::{parse_opt_ptr32, parse_ptr32_count, parse_string_ptr32, xc3_write_bi
 // TODO: little endian for NDWD?
 // TODO: Better naming
 #[binread]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"NDP3"))]
 #[xc3(magic(b"NDP3"))]
@@ -65,6 +66,7 @@ pub struct Nud {
     pub vertex_buffer1: Vec<u8>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(import_raw(strings_offset: u32))]
 pub struct MeshGroup {
@@ -85,6 +87,7 @@ pub struct MeshGroup {
     pub meshes: Vec<Mesh>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u16))]
 pub enum BoneFlags {
@@ -94,6 +97,7 @@ pub enum BoneFlags {
 }
 
 /// The data for a single mesh draw call.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(import_raw(strings_offset: u32))]
 pub struct Mesh {
@@ -132,6 +136,7 @@ pub struct Mesh {
 }
 
 #[bitsize(16)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[br(try_map = |x: u16| x.try_into().map_err(|e| format!("{e:?}")))]
 #[bw(map = |&x| u16::from(x))]
@@ -144,6 +149,7 @@ pub struct VertexFlags {
 }
 
 #[bitsize(16)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(DebugBits, TryFromBits, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[br(try_map = |x: u16| x.try_into().map_err(|e| format!("{e:?}")))]
 #[bw(map = |&x| u16::from(x))]
@@ -158,6 +164,7 @@ pub struct VertexIndexFlags {
 }
 
 #[bitsize(4)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, TryFromBits, PartialEq, Eq, Clone, Copy)]
 pub enum NormalType {
     None = 0,
@@ -168,6 +175,7 @@ pub enum NormalType {
 }
 
 #[bitsize(4)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, TryFromBits, PartialEq, Eq, Clone, Copy)]
 pub enum BoneType {
     None = 0,
@@ -177,6 +185,7 @@ pub enum BoneType {
 }
 
 #[bitsize(3)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, TryFromBits, PartialEq, Eq, Clone, Copy)]
 pub enum ColorType {
     None = 0,
@@ -185,18 +194,21 @@ pub enum ColorType {
 }
 
 #[bitsize(1)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, FromBits, PartialEq, Eq, Clone, Copy)]
 pub enum UvType {
     Float16 = 0,
     Float32 = 1, // TODO: wangan midnight?
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct BoundingSphere {
     pub center: [f32; 3],
     pub radius: f32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(import_raw(strings_offset: u32))]
 pub struct Material {
@@ -224,6 +236,7 @@ pub struct Material {
 }
 
 // TODO: retest these with renderdoc.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u16))]
 pub enum SrcFactor {
@@ -247,6 +260,7 @@ pub enum SrcFactor {
 
 // TODO: retest these with renderdoc.
 // TODO: dst factor + blend op?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u16))]
 pub enum DstFactor {
@@ -270,6 +284,7 @@ pub enum DstFactor {
 }
 
 // TODO: retest these with renderdoc.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq, Hash)]
 #[brw(repr(u16))]
 pub enum AlphaFunc {
@@ -285,6 +300,7 @@ pub enum AlphaFunc {
 }
 
 // TODO: retest these with renderdoc.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u16))]
 pub enum CullMode {
@@ -297,6 +313,7 @@ pub enum CullMode {
     Outside2 = 3,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct MaterialTexture {
     pub hash: u32, // TODO: matches nut gidx hash?
@@ -313,6 +330,7 @@ pub struct MaterialTexture {
 }
 
 // TODO: retest these with renderdoc.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u16))]
 pub enum MapMode {
@@ -324,6 +342,7 @@ pub enum MapMode {
 }
 
 // TODO: retest these with renderdoc.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u8))]
 pub enum MinFilter {
@@ -334,6 +353,7 @@ pub enum MinFilter {
 }
 
 // TODO: retest these with renderdoc.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u8))]
 pub enum MagFilter {
@@ -343,6 +363,7 @@ pub enum MagFilter {
 }
 
 // TODO: retest these with renderdoc.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u8))]
 pub enum MipDetail {
@@ -356,6 +377,7 @@ pub enum MipDetail {
 }
 
 // TODO: retest these with renderdoc.
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
 #[brw(repr(u8))]
 pub enum WrapMode {
@@ -364,6 +386,7 @@ pub enum WrapMode {
     ClampToEdge = 3,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(import_raw(strings_offset: u32))]
 pub struct MaterialProperty {

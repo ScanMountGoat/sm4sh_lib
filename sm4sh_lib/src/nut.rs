@@ -6,6 +6,7 @@ use xc3_write::{Xc3Write, Xc3WriteOffsets};
 use crate::{parse_opt_ptr32, parse_ptr32_count, xc3_write_binwrite_impl};
 
 // TODO: Same inner type for all variants?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub enum Nut {
     Ntwu(Ntwu),
@@ -13,6 +14,7 @@ pub enum Nut {
 }
 
 // TODO: Identical to ntwu other than magic?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"NTP3"))]
 #[xc3(magic(b"NTP3"))]
@@ -26,6 +28,7 @@ pub struct Ntp3 {
     pub textures: Vec<Texture>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
 #[br(magic(b"NTWU"))]
 #[xc3(magic(b"NTWU"))]
@@ -39,6 +42,7 @@ pub struct Ntwu {
 }
 
 #[binread]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(stream = r)]
 #[xc3(base_offset)]
@@ -118,6 +122,14 @@ bitflags! {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for Caps2 {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let value: u32 = u.arbitrary()?;
+        Self::from_bits(value).ok_or(arbitrary::Error::IncorrectFormat)
+    }
+}
+
 impl BinRead for Caps2 {
     type Args<'a> = ();
 
@@ -152,6 +164,7 @@ impl Xc3Write for Caps2 {
 
 // TODO: Test these in game with renderdoc.
 // TODO: gtx format takes priority if present?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[brw(repr(u8))]
 pub enum NutFormat {
@@ -168,6 +181,7 @@ pub enum NutFormat {
     BC5Unorm = 22,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"GIDX"))]
 pub struct Gidx {
@@ -176,6 +190,7 @@ pub struct Gidx {
     pub unk3: u32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"eXt\x00"))]
 pub struct Ext {
@@ -184,6 +199,7 @@ pub struct Ext {
     pub unk3: u32,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct GtxHeader {
     pub dim: u32,
@@ -206,6 +222,7 @@ pub struct GtxHeader {
 }
 
 // TODO: Just use the wiiu_swizzle gx2 values directly?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[brw(repr(u32))]
 pub enum SurfaceFormat {
@@ -219,6 +236,7 @@ pub enum SurfaceFormat {
 }
 
 // TODO: Just use the wiiu_swizzle gx2 values directly?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
 #[brw(repr(u32))]
 pub enum TileMode {

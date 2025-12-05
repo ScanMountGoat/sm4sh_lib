@@ -8,6 +8,7 @@ use crate::{parse_ptr32_count, xc3_write_binwrite_impl};
 // TODO: namco helper bones?
 // TODO: NHB for big endian?
 #[binread]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, Xc3Write, PartialEq, Clone)]
 #[br(magic(b" BHN"))]
 #[br(little)]
@@ -31,6 +32,7 @@ pub struct Nhb {
     pub items: Vec<Data>,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct Data {
     pub size: u32,
@@ -45,6 +47,7 @@ pub struct Data {
 }
 
 // TODO: constraint data?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub struct DataItem {
     pub size: u32,
@@ -54,6 +57,7 @@ pub struct DataItem {
     pub inner: DataItemInner,
 }
 
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 pub enum DataItemInner {
     // TODO: Why does this reach a recursion limit and not compile?
