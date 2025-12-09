@@ -1,5 +1,8 @@
 use glam::Vec4;
+use half::f16;
 use log::error;
+
+use crate::vertex::BoneElementType;
 
 #[derive(Debug, PartialEq)]
 pub struct Influence {
@@ -62,10 +65,11 @@ impl SkinWeights {
         influences: &[Influence],
         vertex_count: usize,
         bone_names: &[S],
+        element_type: BoneElementType,
     ) -> Self {
         let mut influence_counts = vec![0; vertex_count];
         let mut bone_indices = vec![[0; 4]; vertex_count];
-        let mut weights = vec![Vec4::ZERO; vertex_count];
+        let mut bone_weights = vec![Vec4::ZERO; vertex_count];
 
         // Assign up to 4 influences to each vertex.
         for influence in influences {
@@ -78,7 +82,7 @@ impl SkinWeights {
                     // Ignore empty weights since they have no effect.
                     if influence_counts[i] < 4 && weight.weight > 0.0 {
                         bone_indices[i][influence_counts[i]] = bone_index as u32;
-                        weights[i][influence_counts[i]] = weight.weight;
+                        bone_weights[i][influence_counts[i]] = weight.weight;
                         influence_counts[i] += 1;
                     }
                 }
@@ -88,8 +92,8 @@ impl SkinWeights {
             }
         }
 
-        // In game weights are in ascending order by weight.
-        for (is, ws) in bone_indices.iter_mut().zip(weights.iter_mut()) {
+        // In game weights are usually in descending order by weight.
+        for (is, ws) in bone_indices.iter_mut().zip(bone_weights.iter_mut()) {
             let mut permutation = [0, 1, 2, 3];
             permutation.sort_by_key(|i| ordered_float::OrderedFloat::from(-ws[*i]));
 
@@ -97,9 +101,48 @@ impl SkinWeights {
             *ws = permutation.map(|i| ws[i]).into();
         }
 
+        // Linear blend skinning requires the weights to be normalized.
+        // Types other than f32 require special logic to ensure decoded weights are still normalized.
+        match element_type {
+            BoneElementType::Float32 => {
+                for weights in &mut bone_weights {
+                    let weight_sum = weights.element_sum();
+                    if weight_sum > 0.0 {
+                        *weights /= weight_sum;
+                    }
+                }
+            }
+            BoneElementType::Float16 => {
+                for weights in &mut bone_weights {
+                    let f16_weights = weights.to_array().map(f16::from_f32);
+                    let weight_sum: f16 = f16_weights.into_iter().sum();
+                    if weight_sum.to_f32() > 0.0 {
+                        *weights = f16_weights.map(|f| (f / weight_sum).to_f32()).into();
+                    }
+                }
+            }
+            BoneElementType::Byte => {
+                for weights in &mut bone_weights {
+                    // Normalize the integ integers with the remainder since we use uint8 for the vertex buffer.
+                    // https://stackoverflow.com/questions/31121591/normalizing-integers
+                    let mut u8_weights = weights.to_array().map(|f| (f * 255.0) as u8);
+                    let weight_sum: u32 = u8_weights.into_iter().map(|u| u as u32).sum();
+                    if weight_sum > 0 {
+                        let mut remainder = 0;
+                        for weight in &mut u8_weights {
+                            let new_weight = *weight as u32 * 255 + remainder;
+                            *weight = (new_weight / weight_sum) as u8;
+                            remainder = new_weight % weight_sum;
+                        }
+                        *weights = u8_weights.map(|u| u as f32 / 255.0).into();
+                    }
+                }
+            }
+        }
+
         Self {
             bone_indices,
-            bone_weights: weights,
+            bone_weights,
         }
     }
 }
@@ -117,7 +160,7 @@ mod tests {
                 bone_indices: vec![[0; 4]; 3],
                 bone_weights: vec![Vec4::ZERO; 3],
             },
-            SkinWeights::from_influences(&[], 3, &["a", "b", "c"])
+            SkinWeights::from_influences(&[], 3, &["a", "b", "c"], BoneElementType::Float32)
         );
     }
 
@@ -125,11 +168,11 @@ mod tests {
     fn bone_indices_weights_multiple_influences() {
         assert_eq!(
             SkinWeights {
-                bone_indices: vec![[2, 0, 0, 0], [0, 0, 0, 0], [1, 0, 0, 0]],
+                bone_indices: vec![[0, 0, 0, 0], [0, 0, 0, 0], [0, 1, 0, 0]],
                 bone_weights: vec![
-                    vec4(0.2, 0.0, 0.0, 0.0),
+                    vec4(1.0, 0.0, 0.0, 0.0),
                     vec4(0.0, 0.0, 0.0, 0.0),
-                    vec4(0.3, 0.11, 0.0, 0.0)
+                    vec4(0.7, 0.3, 0.0, 0.0)
                 ],
             },
             SkinWeights::from_influences(
@@ -139,11 +182,11 @@ mod tests {
                         weights: vec![
                             VertexWeight {
                                 vertex_index: 0,
-                                weight: 0.0
+                                weight: 0.8
                             },
                             VertexWeight {
                                 vertex_index: 2,
-                                weight: 0.11
+                                weight: 0.7
                             }
                         ]
                     },
@@ -151,7 +194,7 @@ mod tests {
                         bone_name: "b".to_string(),
                         weights: vec![VertexWeight {
                             vertex_index: 0,
-                            weight: 0.2
+                            weight: 0.0
                         }]
                     },
                     Influence {
@@ -165,12 +208,143 @@ mod tests {
                         bone_name: "d".to_string(),
                         weights: vec![VertexWeight {
                             vertex_index: 1,
-                            weight: 0.4
+                            weight: 1.0
                         }]
                     }
                 ],
                 3,
-                &["a", "c", "b"]
+                &["a", "c", "b"],
+                BoneElementType::Float32
+            )
+        );
+    }
+
+    #[test]
+    fn bone_indices_weights_normalize_f32() {
+        assert_eq!(
+            SkinWeights {
+                bone_indices: vec![[0, 0, 0, 0], [1, 2, 0, 0]],
+                bone_weights: vec![vec4(1.0, 0.0, 0.0, 0.0), vec4(0.5, 0.5, 0.0, 0.0),],
+            },
+            SkinWeights::from_influences(
+                &[
+                    Influence {
+                        bone_name: "a".to_string(),
+                        weights: vec![VertexWeight {
+                            vertex_index: 0,
+                            weight: 0.5
+                        },]
+                    },
+                    Influence {
+                        bone_name: "b".to_string(),
+                        weights: vec![VertexWeight {
+                            vertex_index: 1,
+                            weight: 1.0
+                        }]
+                    },
+                    Influence {
+                        bone_name: "c".to_string(),
+                        weights: vec![VertexWeight {
+                            vertex_index: 1,
+                            weight: 1.0
+                        }]
+                    },
+                ],
+                2,
+                &["a", "b", "c"],
+                BoneElementType::Float32
+            )
+        );
+    }
+
+    #[test]
+    fn bone_indices_weights_normalize_f16() {
+        assert_eq!(
+            SkinWeights {
+                bone_indices: vec![[0, 0, 0, 0], [1, 2, 0, 0]],
+                bone_weights: vec![vec4(1.0, 0.0, 0.0, 0.0), vec4(0.5, 0.5, 0.0, 0.0),],
+            },
+            SkinWeights::from_influences(
+                &[
+                    Influence {
+                        bone_name: "a".to_string(),
+                        weights: vec![VertexWeight {
+                            vertex_index: 0,
+                            weight: 0.5
+                        },]
+                    },
+                    Influence {
+                        bone_name: "b".to_string(),
+                        weights: vec![VertexWeight {
+                            vertex_index: 1,
+                            weight: 1.0
+                        }]
+                    },
+                    Influence {
+                        bone_name: "c".to_string(),
+                        weights: vec![VertexWeight {
+                            vertex_index: 1,
+                            weight: 1.0
+                        }]
+                    },
+                ],
+                2,
+                &["a", "b", "c"],
+                BoneElementType::Float16
+            )
+        );
+    }
+
+    #[test]
+    fn bone_indices_weights_normalize_u8() {
+        // Weights should sum to 255.0 / 255.0.
+        assert_eq!(
+            SkinWeights {
+                bone_indices: vec![[2, 1, 0, 0], [1, 2, 0, 0]],
+                bone_weights: vec![
+                    vec4(127.0 / 255.0, 85.0 / 255.0, 43.0 / 255.0, 0.0),
+                    vec4(127.0 / 255.0, 128.0 / 255.0, 0.0, 0.0),
+                ],
+            },
+            SkinWeights::from_influences(
+                &[
+                    Influence {
+                        bone_name: "a".to_string(),
+                        weights: vec![VertexWeight {
+                            vertex_index: 0,
+                            weight: 0.25
+                        },]
+                    },
+                    Influence {
+                        bone_name: "b".to_string(),
+                        weights: vec![
+                            VertexWeight {
+                                vertex_index: 0,
+                                weight: 0.5
+                            },
+                            VertexWeight {
+                                vertex_index: 1,
+                                weight: 1.0
+                            }
+                        ]
+                    },
+                    Influence {
+                        bone_name: "c".to_string(),
+                        weights: vec![
+                            VertexWeight {
+                                vertex_index: 0,
+                                weight: 0.75
+                            },
+                            VertexWeight {
+                                vertex_index: 1,
+                                weight: 1.0
+                            }
+                        ]
+                    },
+                ],
+                2,
+                &["a", "b", "c"],
+                BoneElementType::Byte
             )
         );
     }
