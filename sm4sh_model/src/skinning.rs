@@ -102,7 +102,7 @@ impl SkinWeights {
         }
 
         // Linear blend skinning requires the weights to be normalized.
-        // Types other than f32 require special logic to ensure decoded weights are still normalized.
+        // Use logic for each type to ensure weights are normalized after decoding.
         match element_type {
             BoneElementType::Float32 => {
                 for weights in &mut bone_weights {
@@ -123,7 +123,7 @@ impl SkinWeights {
             }
             BoneElementType::Byte => {
                 for weights in &mut bone_weights {
-                    // Normalize the integ integers with the remainder since we use uint8 for the vertex buffer.
+                    // Normalize integers with the remainder since we use u8 for the vertex buffer.
                     // https://stackoverflow.com/questions/31121591/normalizing-integers
                     let mut u8_weights = weights.to_array().map(|f| (f * 255.0) as u8);
                     let weight_sum: u32 = u8_weights.into_iter().map(|u| u as u32).sum();
