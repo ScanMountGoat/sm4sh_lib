@@ -504,18 +504,14 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = camera.projection[0];
     let REMOVE_END = 0.0;
 
-    let vertex_tangent = normalize(in.tangent.xyz);
-    let vertex_bitangent = normalize(in.bitangent.xyz);
-    let vertex_normal = normalize(in.normal.xyz);
-
     // TODO: Rename these in the shadergen itself?
     let a_Position = vec4(in.position, 0.0);
     let a_TexCoord0 = vec4(in.uv0, 0.0, 0.0);
     let a_TexCoord1 = vec4(in.uv1, 0.0, 0.0);
     let a_TexCoord2 = vec4(in.uv2, 0.0, 0.0);
-    let a_Normal = vec4(vertex_normal, 0.0);
-    let a_Tangent = vec4(vertex_tangent, 0.0);
-    let a_Binormal = vec4(vertex_bitangent, 0.0);
+    let a_Normal = vec4(in.normal.xyz, 0.0);
+    let a_Tangent = vec4(in.tangent.xyz, 0.0);
+    let a_Binormal = vec4(in.bitangent.xyz, 0.0);
     let a_Color = in.color;
 
     // Calculated globals.
