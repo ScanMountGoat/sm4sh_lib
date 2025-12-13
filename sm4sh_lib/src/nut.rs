@@ -1,6 +1,7 @@
 use binrw::{BinRead, BinWrite, binread};
 use bitflags::bitflags;
 use image_dds::{Surface, ddsfile::Dds};
+use thiserror::Error;
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
 use crate::{parse_opt_ptr32, parse_ptr32_count, xc3_write_binwrite_impl};
@@ -202,13 +203,13 @@ pub struct Ext {
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 pub struct GtxHeader {
-    pub dim: u32,
+    pub dim: SurfaceDim,
     pub width: u32,
     pub height: u32,
     pub depth_or_array_layers: u32,
     pub mipmap_count: u32,
     pub format: SurfaceFormat,
-    pub aa: u32,
+    pub aa: AaMode,
     pub usage: u32,
     pub image_data_size: u32,
     pub image_data_offset: u32,
@@ -245,6 +246,37 @@ pub enum TileMode {
     D2TiledThick = 7,
 }
 
+// TODO: Just use the wiiu_swizzle gx2 values directly?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
+#[brw(repr(u32))]
+pub enum AaMode {
+    X1 = 0,
+    X2 = 1,
+    X4 = 2,
+    X8 = 3,
+}
+
+// TODO: Just use the wiiu_swizzle gx2 values directly?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Debug, BinRead, BinWrite, PartialEq, Eq, Clone, Copy)]
+#[brw(repr(u32))]
+pub enum SurfaceDim {
+    D1 = 0,
+    D2 = 1,
+    D3 = 2,
+    Cube = 3,
+}
+
+#[derive(Debug, Error)]
+pub enum CreateSurfaceError {
+    #[error("error deswizzling surface")]
+    SwizzleError(#[from] wiiu_swizzle::SwizzleError),
+
+    #[error("image format {0:?} is not supported")]
+    UnsupportedImageFormat(NutFormat),
+}
+
 impl SurfaceFormat {
     pub fn block_dim(&self) -> (u32, u32) {
         match self {
@@ -276,13 +308,13 @@ impl Texture {
         if let Some(gtx_header) = &self.gtx_header {
             // TODO: Avoid unwrap.
             wiiu_swizzle::Gx2Surface {
-                dim: wiiu_swizzle::SurfaceDim::from_repr(gtx_header.dim).unwrap(),
+                dim: wiiu_swizzle::SurfaceDim::from_repr(gtx_header.dim as u32).unwrap(),
                 width: gtx_header.width,
                 height: gtx_header.height,
                 depth_or_array_layers: gtx_header.depth_or_array_layers,
                 mipmap_count: gtx_header.mipmap_count,
                 format: wiiu_swizzle::SurfaceFormat::from_repr(gtx_header.format as u32).unwrap(),
-                aa: wiiu_swizzle::AaMode::from_repr(gtx_header.aa).unwrap(),
+                aa: wiiu_swizzle::AaMode::from_repr(gtx_header.aa as u32).unwrap(),
                 usage: gtx_header.usage,
                 image_data: &self.data[..gtx_header.image_data_size as usize],
                 mipmap_data: &self.data[gtx_header.mipmap_offsets[0] as usize
@@ -299,7 +331,7 @@ impl Texture {
         }
     }
 
-    pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, wiiu_swizzle::SwizzleError> {
+    pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
         let mut data = self.deswizzle()?;
         if self.format == NutFormat::Rgb5A1Unorm {
             // image_dds only supports Bgr5A1Unorm.
@@ -316,7 +348,7 @@ impl Texture {
                 1
             },
             mipmaps: self.mipmap_count as u32,
-            image_format: self.format.into(),
+            image_format: self.format.try_into()?,
             data,
         })
     }
@@ -327,20 +359,22 @@ impl Texture {
     }
 }
 
-impl From<NutFormat> for image_dds::ImageFormat {
-    fn from(value: NutFormat) -> Self {
+impl TryFrom<NutFormat> for image_dds::ImageFormat {
+    type Error = CreateSurfaceError;
+
+    fn try_from(value: NutFormat) -> Result<Self, Self::Error> {
         match value {
-            NutFormat::BC1Unorm => image_dds::ImageFormat::BC1RgbaUnorm,
-            NutFormat::BC2Unorm => image_dds::ImageFormat::BC2RgbaUnorm,
-            NutFormat::BC3Unorm => image_dds::ImageFormat::BC3RgbaUnorm,
-            NutFormat::Bgr5A1Unorm => image_dds::ImageFormat::Bgr5A1Unorm,
-            NutFormat::Bgr5A1Unorm2 => image_dds::ImageFormat::Bgr5A1Unorm,
-            NutFormat::B5G6R5Unorm => todo!(),
-            NutFormat::Rgb5A1Unorm => image_dds::ImageFormat::Bgr5A1Unorm,
-            NutFormat::Rgba8Unorm => image_dds::ImageFormat::Rgba8Unorm,
-            NutFormat::R32Float => image_dds::ImageFormat::R32Float,
-            NutFormat::Rgba82 => image_dds::ImageFormat::Rgba8Unorm,
-            NutFormat::BC5Unorm => image_dds::ImageFormat::BC5RgUnorm,
+            NutFormat::BC1Unorm => Ok(image_dds::ImageFormat::BC1RgbaUnorm),
+            NutFormat::BC2Unorm => Ok(image_dds::ImageFormat::BC2RgbaUnorm),
+            NutFormat::BC3Unorm => Ok(image_dds::ImageFormat::BC3RgbaUnorm),
+            NutFormat::Bgr5A1Unorm => Ok(image_dds::ImageFormat::Bgr5A1Unorm),
+            NutFormat::Bgr5A1Unorm2 => Ok(image_dds::ImageFormat::Bgr5A1Unorm),
+            NutFormat::B5G6R5Unorm => Err(CreateSurfaceError::UnsupportedImageFormat(value)),
+            NutFormat::Rgb5A1Unorm => Ok(image_dds::ImageFormat::Bgr5A1Unorm),
+            NutFormat::Rgba8Unorm => Ok(image_dds::ImageFormat::Rgba8Unorm),
+            NutFormat::R32Float => Ok(image_dds::ImageFormat::R32Float),
+            NutFormat::Rgba82 => Ok(image_dds::ImageFormat::Rgba8Unorm),
+            NutFormat::BC5Unorm => Ok(image_dds::ImageFormat::BC5RgUnorm),
         }
     }
 }
@@ -372,7 +406,15 @@ fn swap_red_blue_bgr5a1(data: &mut [u8]) {
     });
 }
 
-xc3_write_binwrite_impl!(NutFormat, Ext, Gidx, SurfaceFormat, TileMode);
+xc3_write_binwrite_impl!(
+    NutFormat,
+    Ext,
+    Gidx,
+    SurfaceFormat,
+    TileMode,
+    AaMode,
+    SurfaceDim
+);
 
 impl Xc3WriteOffsets for Ntp3Offsets<'_> {
     type Args = ();

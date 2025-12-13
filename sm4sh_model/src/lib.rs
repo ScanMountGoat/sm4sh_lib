@@ -16,7 +16,7 @@ use sm4sh_lib::{
         BoundingSphere, Material, MaterialProperty, MaterialTexture, Mesh, MeshGroup, Nud,
         VertexIndexFlags,
     },
-    nut::Nut,
+    nut::{CreateSurfaceError, Nut},
     vbn::Vbn,
 };
 
@@ -203,7 +203,8 @@ impl NudModel {
             });
         }
 
-        let textures = nut.map(nut_textures).unwrap_or_default();
+        // TODO: Return errors.
+        let textures = nut.and_then(|n| nut_textures(n).ok()).unwrap_or_default();
 
         let skeleton = vbn.map(vbn_skeleton);
 
@@ -462,17 +463,17 @@ fn bounding_sphere(sphere: Vec4) -> BoundingSphere {
     }
 }
 
-fn nut_textures(nut: &Nut) -> Vec<ImageTexture> {
+fn nut_textures(nut: &Nut) -> Result<Vec<ImageTexture>, CreateSurfaceError> {
     match nut {
         Nut::Ntwu(ntwu) => ntwu
             .textures
             .iter()
-            .map(|t| ImageTexture::from_surface(t.gidx.hash, t.to_surface().unwrap()))
+            .map(|t| Ok(ImageTexture::from_surface(t.gidx.hash, t.to_surface()?)))
             .collect(),
         Nut::Ntp3(ntp3) => ntp3
             .textures
             .iter()
-            .map(|t| ImageTexture::from_surface(t.gidx.hash, t.to_surface().unwrap()))
+            .map(|t| Ok(ImageTexture::from_surface(t.gidx.hash, t.to_surface()?)))
             .collect(),
     }
 }
@@ -520,16 +521,16 @@ fn nud_material(material: &sm4sh_lib::nud::Material) -> NudMaterial {
 impl ImageTexture {
     /// Create a view of all image data in this texture
     /// to use with encode or decode operations.
-    pub fn to_surface(&self) -> image_dds::Surface<&[u8]> {
-        image_dds::Surface {
+    pub fn to_surface(&self) -> Result<image_dds::Surface<&[u8]>, CreateSurfaceError> {
+        Ok(image_dds::Surface {
             width: self.width,
             height: self.height,
             depth: 1,
             layers: 1,
             mipmaps: self.mipmap_count,
-            image_format: self.image_format.into(),
+            image_format: self.image_format.try_into()?,
             data: &self.image_data,
-        }
+        })
     }
 
     pub fn from_surface<T: AsRef<[u8]>>(hash_id: u32, surface: image_dds::Surface<T>) -> Self {
