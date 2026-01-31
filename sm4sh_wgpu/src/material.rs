@@ -11,8 +11,6 @@ pub fn create_bind_group2(
     device: &wgpu::Device,
     mesh: &NudMesh,
     hash_to_texture: &BTreeMap<u32, wgpu::TextureView>,
-    default_texture: &wgpu::TextureView,
-    default_cube_texture: &wgpu::TextureView,
     shared_data: &SharedData,
 ) -> crate::shader::model::bind_groups::BindGroup2 {
     // TODO: Load all textures and samplers.
@@ -186,23 +184,26 @@ pub fn create_bind_group2(
         crate::shader::model::bind_groups::BindGroupLayout2 {
             uniforms: uniforms.as_entire_buffer_binding(),
             effect_uniforms: effect_uniforms.as_entire_buffer_binding(),
-            color_texture: color_texture.unwrap_or(default_texture),
+            color_texture: color_texture.unwrap_or(&shared_data.default_texture),
             color_sampler: color_sampler.as_ref().unwrap_or(&sampler),
-            normal_texture: normal_texture.unwrap_or(default_texture),
+            normal_texture: normal_texture.unwrap_or(&shared_data.default_texture),
             normal_sampler: normal_sampler.as_ref().unwrap_or(&sampler),
-            reflection_texture: reflection_texture.unwrap_or(default_texture),
-            reflection_texture_cube: reflection_texture_cube.unwrap_or(default_cube_texture),
+            reflection_texture: reflection_texture.unwrap_or(&shared_data.default_texture),
+            reflection_texture_cube: reflection_texture_cube
+                .unwrap_or(&shared_data.default_cube_texture),
             reflection_sampler: reflection_sampler.as_ref().unwrap_or(&sampler),
-            reflection_cube_texture: reflection_cube_texture.unwrap_or(default_cube_texture),
-            reflection_cube_texture_2d: reflection_cube_texture_2d.unwrap_or(default_texture),
+            reflection_cube_texture: reflection_cube_texture
+                .unwrap_or(&shared_data.default_cube_texture),
+            reflection_cube_texture_2d: reflection_cube_texture_2d
+                .unwrap_or(&shared_data.default_texture),
             reflection_cube_sampler: reflection_cube_sampler.as_ref().unwrap_or(&sampler),
-            color2_texture: color2_texture.unwrap_or(default_texture),
+            color2_texture: color2_texture.unwrap_or(&shared_data.default_texture),
             color2_sampler: color2_sampler.as_ref().unwrap_or(&sampler),
-            diffuse_texture: diffuse_texture.unwrap_or(default_texture),
+            diffuse_texture: diffuse_texture.unwrap_or(&shared_data.default_texture),
             diffuse_sampler: diffuse_sampler.as_ref().unwrap_or(&sampler),
-            light_map_texture: light_map_texture.unwrap_or(default_texture),
+            light_map_texture: light_map_texture.unwrap_or(&shared_data.default_texture),
             light_map_sampler: light_map_sampler.as_ref().unwrap_or(&sampler),
-            normal2_texture: normal2_texture.unwrap_or(default_texture),
+            normal2_texture: normal2_texture.unwrap_or(&shared_data.default_texture),
             normal2_sampler: normal2_sampler.as_ref().unwrap_or(&sampler),
         },
     )

@@ -93,7 +93,7 @@ impl<'a> State<'a> {
         let renderer = Renderer::new(&device, size.width, size.height, config.format);
 
         let database = ShaderDatabase::from_file(&cli.database)?;
-        let shared_data = SharedData::new(&device, database);
+        let shared_data = SharedData::new(&device, &queue, database);
 
         let nud_model = sm4sh_model::load_model(&cli.file)?;
         let model = load_model(&device, &queue, &nud_model, &shared_data);

@@ -95,7 +95,7 @@ fn main() -> anyhow::Result<()> {
     let output_view = output.create_view(&Default::default());
 
     let database = ShaderDatabase::from_file(&cli.database)?;
-    let shared_data = SharedData::new(&device, database);
+    let shared_data = SharedData::new(&device, &queue, database);
 
     // Load and render folders individually to save on memory.
     let root_folder = Path::new(&cli.root_folder);

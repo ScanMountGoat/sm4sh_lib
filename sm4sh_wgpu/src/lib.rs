@@ -121,14 +121,82 @@ impl CameraData {
 pub struct SharedData {
     model_layout: wgpu::PipelineLayout,
     database: ShaderDatabase,
+    default_texture: wgpu::TextureView,
+    default_cube_texture: wgpu::TextureView,
+    light_map_texture: wgpu::TextureView,
 }
 
 impl SharedData {
-    pub fn new(device: &wgpu::Device, database: ShaderDatabase) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, database: ShaderDatabase) -> Self {
         // TODO: Include database in binary?
+        let default_texture = create_solid_texture(device, queue, [0u8; 4])
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let default_cube_texture = create_default_black_cube_texture(device, queue).create_view(
+            &wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::Cube),
+                ..Default::default()
+            },
+        );
+
+        // TODO: proper loading for global textures.
+        let light_map_texture = create_solid_texture(device, queue, [255u8; 4])
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
         Self {
             model_layout: crate::shader::model::create_pipeline_layout(device),
             database,
+            default_texture,
+            default_cube_texture,
+            light_map_texture,
         }
     }
+}
+
+fn create_solid_texture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    rgba: [u8; 4],
+) -> wgpu::Texture {
+    device.create_texture_with_data(
+        queue,
+        &wgpu::TextureDescriptor {
+            label: Some("DEFAULT"),
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        },
+        wgpu::util::TextureDataOrder::LayerMajor,
+        bytemuck::cast_slice(&[rgba; 4 * 4]),
+    )
+}
+
+fn create_default_black_cube_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
+    device.create_texture_with_data(
+        queue,
+        &wgpu::TextureDescriptor {
+            label: Some("DEFAULT_CUBE"),
+            size: wgpu::Extent3d {
+                width: 4,
+                height: 4,
+                depth_or_array_layers: 6,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        },
+        wgpu::util::TextureDataOrder::LayerMajor,
+        &[0u8; 4 * 4 * 4 * 6],
+    )
 }

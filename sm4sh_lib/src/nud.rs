@@ -238,7 +238,7 @@ pub struct Material {
 
 // TODO: retest these with renderdoc.
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq, Hash)]
 #[brw(repr(u16))]
 pub enum SrcFactor {
     // TODO: Validate this section.
@@ -262,7 +262,7 @@ pub enum SrcFactor {
 // TODO: retest these with renderdoc.
 // TODO: dst factor + blend op?
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq, Hash)]
 #[brw(repr(u16))]
 pub enum DstFactor {
     Zero = 0,
@@ -302,7 +302,7 @@ pub enum AlphaFunc {
 
 // TODO: retest these with renderdoc.
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, BinRead, BinWrite, Clone, Copy, PartialEq, Eq, Hash)]
 #[brw(repr(u16))]
 pub enum CullMode {
     Disabled = 0x0,

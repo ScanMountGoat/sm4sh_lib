@@ -8,8 +8,10 @@ use sm4sh_model::{
 use wgpu::util::DeviceExt;
 
 use crate::{
-    CameraData, DeviceBufferExt, QueueBufferExt, SharedData, material::create_bind_group2,
-    pipeline::model_pipeline, texture::create_texture,
+    CameraData, DeviceBufferExt, QueueBufferExt, SharedData,
+    material::create_bind_group2,
+    pipeline::{PipelineKey, model_pipeline},
+    texture::create_texture,
 };
 
 pub struct Model {
@@ -52,16 +54,6 @@ pub fn load_model(
     model: &NudModel,
     shared_data: &SharedData,
 ) -> Model {
-    let default_texture = create_solid_texture(device, queue, [0u8; 4])
-        .create_view(&wgpu::TextureViewDescriptor::default());
-
-    let default_cube_texture = create_default_black_cube_texture(device, queue).create_view(
-        &wgpu::TextureViewDescriptor {
-            dimension: Some(wgpu::TextureViewDimension::Cube),
-            ..Default::default()
-        },
-    );
-
     // TODO: texture module
     let mut textures: BTreeMap<_, _> = model
         .textures
@@ -81,10 +73,7 @@ pub fn load_model(
         })
         .collect();
 
-    // TODO: proper loading for global textures.
-    let light_map = create_solid_texture(device, queue, [255u8; 4])
-        .create_view(&wgpu::TextureViewDescriptor::default());
-    textures.insert(0x10080000, light_map);
+    textures.insert(0x10080000, shared_data.light_map_texture.clone());
 
     let bone_transforms = model
         .skeleton
@@ -134,17 +123,7 @@ pub fn load_model(
                 meshes: g
                     .meshes
                     .iter()
-                    .map(|m| {
-                        create_mesh(
-                            device,
-                            g,
-                            m,
-                            &textures,
-                            &default_texture,
-                            &default_cube_texture,
-                            shared_data,
-                        )
-                    })
+                    .map(|m| create_mesh(device, g, m, &textures, shared_data))
                     .collect(),
                 sort_bias: g.sort_bias,
                 bounding_sphere: g.bounding_sphere,
@@ -165,8 +144,6 @@ fn create_mesh(
     group: &sm4sh_model::NudMeshGroup,
     mesh: &sm4sh_model::NudMesh,
     hash_to_texture: &BTreeMap<u32, wgpu::TextureView>,
-    default_texture: &wgpu::TextureView,
-    default_cube_texture: &wgpu::TextureView,
     shared_data: &SharedData,
 ) -> Mesh {
     let mut vertices: Vec<_> = mesh
@@ -207,14 +184,7 @@ fn create_mesh(
         usage: wgpu::BufferUsages::INDEX,
     });
 
-    let bind_group2 = create_bind_group2(
-        device,
-        mesh,
-        hash_to_texture,
-        default_texture,
-        default_cube_texture,
-        shared_data,
-    );
+    let bind_group2 = create_bind_group2(device, mesh, hash_to_texture, shared_data);
 
     // TODO: BILLBOARDV?
     let per_mesh = device.create_uniform_buffer(
@@ -235,7 +205,8 @@ fn create_mesh(
         },
     );
 
-    let pipeline = model_pipeline(device, shared_data, mesh);
+    let pipeline_key = PipelineKey::new(mesh);
+    let pipeline = model_pipeline(device, shared_data, &pipeline_key);
 
     let is_transparent = mesh
         .material1
@@ -432,55 +403,4 @@ impl Mesh {
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..self.vertex_index_count, 0, 0..1);
     }
-}
-
-pub fn create_solid_texture(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    rgba: [u8; 4],
-) -> wgpu::Texture {
-    device.create_texture_with_data(
-        queue,
-        &wgpu::TextureDescriptor {
-            label: Some("DEFAULT"),
-            size: wgpu::Extent3d {
-                width: 4,
-                height: 4,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        },
-        wgpu::util::TextureDataOrder::LayerMajor,
-        bytemuck::cast_slice(&[rgba; 4 * 4]),
-    )
-}
-
-pub fn create_default_black_cube_texture(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-) -> wgpu::Texture {
-    device.create_texture_with_data(
-        queue,
-        &wgpu::TextureDescriptor {
-            label: Some("DEFAULT_CUBE"),
-            size: wgpu::Extent3d {
-                width: 4,
-                height: 4,
-                depth_or_array_layers: 6,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        },
-        wgpu::util::TextureDataOrder::LayerMajor,
-        &[0u8; 4 * 4 * 4 * 6],
-    )
 }

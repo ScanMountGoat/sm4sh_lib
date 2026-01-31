@@ -118,7 +118,7 @@ pub struct NudProperty {
 }
 
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum PrimitiveType {
     TriangleList,
     TriangleStrip,
