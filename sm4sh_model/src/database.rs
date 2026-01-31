@@ -36,7 +36,7 @@ pub struct ShaderProgram {
 impl ShaderDatabase {
     /// Load the database data from `path`.
     pub fn from_file<P: AsRef<Path>>(path: P) -> BinResult<Self> {
-        // Store non indexed programs to avoid converting an index program more than once.
+        // Store non indexed programs to avoid converting an indexed program more than once.
         let indexed = io::ShaderDatabaseIndexed::from_file(path)?;
         Ok(Self {
             programs: indexed.programs(),

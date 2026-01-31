@@ -110,8 +110,14 @@ fn write_expr(wgsl: &mut String, expr: &OutputExpr<Operation>) -> Option<()> {
 
 fn write_value(wgsl: &mut String, value: &Value) -> Option<()> {
     match value {
-        Value::Int(i) => Some(write!(wgsl, "{i:?}").unwrap()),
-        Value::Float(f) => Some(write!(wgsl, "{f:?}").unwrap()),
+        Value::Int(i) => {
+            write!(wgsl, "{i:?}").unwrap();
+            Some(())
+        }
+        Value::Float(f) => {
+            write!(wgsl, "{f:?}").unwrap();
+            Some(())
+        }
         Value::Parameter(p) => write_parameter(wgsl, p),
         Value::Texture(t) => write_texture(wgsl, t),
         Value::Attribute(a) => write_attribute(wgsl, a),
