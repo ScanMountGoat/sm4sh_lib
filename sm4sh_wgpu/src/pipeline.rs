@@ -88,7 +88,7 @@ pub fn model_pipeline(
                 .as_ref()
                 .map(|m| (m.alpha_test_ref, m.alpha_func));
 
-            let shader_wgsl = ShaderWgsl::new(program.as_ref(), alpha_test_ref_func);
+            let shader_wgsl = ShaderWgsl::new(program, alpha_test_ref_func);
             let source = shader_wgsl.create_model_shader();
             let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,

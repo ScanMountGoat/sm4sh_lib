@@ -15,7 +15,9 @@ mod uniforms;
 type IndexMap<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ShaderDatabase(io::ShaderDatabaseIndexed);
+pub struct ShaderDatabase {
+    programs: BTreeMap<u32, ShaderProgram>,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ShaderProgram {
@@ -34,23 +36,27 @@ pub struct ShaderProgram {
 impl ShaderDatabase {
     /// Load the database data from `path`.
     pub fn from_file<P: AsRef<Path>>(path: P) -> BinResult<Self> {
-        // Keep the indexed database to improve load times and reduce memory usage.
-        io::ShaderDatabaseIndexed::from_file(path).map(Self)
+        // Store non indexed programs to avoid converting an index program more than once.
+        let indexed = io::ShaderDatabaseIndexed::from_file(path)?;
+        Ok(Self {
+            programs: indexed.programs(),
+        })
     }
 
     /// Serialize and save the database data to `path`.
     pub fn save<P: AsRef<Path>>(&self, path: P) -> BinResult<()> {
-        self.0.save(path)?;
+        let indexed = io::ShaderDatabaseIndexed::from_programs(&self.programs);
+        indexed.save(path)?;
         Ok(())
     }
 
-    pub fn get_shader(&self, shader_id: u32) -> Option<ShaderProgram> {
-        self.0.get_shader(shader_id)
+    pub fn get_shader(&self, shader_id: u32) -> Option<&ShaderProgram> {
+        self.programs.get(&shader_id)
     }
 
     /// Create the internal database representation from non indexed data.
     pub fn from_programs(programs: BTreeMap<u32, ShaderProgram>) -> Self {
-        Self(io::ShaderDatabaseIndexed::from_programs(programs))
+        Self { programs }
     }
 }
 

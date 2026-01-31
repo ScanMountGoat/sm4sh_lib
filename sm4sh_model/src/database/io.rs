@@ -200,53 +200,54 @@ impl ShaderDatabaseIndexed {
         Ok(())
     }
 
-    pub fn get_shader(&self, shader_id: u32) -> Option<ShaderProgram> {
+    pub fn programs(&self) -> BTreeMap<u32, ShaderProgram> {
         self.programs
-            .get(&shader_id)
-            .map(|p| self.program_from_indexed(p))
+            .iter()
+            .map(|(id, p)| (*id, self.program_from_indexed(p)))
+            .collect()
     }
 
-    pub fn from_programs(programs: BTreeMap<u32, ShaderProgram>) -> Self {
+    pub fn from_programs(programs: &BTreeMap<u32, ShaderProgram>) -> Self {
         let mut database = Self::default();
 
-        for (id, p) in programs.into_iter() {
+        for (id, p) in programs.iter() {
             let program = database.program_indexed(p);
-            database.programs.insert(id, program);
+            database.programs.insert(*id, program);
         }
 
         database
     }
 
-    fn program_indexed(&mut self, p: ShaderProgram) -> ShaderProgramIndexed {
+    fn program_indexed(&mut self, p: &ShaderProgram) -> ShaderProgramIndexed {
         // Remap exprs indexed for this program to exprs indexed for all programs.
         let mut expr_indices = IndexMap::default();
 
         ShaderProgramIndexed {
             output_dependencies: p
                 .output_dependencies
-                .into_iter()
+                .iter()
                 .map(|(output, value)| {
-                    let output_index = add_string(&mut self.outputs, output);
+                    let output_index = add_string(&mut self.outputs, output.clone());
                     (
                         output_index,
-                        self.add_output_expr(&p.exprs[value], &p.exprs, &mut expr_indices),
+                        self.add_output_expr(&p.exprs[*value], &p.exprs, &mut expr_indices),
                     )
                 })
                 .collect(),
             attributes: p
                 .attributes
-                .into_iter()
-                .map(|s| add_string(&mut self.attribute_names, s))
+                .iter()
+                .map(|s| add_string(&mut self.attribute_names, s.clone()))
                 .collect(),
             samplers: p
                 .samplers
-                .into_iter()
-                .map(|s| add_string(&mut self.texture_names, s))
+                .iter()
+                .map(|s| add_string(&mut self.texture_names, s.clone()))
                 .collect(),
             parameters: p
                 .parameters
-                .into_iter()
-                .map(|s| add_string(&mut self.buffer_field_names, s))
+                .iter()
+                .map(|s| add_string(&mut self.buffer_field_names, s.clone()))
                 .collect(),
         }
     }

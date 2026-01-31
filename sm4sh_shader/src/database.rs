@@ -122,7 +122,7 @@ impl xc3_shader::expr::Operation for Operation {
             .or_else(|| binary_op(graph, expr, BinaryOp::Less, Operation::Less))
             .or_else(|| binary_op(graph, expr, BinaryOp::LessEqual, Operation::LessEqual))
             .or_else(|| {
-                error!("Unsuported expression {expr:?}");
+                error!("Unsupported expression {expr:?}");
                 None
             })
     }
