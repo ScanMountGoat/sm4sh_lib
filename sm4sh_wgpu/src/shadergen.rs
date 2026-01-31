@@ -1,5 +1,6 @@
-use std::fmt::Write;
+use std::{fmt::Write, sync::LazyLock};
 
+use aho_corasick::AhoCorasick;
 use case::CaseExt;
 use indoc::formatdoc;
 use log::error;
@@ -8,14 +9,23 @@ use sm4sh_model::{
     database::{Operation, OutputExpr, Parameter, ShaderProgram, Value},
 };
 
-const OUT_VAR: &str = "RESULT";
+const OUT_VAR: &str = "out_color";
 const VAR_PREFIX: &str = "VAR";
+
+static WGSL_REPLACEMENTS: LazyLock<AhoCorasick> = LazyLock::new(|| {
+    AhoCorasick::new([
+        "let ASSIGN_VARS_GENERATED = 0.0;",
+        "let ASSIGN_OUT_COLOR_GENERATED = 0.0;",
+        "let ALPHA_TEST_GENERATED = 0.0;",
+    ])
+    .unwrap()
+});
 
 /// Generated WGSL model shader code for a material.
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub struct ShaderWgsl {
     assignments: String,
-    outputs: Vec<String>,
+    outputs: String,
     discard: String,
 }
 
@@ -40,14 +50,9 @@ impl ShaderWgsl {
     }
 
     pub fn create_model_shader(&self) -> String {
-        let mut source = crate::shader::model::SOURCE.to_string();
+        let replace_with = &[&self.assignments, &self.outputs, &self.discard];
 
-        source = source.replace("let ASSIGN_VARS_GENERATED = 0.0;", &self.assignments);
-        source = source.replace(
-            "let ASSIGN_OUT_COLOR_GENERATED = 0.0;",
-            &self.outputs.join("\n").replace(OUT_VAR, "out_color"),
-        );
-        source = source.replace("let ALPHA_TEST_GENERATED = 0.0;", &self.discard);
+        let mut source = WGSL_REPLACEMENTS.replace_all(crate::shader::model::SOURCE, replace_with);
 
         // This section is only used for wgsl_to_wgpu reachability analysis and can be removed.
         if let (Some(start), Some(end)) = (
@@ -87,35 +92,34 @@ fn alpha_test_inner(ref_value: f32, func: &str) -> String {
 fn generate_assignments_wgsl(program: &ShaderProgram) -> String {
     let mut wgsl = String::new();
     for (i, expr) in program.exprs.iter().enumerate() {
-        let value_wgsl = expr_wgsl(expr);
-        writeln!(
-            &mut wgsl,
-            "let {VAR_PREFIX}{i} = {};",
-            value_wgsl.unwrap_or("0.0".to_string())
-        )
-        .unwrap();
+        write!(&mut wgsl, "let {VAR_PREFIX}{i} = ",).unwrap();
+        if write_expr(&mut wgsl, expr).is_none() {
+            write!(wgsl, "0.0").unwrap();
+        }
+        writeln!(&mut wgsl, ";",).unwrap();
     }
     wgsl
 }
 
-fn expr_wgsl(expr: &OutputExpr<Operation>) -> Option<String> {
+fn write_expr(wgsl: &mut String, expr: &OutputExpr<Operation>) -> Option<()> {
     match expr {
-        OutputExpr::Value(value) => value_wgsl(value),
-        OutputExpr::Func { op, args } => func_wgsl(op, args),
+        OutputExpr::Value(value) => write_value(wgsl, value),
+        OutputExpr::Func { op, args } => write_func(wgsl, op, args),
     }
 }
 
-fn value_wgsl(value: &Value) -> Option<String> {
+fn write_value(wgsl: &mut String, value: &Value) -> Option<()> {
     match value {
-        Value::Int(i) => Some(format!("{i:?}")),
-        Value::Float(f) => Some(format!("{f:?}")),
-        Value::Parameter(p) => parameter_wgsl(p),
-        Value::Texture(t) => texture_wgsl(t),
-        Value::Attribute(a) => attribute_wgsl(a),
+        Value::Int(i) => Some(write!(wgsl, "{i:?}").unwrap()),
+        Value::Float(f) => Some(write!(wgsl, "{f:?}").unwrap()),
+        Value::Parameter(p) => write_parameter(wgsl, p),
+        Value::Texture(t) => write_texture(wgsl, t),
+        Value::Attribute(a) => write_attribute(wgsl, a),
     }
 }
 
-fn texture_wgsl(t: &sm4sh_model::database::Texture) -> Option<String> {
+fn write_texture(wgsl: &mut String, t: &sm4sh_model::database::Texture) -> Option<()> {
+    let a = VAR_PREFIX;
     match t.name.as_str() {
         "g_PCFTextureSampler"
         | "sampler0"
@@ -125,64 +129,84 @@ fn texture_wgsl(t: &sm4sh_model::database::Texture) -> Option<String> {
         | "multiplicationSampler"
         | "frameSampler" => None,
         "colorSampler2" | "colorSampler3" => None, // TODO: load all color textures
-        "reflectionSampler" => sampler_2d_or_cube(
+        "reflectionSampler" => write_sampler_2d_or_cube(
+            wgsl,
             "reflection_texture",
             "reflection_texture_cube",
             "reflection_sampler",
             &t.texcoords,
             t.channel,
         ),
-        "reflectionCubeSampler" => sampler_2d_or_cube(
+        "reflectionCubeSampler" => write_sampler_2d_or_cube(
+            wgsl,
             "reflection_cube_texture_2d",
             "reflection_cube_texture",
             "reflection_cube_sampler",
             &t.texcoords,
             t.channel,
         ),
-        "g_VSMTextureSampler" => Some(format!(
-            "textureSample({}, {}, vec2({}, {})){}",
-            "g_vsm_texture",
-            "g_vsm_sampler",
-            arg(&t.texcoords, 0)?,
-            arg(&t.texcoords, 1)?,
-            channel_wgsl(t.channel)
-        )),
-        _ => Some(format!(
-            "textureSample({}, {}, vec2({}, {})){}",
-            t.name.to_snake().replace("_sampler", "_texture"),
-            t.name.to_snake(),
-            arg(&t.texcoords, 0)?,
-            arg(&t.texcoords, 1)?,
-            channel_wgsl(t.channel)
-        )),
+        "g_VSMTextureSampler" => {
+            write!(
+                wgsl,
+                "textureSample(g_vsm_texture, g_vsm_sampler, vec2({a}{}, {a}{}))",
+                t.texcoords.first()?,
+                t.texcoords.get(1)?,
+            )
+            .unwrap();
+            write_channel(wgsl, t.channel);
+            Some(())
+        }
+        _ => {
+            write!(
+                wgsl,
+                "textureSample({}, {}, vec2({a}{}, {a}{}))",
+                t.name.to_snake().replace("_sampler", "_texture"),
+                t.name.to_snake(),
+                t.texcoords.first()?,
+                t.texcoords.get(1)?,
+            )
+            .unwrap();
+            write_channel(wgsl, t.channel);
+
+            Some(())
+        }
     }
 }
 
-fn sampler_2d_or_cube(
+fn write_sampler_2d_or_cube(
+    wgsl: &mut String,
     name_2d: &str,
     name_cube: &str,
     name_sampler: &str,
     texcoords: &[usize],
     channel: Option<char>,
-) -> Option<String> {
+) -> Option<()> {
     match texcoords {
-        [u, v] => Some(format!(
-            "textureSample({}, {}, vec2({VAR_PREFIX}{u}, {VAR_PREFIX}{v})){}",
-            name_2d,
-            name_sampler,
-            channel_wgsl(channel)
-        )),
-        [u, v, w] => Some(format!(
-            "textureSample({}, {}, vec3({VAR_PREFIX}{u}, {VAR_PREFIX}{v}, {VAR_PREFIX}{w})){}",
-            name_cube,
-            name_sampler,
-            channel_wgsl(channel)
-        )),
+        [u, v] => {
+            write!(
+                wgsl,
+                "textureSample({}, {}, vec2({VAR_PREFIX}{u}, {VAR_PREFIX}{v}))",
+                name_2d, name_sampler,
+            )
+            .unwrap();
+            write_channel(wgsl, channel);
+            Some(())
+        }
+        [u, v, w] => {
+            write!(
+                wgsl,
+                "textureSample({}, {}, vec3({VAR_PREFIX}{u}, {VAR_PREFIX}{v}, {VAR_PREFIX}{w}))",
+                name_cube, name_sampler,
+            )
+            .unwrap();
+            write_channel(wgsl, channel);
+            Some(())
+        }
         _ => None,
     }
 }
 
-fn attribute_wgsl(a: &sm4sh_model::database::Attribute) -> Option<String> {
+fn write_attribute(wgsl: &mut String, a: &sm4sh_model::database::Attribute) -> Option<()> {
     // Some "attributes" are the simplified result of queries like the eye vector.
     if a.name.starts_with("a_")
         || matches!(
@@ -190,206 +214,203 @@ fn attribute_wgsl(a: &sm4sh_model::database::Attribute) -> Option<String> {
             "eye" | "light_position" | "light_map_position" | "bitangent_sign"
         )
     {
-        Some(format!("{}{}", a.name, channel_wgsl(a.channel)))
+        write!(wgsl, "{}", a.name).unwrap();
+        write_channel(wgsl, a.channel);
+        Some(())
     } else {
         error!("Unrecognized attribute {a}");
         None
     }
 }
 
-fn parameter_wgsl(p: &Parameter) -> Option<String> {
+fn write_parameter(wgsl: &mut String, p: &Parameter) -> Option<()> {
     // TODO: just convert case instead of matching names?
     match p.name.as_str() {
-        "MC" => parameter_wgsl_inner(p, "uniforms"),
-        "MC_EFFECT" => parameter_wgsl_inner(p, "effect_uniforms"),
-        "FB0" => parameter_wgsl_inner(p, "fb0"),
-        "FB1" => parameter_wgsl_inner(p, "fb1"),
-        "FB3" => parameter_wgsl_inner(p, "fb3"),
-        "FB4" => parameter_wgsl_inner(p, "fb4"),
-        "FB5" => parameter_wgsl_inner(p, "fb5"),
+        "MC" => write_parameter_inner(wgsl, "uniforms", &p.field, p.index, p.channel),
+        "MC_EFFECT" => write_parameter_inner(wgsl, "effect_uniforms", &p.field, p.index, p.channel),
+        "FB0" => write_parameter_inner(wgsl, "fb0", &p.field, p.index, p.channel),
+        "FB1" => write_parameter_inner(wgsl, "fb1", &p.field, p.index, p.channel),
+        "FB3" => write_parameter_inner(wgsl, "fb3", &p.field, p.index, p.channel),
+        "FB4" => write_parameter_inner(wgsl, "fb4", &p.field, p.index, p.channel),
+        "FB5" => write_parameter_inner(wgsl, "fb5", &p.field, p.index, p.channel),
         "PerDraw" => match p.field.as_str() {
-            "LocalToWorldMatrix" => Some(format!(
-                "local_to_world_matrix{}{}",
-                index_wgsl(p.index),
-                channel_wgsl(p.channel)
-            )),
-            "LocalToViewMatrix" => Some(format!(
-                "camera.view{}{}",
-                index_wgsl(p.index),
-                channel_wgsl(p.channel)
-            )),
-            "LocalToProjectionMatrix" => Some(format!(
-                "camera.view_projection{}{}",
-                index_wgsl(p.index),
-                channel_wgsl(p.channel)
-            )),
+            "LocalToWorldMatrix" => {
+                write!(wgsl, "local_to_world_matrix").unwrap();
+                write_index(wgsl, p.index);
+                write_channel(wgsl, p.channel);
+            }
+            "LocalToViewMatrix" => {
+                write_parameter_inner(wgsl, "camera", "view", p.index, p.channel)
+            }
+            "LocalToProjectionMatrix" => {
+                write_parameter_inner(wgsl, "camera", "view_projection", p.index, p.channel)
+            }
             _ => {
                 error!("Unrecognized uniform {p}");
-                None
+                return None;
             }
         },
         "PerView" => match p.field.as_str() {
-            "WorldToProjectionMatrix" => Some(format!(
-                "camera.view_projection{}{}",
-                index_wgsl(p.index),
-                channel_wgsl(p.channel)
-            )),
-            "WorldToViewMatrix" => Some(format!(
-                "camera.view{}{}",
-                index_wgsl(p.index),
-                channel_wgsl(p.channel)
-            )),
-            "ViewToProjectionMatrix" => Some(format!(
-                "camera.projection{}{}",
-                index_wgsl(p.index),
-                channel_wgsl(p.channel)
-            )),
+            "WorldToProjectionMatrix" => {
+                write_parameter_inner(wgsl, "camera", "view_projection", p.index, p.channel)
+            }
+            "WorldToViewMatrix" => {
+                write_parameter_inner(wgsl, "camera", "view", p.index, p.channel)
+            }
+            "ViewToProjectionMatrix" => {
+                write_parameter_inner(wgsl, "camera", "projection", p.index, p.channel)
+            }
             _ => {
                 error!("Unrecognized uniform {p}");
-                None
+                return None;
             }
         },
-        "CB10" => None, // TODO: figure out why C10.xyzw is used
-        "CB11" => None, // TODO: figure out why C11.xyzw is used
+        "CB10" => return None, // TODO: figure out why C10.xyzw is used
+        "CB11" => return None, // TODO: figure out why C11.xyzw is used
         _ => {
             error!("Unrecognized uniform {p}");
-            None
+            return None;
         }
     }
+    Some(())
 }
 
-fn parameter_wgsl_inner(p: &Parameter, buffer_name: &str) -> Option<String> {
-    Some(format!(
-        "{buffer_name}.{}{}{}",
-        p.field.to_snake(),
-        index_wgsl(p.index),
-        channel_wgsl(p.channel)
-    ))
+fn write_parameter_inner(
+    wgsl: &mut String,
+    buffer_name: &str,
+    field: &str,
+    index: Option<usize>,
+    channel: Option<char>,
+) {
+    write!(wgsl, "{buffer_name}.{}", field.to_snake(),).unwrap();
+    write_index(wgsl, index);
+    write_channel(wgsl, channel);
 }
 
-fn func_wgsl(op: &Operation, args: &[usize]) -> Option<String> {
-    let arg0 = arg(args, 0);
-    let arg1 = arg(args, 1);
-    let arg2 = arg(args, 2);
-    let arg3 = arg(args, 3);
-    let arg4 = arg(args, 4);
-    let arg5 = arg(args, 5);
-    let arg6 = arg(args, 6);
-    let arg7 = arg(args, 7);
+fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
+    let arg0 = args.first();
+    let arg1 = args.get(1);
+    let arg2 = args.get(2);
+    let arg3 = args.get(3);
+    let arg4 = args.get(4);
+    let arg5 = args.get(5);
+    let arg6 = args.get(6);
+    let arg7 = args.get(7);
 
+    let a = VAR_PREFIX;
     match op {
-        Operation::Unk => None,
-        Operation::Add => Some(format!("{} + {}", arg0?, arg1?)),
-        Operation::Sub => Some(format!("{} - {}", arg0?, arg1?)),
-        Operation::Mul => Some(format!("{} * {}", arg0?, arg1?)),
-        Operation::Div => Some(format!("{} / {}", arg0?, arg1?)),
-        Operation::Mix => Some(format!("mix({}, {}, {})", arg0?, arg1?, arg2?)),
-        Operation::Clamp => Some(format!("clamp({}, {}, {})", arg0?, arg1?, arg2?)),
-        Operation::Min => Some(format!("min({}, {})", arg0?, arg1?)),
-        Operation::Max => Some(format!("max({}, {})", arg0?, arg1?)),
-        Operation::Abs => Some(format!("abs({})", arg0?)),
-        Operation::Floor => Some(format!("floor({})", arg0?)),
-        Operation::Power => Some(format!("pow({}, {})", arg0?, arg1?)),
-        Operation::Sqrt => Some(format!("sqrt({})", arg0?)),
-        Operation::InverseSqrt => Some(format!("inverseSqrt({})", arg0?)),
-        Operation::Fma => Some(format!("{} * {} + {}", arg0?, arg1?, arg2?)),
+        Operation::Unk => return None,
+        Operation::Add => write!(wgsl, "{a}{} + {a}{}", arg0?, arg1?).unwrap(),
+        Operation::Sub => write!(wgsl, "{a}{} - {a}{}", arg0?, arg1?).unwrap(),
+        Operation::Mul => write!(wgsl, "{a}{} * {a}{}", arg0?, arg1?).unwrap(),
+        Operation::Div => write!(wgsl, "{a}{} / {a}{}", arg0?, arg1?).unwrap(),
+        Operation::Mix => write!(wgsl, "mix({a}{}, {a}{}, {a}{})", arg0?, arg1?, arg2?).unwrap(),
+        Operation::Clamp => write!(wgsl, "clamp({a}{}, {a}{}, {a}{})", arg0?, arg1?, arg2?).unwrap(),
+        Operation::Min => write!(wgsl, "min({a}{}, {a}{})", arg0?, arg1?).unwrap(),
+        Operation::Max => write!(wgsl, "max({a}{}, {a}{})", arg0?, arg1?).unwrap(),
+        Operation::Abs => write!(wgsl, "abs({a}{})", arg0?).unwrap(),
+        Operation::Floor => write!(wgsl, "floor({a}{})", arg0?).unwrap(),
+        Operation::Power => write!(wgsl, "pow({a}{}, {a}{})", arg0?, arg1?).unwrap(),
+        Operation::Sqrt => write!(wgsl, "sqrt({a}{})", arg0?).unwrap(),
+        Operation::InverseSqrt => write!(wgsl, "inverseSqrt({a}{})", arg0?).unwrap(),
+        Operation::Fma => write!(wgsl, "{a}{} * {a}{} + {a}{}", arg0?, arg1?, arg2?).unwrap(),
         Operation::Dot => {
             if args.len() == 6 {
-                Some(format!(
-                    "dot(vec3({}, {}, {}), vec3({}, {}, {}))",
+                write!(wgsl,
+                    "dot(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}))",
                     arg0?, arg1?, arg2?, arg3?, arg4?, arg5?
-                ))
+                ).unwrap()
             } else {
-                Some(format!(
-                    "dot(vec4({}, {}, {}, {}), vec4({}, {}, {}, {}))",
+                write!(wgsl,
+                    "dot(vec4({a}{}, {a}{}, {a}{}, {a}{}), vec4({a}{}, {a}{}, {a}{}, {a}{}))",
                     arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, arg7?
-                ))
+                ).unwrap()
             }
         }
-        Operation::Sin => Some(format!("sin({})", arg0?)),
-        Operation::Cos => Some(format!("cos({})", arg0?)),
-        Operation::Exp2 => Some(format!("exp2({})", arg0?)),
-        Operation::Log2 => Some(format!("log2({})", arg0?)),
-        Operation::Select => Some(format!("mix({}, {}, f32({}))", arg2?, arg1?, arg0?)),
-        Operation::Negate => Some(format!("-({})", arg0?)),
-        Operation::Equal => Some(format!("{} == {}", arg0?, arg1?)),
-        Operation::NotEqual => Some(format!("{} != {}", arg0?, arg1?)),
-        Operation::Less => Some(format!("{} < {}", arg0?, arg1?)),
-        Operation::Greater => Some(format!("{} > {}", arg0?, arg1?)),
-        Operation::LessEqual => Some(format!("{} <= {}", arg0?, arg1?)),
-        Operation::GreaterEqual => Some(format!("{} >= {}", arg0?, arg1?)),
-        Operation::Fract => Some(format!("fract({})", arg0?)),
-        Operation::IntBitsToFloat => Some(format!("bitcast<f32>({})", arg0?)),
-        Operation::FloatBitsToInt => Some(format!("bitcast<i32>({})", arg0?)),
-        Operation::NormalMapX => Some(format!(
-            "apply_normal_map(vec3({}, {}, {}), a_Tangent.xyz, a_Binormal.xyz, a_Normal.xyz).x",
+        Operation::Sin => write!(wgsl, "sin({a}{})", arg0?).unwrap(),
+        Operation::Cos => write!(wgsl, "cos({a}{})", arg0?).unwrap(),
+        Operation::Exp2 => write!(wgsl, "exp2({a}{})", arg0?).unwrap(),
+        Operation::Log2 => write!(wgsl, "log2({a}{})", arg0?).unwrap(),
+        Operation::Select => write!(wgsl,
+            "mix({a}{}, {a}{}, f32({a}{}))",
+            arg2?, arg1?, arg0?
+        ).unwrap(),
+        Operation::Negate => write!(wgsl, "-({a}{})", arg0?).unwrap(),
+        Operation::Equal => write!(wgsl, "{a}{} == {a}{}", arg0?, arg1?).unwrap(),
+        Operation::NotEqual => write!(wgsl, "{a}{} != {a}{}", arg0?, arg1?).unwrap(),
+        Operation::Less => write!(wgsl, "{a}{} < {a}{}", arg0?, arg1?).unwrap(),
+        Operation::Greater => write!(wgsl, "{a}{} > {a}{}", arg0?, arg1?).unwrap(),
+        Operation::LessEqual => write!(wgsl, "{a}{} <= {a}{}", arg0?, arg1?).unwrap(),
+        Operation::GreaterEqual => write!(wgsl, "{a}{} >= {a}{}", arg0?, arg1?).unwrap(),
+        Operation::Fract => write!(wgsl, "fract({a}{})", arg0?).unwrap(),
+        Operation::IntBitsToFloat => write!(wgsl, "bitcast<f32>({a}{})", arg0?).unwrap(),
+        Operation::FloatBitsToInt => write!(wgsl, "bitcast<i32>({a}{})", arg0?).unwrap(),
+        Operation::NormalMapX => write!(wgsl,
+            "apply_normal_map(vec3({a}{}, {a}{}, {a}{}), a_Tangent.xyz, a_Binormal.xyz, a_Normal.xyz).x",
             arg0?, arg1?, arg2?
-        )),
-        Operation::NormalMapY => Some(format!(
-            "apply_normal_map(vec3({}, {}, {}), a_Tangent.xyz, a_Binormal.xyz, a_Normal.xyz).y",
+        ).unwrap(),
+        Operation::NormalMapY => write!(wgsl,
+            "apply_normal_map(vec3({a}{}, {a}{}, {a}{}), a_Tangent.xyz, a_Binormal.xyz, a_Normal.xyz).y",
             arg0?, arg1?, arg2?
-        )),
-        Operation::NormalMapZ => Some(format!(
-            "apply_normal_map(vec3({}, {}, {}), a_Tangent.xyz, a_Binormal.xyz, a_Normal.xyz).z",
+        ).unwrap(),
+        Operation::NormalMapZ => write!(wgsl,
+            "apply_normal_map(vec3({a}{}, {a}{}, {a}{}), a_Tangent.xyz, a_Binormal.xyz, a_Normal.xyz).z",
             arg0?, arg1?, arg2?
-        )),
-        Operation::NormalizeX => Some(format!(
-            "normalize(vec4({}, {}, {}, {})).x",
+        ).unwrap(),
+        Operation::NormalizeX => write!(wgsl,
+            "normalize(vec4({a}{}, {a}{}, {a}{}, {a}{})).x",
             arg0?, arg1?, arg2?, arg3?
-        )),
-        Operation::NormalizeY => Some(format!(
-            "normalize(vec4({}, {}, {}, {})).y",
+        ).unwrap(),
+        Operation::NormalizeY => write!(wgsl,
+            "normalize(vec4({a}{}, {a}{}, {a}{}, {a}{})).y",
             arg0?, arg1?, arg2?, arg3?
-        )),
-        Operation::NormalizeZ => Some(format!(
-            "normalize(vec4({}, {}, {}, {})).z",
+        ).unwrap(),
+        Operation::NormalizeZ => write!(wgsl,
+            "normalize(vec4({a}{}, {a}{}, {a}{}, {a}{})).z",
             arg0?, arg1?, arg2?, arg3?
-        )),
-        Operation::SphereMapCoordX => Some(format!(
-            "sphere_map_coords(a_Position.xyz, a_Normal.xyz, {}).x",
+        ).unwrap(),
+        Operation::SphereMapCoordX => write!(wgsl,
+            "sphere_map_coords(a_Position.xyz, a_Normal.xyz, {a}{}).x",
             arg0?,
-        )),
-        Operation::SphereMapCoordY => Some(format!(
-            "sphere_map_coords(a_Position.xyz, a_Normal.xyz, {}).y",
+        ).unwrap(),
+        Operation::SphereMapCoordY => write!(wgsl,
+            "sphere_map_coords(a_Position.xyz, a_Normal.xyz, {a}{}).y",
             arg0?,
-        )),
+        ).unwrap(),
         // TODO: Don't assume attributes are already in world space.
-        Operation::LocalToWorldPointX => arg0,
-        Operation::LocalToWorldPointY => arg1,
-        Operation::LocalToWorldPointZ => arg2,
-        Operation::LocalToWorldVectorX => arg0,
-        Operation::LocalToWorldVectorY => arg1,
-        Operation::LocalToWorldVectorZ => arg2,
+        Operation::LocalToWorldPointX => write!(wgsl, "{a}{}", arg0?).unwrap(),
+        Operation::LocalToWorldPointY => write!(wgsl, "{a}{}", arg1?).unwrap(),
+        Operation::LocalToWorldPointZ => write!(wgsl, "{a}{}", arg2?).unwrap(),
+        Operation::LocalToWorldVectorX => write!(wgsl, "{a}{}", arg0?).unwrap(),
+        Operation::LocalToWorldVectorY => write!(wgsl, "{a}{}", arg1?).unwrap(),
+        Operation::LocalToWorldVectorZ => write!(wgsl, "{a}{}", arg2?).unwrap(),
+    }
+    Some(())
+}
+
+fn write_index(wgsl: &mut String, i: Option<usize>) {
+    if let Some(i) = i {
+        write!(wgsl, "[{i}]").unwrap();
     }
 }
 
-fn arg(args: &[usize], i: usize) -> Option<String> {
-    Some(format!("{VAR_PREFIX}{}", args.get(i)?))
+fn write_channel(wgsl: &mut String, c: Option<char>) {
+    if let Some(c) = c {
+        write!(wgsl, ".{c}").unwrap();
+    }
 }
 
-fn index_wgsl(i: Option<usize>) -> String {
-    i.map(|i| format!("[{i}]")).unwrap_or_default()
-}
+fn generate_outputs_wgsl(program: &ShaderProgram) -> String {
+    let mut wgsl = String::new();
+    for (name, i) in program.output_dependencies.iter() {
+        match name.as_str() {
+            "out_attr0.x" => writeln!(&mut wgsl, "{OUT_VAR}.x = {VAR_PREFIX}{i};").unwrap(),
+            "out_attr0.y" => writeln!(&mut wgsl, "{OUT_VAR}.y = {VAR_PREFIX}{i};").unwrap(),
+            "out_attr0.z" => writeln!(&mut wgsl, "{OUT_VAR}.z = {VAR_PREFIX}{i};").unwrap(),
+            "out_attr0.w" => writeln!(&mut wgsl, "{OUT_VAR}.w = {VAR_PREFIX}{i};").unwrap(),
+            _ => error!("Unrecognized output {name}"),
+        }
+    }
 
-fn channel_wgsl(c: Option<char>) -> String {
-    c.map(|c| format!(".{c}")).unwrap_or_default()
-}
-
-fn generate_outputs_wgsl(program: &ShaderProgram) -> Vec<String> {
-    program
-        .output_dependencies
-        .iter()
-        .map(|(name, i)| {
-            let mut wgsl = String::new();
-            match name.as_str() {
-                "out_attr0.x" => writeln!(&mut wgsl, "{OUT_VAR}.x = {VAR_PREFIX}{i};").unwrap(),
-                "out_attr0.y" => writeln!(&mut wgsl, "{OUT_VAR}.y = {VAR_PREFIX}{i};").unwrap(),
-                "out_attr0.z" => writeln!(&mut wgsl, "{OUT_VAR}.z = {VAR_PREFIX}{i};").unwrap(),
-                "out_attr0.w" => writeln!(&mut wgsl, "{OUT_VAR}.w = {VAR_PREFIX}{i};").unwrap(),
-                _ => error!("Unrecognized output {name}"),
-            }
-
-            wgsl
-        })
-        .collect()
+    wgsl
 }
