@@ -18,3 +18,9 @@ glam.workspace = true
 rayon.workspace = true
 anyhow.workspace = true
 clap.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, optional = true }
+tracing-tracy = { workspace = true, optional = true }
+
+[features]
+tracing = ["tracing-subscriber", "tracing-tracy"]

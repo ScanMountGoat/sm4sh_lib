@@ -1,15 +1,23 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 use clap::Parser;
 use futures::executor::block_on;
 use glam::{Mat4, Vec3, Vec4, vec3};
 use log::error;
+use rayon::prelude::*;
 use sm4sh_model::database::ShaderDatabase;
 use sm4sh_wgpu::{CameraData, Renderer, SharedData};
+use tracing::trace_span;
 use wgpu::{
     DeviceDescriptor, Extent3d, PowerPreference, RequestAdapterOptions, TextureDescriptor,
     TextureDimension, TextureUsages,
 };
+
+#[cfg(feature = "tracing")]
+use tracing_subscriber::prelude::*;
 
 const FOV_Y: f32 = 0.5;
 const Z_NEAR: f32 = 0.1;
@@ -60,6 +68,12 @@ fn main() -> anyhow::Result<()> {
         .with_module_level("sm4sh_wgpu", log::LevelFilter::Warn)
         .init()?;
 
+    #[cfg(feature = "tracing")]
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::registry().with(tracing_tracy::TracyLayer::default()),
+    )
+    .unwrap();
+
     // Load models in headless mode without a surface.
     // This simplifies testing for stability and performance.
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -102,23 +116,22 @@ fn main() -> anyhow::Result<()> {
 
     // Render each model folder.
     let start = std::time::Instant::now();
-    let paths: Vec<_> = globwalk::GlobWalkerBuilder::from_patterns(root_folder, &["*.{nud}"])
+    let paths: Vec<_> = globwalk::GlobWalkerBuilder::from_patterns(root_folder, &["*.nud"])
         .build()?
         .filter_map(Result::ok)
         .map(|e| e.path().to_path_buf())
         .collect();
 
-    // Round up to avoid skipping any files at the end.
-    let n = paths.len().div_ceil(rayon::current_num_threads());
+    let renderer = Mutex::new(Renderer::new(&device, WIDTH, HEIGHT, surface_format));
 
-    // Rayon's thread pool causes weird texture rendering issues potentially due to work stealing.
-    // TODO: Investigate why textures don't load properly when using Rayon's threadpool.
-    // Scoped threads are slightly less efficient but don't have this issue.
-    std::thread::scope(|s| {
-        for i in 0..rayon::current_num_threads() {
-            let paths = paths.iter().skip(i * n).take(n);
-            s.spawn(|| {
-                let renderer = Renderer::new(&device, WIDTH, HEIGHT, surface_format);
+    paths.par_iter().for_each(|path| {
+        let nud_model = sm4sh_model::load_model(path);
+
+        match nud_model {
+            Ok(nud_model) => {
+                let model = sm4sh_wgpu::load_model(&device, &queue, &nud_model, &shared_data);
+
+                let output_path = screenshot_path(root_folder, path);
 
                 // Create a unique buffer to avoid mapping a buffer from multiple threads.
                 let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -128,55 +141,50 @@ fn main() -> anyhow::Result<()> {
                     mapped_at_creation: false,
                 });
 
-                for path in paths {
-                    let nud_model = sm4sh_model::load_model(path);
+                let span = trace_span!("render_model");
+                span.in_scope(|| {
+                    // Each model updates the renderer's internal buffers for camera framing.
+                    // We need to hold the lock until the output image has been copied to the buffer.
+                    // Rendering is cheap, so this has little performance impact in practice.
+                    let renderer = renderer.lock().unwrap();
 
-                    match nud_model {
-                        Ok(nud_model) => {
-                            let model =
-                                sm4sh_wgpu::load_model(&device, &queue, &nud_model, &shared_data);
+                    // Initialize the camera to frame the model.
+                    let camera = frame_bounds(model.bounding_sphere);
+                    renderer.update_camera(&queue, &camera);
 
-                            // Initialize the camera to frame the model.
-                            let camera = frame_bounds(model.bounding_sphere);
-                            renderer.update_camera(&queue, &camera);
+                    // Render to a buffer to save as PNG.
+                    let mut encoder =
+                        device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Render Encoder"),
+                        });
 
-                            let output_path = screenshot_path(root_folder, path);
+                    renderer.render_model(&mut encoder, &output_view, &model, &camera);
 
-                            // Render to a buffer to save as PNG.
-                            let mut encoder =
-                                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                                    label: Some("Render Encoder"),
-                                });
+                    encoder.copy_texture_to_buffer(
+                        wgpu::TexelCopyTextureInfo {
+                            aspect: wgpu::TextureAspect::All,
+                            texture: &output,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                        },
+                        wgpu::TexelCopyBufferInfo {
+                            buffer: &output_buffer,
+                            layout: wgpu::TexelCopyBufferLayout {
+                                offset: 0,
+                                bytes_per_row: Some(WIDTH * 4),
+                                rows_per_image: Some(HEIGHT),
+                            },
+                        },
+                        texture_desc.size,
+                    );
+                    queue.submit([encoder.finish()]);
+                });
 
-                            renderer.render_model(&mut encoder, &output_view, &model, &camera);
-
-                            encoder.copy_texture_to_buffer(
-                                wgpu::TexelCopyTextureInfo {
-                                    aspect: wgpu::TextureAspect::All,
-                                    texture: &output,
-                                    mip_level: 0,
-                                    origin: wgpu::Origin3d::ZERO,
-                                },
-                                wgpu::TexelCopyBufferInfo {
-                                    buffer: &output_buffer,
-                                    layout: wgpu::TexelCopyBufferLayout {
-                                        offset: 0,
-                                        bytes_per_row: Some(WIDTH * 4),
-                                        rows_per_image: Some(HEIGHT),
-                                    },
-                                },
-                                texture_desc.size,
-                            );
-                            queue.submit([encoder.finish()]);
-
-                            save_screenshot(&device, &output_buffer, output_path);
-                        }
-                        Err(e) => {
-                            error!("Error loading {path:?}: {e}");
-                        }
-                    }
-                }
-            });
+                save_screenshot(&device, &output_buffer, output_path);
+            }
+            Err(e) => {
+                error!("Error loading {path:?}: {e}");
+            }
         }
     });
 
@@ -198,6 +206,7 @@ fn screenshot_path(root_folder: &Path, path: &Path) -> PathBuf {
     root_folder.join(output_path).with_extension("png")
 }
 
+#[tracing::instrument(skip_all)]
 fn save_screenshot(device: &wgpu::Device, output_buffer: &wgpu::Buffer, output_path: PathBuf) {
     // Save the output texture.
     // Adapted from WGPU Example https://github.com/gfx-rs/wgpu/tree/master/wgpu/examples/capture

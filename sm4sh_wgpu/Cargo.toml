@@ -16,6 +16,7 @@ indoc.workspace = true
 indexmap.workspace = true
 case.workspace = true
 aho-corasick = "1.1.4"
+tracing.workspace = true
 
 [build-dependencies]
 wgsl_to_wgpu = "0.16.0"

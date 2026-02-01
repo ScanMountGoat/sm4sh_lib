@@ -48,6 +48,7 @@ pub struct Mesh {
     bind_group3: crate::shader::model::bind_groups::BindGroup3,
 }
 
+#[tracing::instrument(skip_all)]
 pub fn load_model(
     device: &wgpu::Device,
     queue: &wgpu::Queue,

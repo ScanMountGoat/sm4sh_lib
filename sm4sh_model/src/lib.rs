@@ -33,6 +33,7 @@ pub mod skinning;
 pub mod vertex;
 
 /// Load a nud model from `path` and the corresponding `"model.nut"` and `"model.vbn"` if present.
+#[tracing::instrument(skip_all)]
 pub fn load_model<P: AsRef<Path>>(path: P) -> BinResult<NudModel> {
     let path = path.as_ref();
     let nud = Nud::from_file(path)?;
