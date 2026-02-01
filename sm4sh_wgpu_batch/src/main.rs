@@ -177,10 +177,20 @@ fn main() -> anyhow::Result<()> {
                         },
                         texture_desc.size,
                     );
+
+                    let buffer = output_buffer.clone();
+                    encoder.map_buffer_on_submit(
+                        &output_buffer,
+                        wgpu::MapMode::Read,
+                        0..,
+                        move |result| {
+                            if let Ok(()) = result {
+                                save_screenshot(&buffer, output_path);
+                            }
+                        },
+                    );
                     queue.submit([encoder.finish()]);
                 });
-
-                save_screenshot(&device, &output_buffer, output_path);
             }
             Err(e) => {
                 error!("Error loading {path:?}: {e}");
@@ -207,26 +217,16 @@ fn screenshot_path(root_folder: &Path, path: &Path) -> PathBuf {
 }
 
 #[tracing::instrument(skip_all)]
-fn save_screenshot(device: &wgpu::Device, output_buffer: &wgpu::Buffer, output_path: PathBuf) {
+fn save_screenshot(output_buffer: &wgpu::Buffer, output_path: PathBuf) {
     // Save the output texture.
-    // Adapted from WGPU Example https://github.com/gfx-rs/wgpu/tree/master/wgpu/examples/capture
-    {
-        let buffer_slice = output_buffer.slice(..);
-
-        let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            tx.send(result).unwrap();
-        });
-        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
-        block_on(rx.receive()).unwrap().unwrap();
-
-        let data = buffer_slice.get_mapped_range();
+    let buffer_slice = output_buffer.slice(..);
+    let data = buffer_slice.get_mapped_range();
+    rayon::spawn(move || {
         let mut buffer = image::RgbaImage::from_raw(WIDTH, HEIGHT, data.to_owned()).unwrap();
         // Force opaque to match sm4sh_viewer.
         buffer.pixels_mut().for_each(|rgba| rgba[3] = 255u8);
         buffer.save(output_path).unwrap();
-    }
-    output_buffer.unmap();
+    });
 }
 
 fn frame_bounds(bounding_sphere: Vec4) -> CameraData {
