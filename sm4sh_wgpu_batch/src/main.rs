@@ -114,9 +114,9 @@ fn main() -> anyhow::Result<()> {
     // Load and render folders individually to save on memory.
     let root_folder = Path::new(&cli.root_folder);
 
-    // Render each model folder.
+    // Render only the main nud model from each folder.
     let start = std::time::Instant::now();
-    let paths: Vec<_> = globwalk::GlobWalkerBuilder::from_patterns(root_folder, &["*.nud"])
+    let paths: Vec<_> = globwalk::GlobWalkerBuilder::from_patterns(root_folder, &["*model.nud"])
         .build()?
         .filter_map(Result::ok)
         .map(|e| e.path().to_path_buf())
