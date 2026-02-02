@@ -306,27 +306,40 @@ impl SurfaceFormat {
 impl Texture {
     pub fn deswizzle(&self) -> Result<Vec<u8>, wiiu_swizzle::SwizzleError> {
         if let Some(gtx_header) = &self.gtx_header {
-            // TODO: Avoid unwrap.
-            wiiu_swizzle::Gx2Surface {
-                dim: wiiu_swizzle::SurfaceDim::from_repr(gtx_header.dim as u32).unwrap(),
-                width: gtx_header.width,
-                height: gtx_header.height,
-                depth_or_array_layers: gtx_header.depth_or_array_layers,
-                mipmap_count: gtx_header.mipmap_count,
-                format: wiiu_swizzle::SurfaceFormat::from_repr(gtx_header.format as u32).unwrap(),
-                aa: wiiu_swizzle::AaMode::from_repr(gtx_header.aa as u32).unwrap(),
-                usage: gtx_header.usage,
-                image_data: &self.data[..gtx_header.image_data_size as usize],
-                mipmap_data: &self.data[gtx_header.mipmap_offsets[0] as usize
-                    ..gtx_header.mipmap_offsets[0] as usize + gtx_header.mipmap_data_size as usize],
-                tile_mode: wiiu_swizzle::TileMode::from_repr(gtx_header.tile_mode as u32).unwrap(),
-                swizzle: gtx_header.swizzle,
-                alignment: gtx_header.alignment,
-                pitch: gtx_header.pitch,
-                mipmap_offsets: gtx_header.mipmap_offsets,
+            if let Some((image_data, mipmap_data)) = self
+                .data
+                .split_at_checked(gtx_header.mipmap_offsets[0] as usize)
+            {
+                // TODO: Avoid unwrap.
+                wiiu_swizzle::Gx2Surface {
+                    dim: wiiu_swizzle::SurfaceDim::from_repr(gtx_header.dim as u32).unwrap(),
+                    width: gtx_header.width,
+                    height: gtx_header.height,
+                    depth_or_array_layers: gtx_header.depth_or_array_layers,
+                    mipmap_count: gtx_header.mipmap_count,
+                    format: wiiu_swizzle::SurfaceFormat::from_repr(gtx_header.format as u32)
+                        .unwrap(),
+                    aa: wiiu_swizzle::AaMode::from_repr(gtx_header.aa as u32).unwrap(),
+                    usage: gtx_header.usage,
+                    image_data,
+                    mipmap_data,
+                    tile_mode: wiiu_swizzle::TileMode::from_repr(gtx_header.tile_mode as u32)
+                        .unwrap(),
+                    swizzle: gtx_header.swizzle,
+                    alignment: gtx_header.alignment,
+                    pitch: gtx_header.pitch,
+                    mipmap_offsets: gtx_header.mipmap_offsets,
+                }
+                .deswizzle()
+            } else {
+                Err(wiiu_swizzle::SwizzleError::NotEnoughData {
+                    expected_size: gtx_header.mipmap_offsets[0] as usize
+                        + gtx_header.mipmap_data_size as usize,
+                    actual_size: self.data.len(),
+                })
             }
-            .deswizzle()
         } else {
+            // Assume textures without the gtx header aren't tiled.
             Ok(self.data.clone())
         }
     }
