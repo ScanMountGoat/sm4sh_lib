@@ -306,10 +306,12 @@ impl SurfaceFormat {
 impl Texture {
     pub fn deswizzle(&self) -> Result<Vec<u8>, wiiu_swizzle::SwizzleError> {
         if let Some(gtx_header) = &self.gtx_header {
-            if let Some((image_data, mipmap_data)) = self
-                .data
-                .split_at_checked(gtx_header.mipmap_offsets[0] as usize)
-            {
+            let mips_start = gtx_header.mipmap_offsets[0] as usize;
+            let mips_size = gtx_header.mipmap_data_size as usize;
+            if let (Some(image_data), Some(mipmap_data)) = (
+                self.data.get(..gtx_header.image_data_size as usize),
+                self.data.get(mips_start..mips_start + mips_size),
+            ) {
                 // TODO: Avoid unwrap.
                 wiiu_swizzle::Gx2Surface {
                     dim: wiiu_swizzle::SurfaceDim::from_repr(gtx_header.dim as u32).unwrap(),
