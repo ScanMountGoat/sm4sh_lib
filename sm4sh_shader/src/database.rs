@@ -1,13 +1,12 @@
 use std::borrow::Cow;
 
-use glsl_lang::ast::TranslationUnit;
 use log::error;
 use smol_str::SmolStr;
 use xc3_shader::{
     expr::{OutputExpr, output_expr},
     graph::{
         BinaryOp, Expr, Graph, UnaryOp,
-        glsl::{find_attribute_locations, merge_vertex_fragment},
+        glsl::{GlslGraph, merge_vertex_fragment},
     },
 };
 
@@ -136,21 +135,17 @@ impl xc3_shader::expr::Operation for Operation {
     }
 }
 
-pub fn shader_from_glsl(vertex: &TranslationUnit, fragment: &TranslationUnit) -> ShaderProgram {
-    let frag = Graph::from_glsl(fragment);
-    let frag_attributes = find_attribute_locations(fragment);
-
-    let vert = Graph::from_glsl(vertex);
-    let vert_attributes = find_attribute_locations(vertex);
-
+pub fn shader_from_glsl(vertex: GlslGraph, fragment: GlslGraph) -> ShaderProgram {
     // Create a combined graph that links vertex outputs to fragment inputs.
     // This effectively moves all shader logic to the fragment shader.
     // This simplifies generating shader code or material nodes in 3D applications.
+    let frag_attributes = fragment.attributes.clone();
     let graph = merge_vertex_fragment(
-        vert.simplify(),
-        &vert_attributes,
-        frag,
-        &frag_attributes,
+        GlslGraph {
+            graph: vertex.graph.simplify(),
+            attributes: vertex.attributes,
+        },
+        fragment,
         modify_attributes,
     );
     let graph = graph.simplify();

@@ -1,6 +1,5 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use glsl_lang::{ast::TranslationUnit, parse::DefaultParse};
 use log::error;
 use rayon::prelude::*;
 use sm4sh_lib::{
@@ -15,7 +14,7 @@ use std::{
     fs::File,
     path::Path,
 };
-use xc3_shader::graph::glsl::glsl_dependencies;
+use xc3_shader::graph::glsl::{GlslGraph, glsl_dependencies};
 
 use crate::{
     annotation::annotate_shader,
@@ -294,13 +293,13 @@ fn create_shader_database(
 
             let vert_path = folder.join(format!("texas_cross.{nsh_index}.vert"));
             let vertex = std::fs::read_to_string(vert_path)?;
-            let vertex = TranslationUnit::parse(&vertex)?;
+            let vertex = GlslGraph::parse_glsl(&vertex)?;
 
             let frag_path = folder.join(format!("texas_cross.{nsh_index}.frag"));
             let fragment = std::fs::read_to_string(frag_path)?;
-            let fragment = TranslationUnit::parse(&fragment)?;
+            let fragment = GlslGraph::parse_glsl(&fragment)?;
 
-            let program = shader_from_glsl(&vertex, &fragment);
+            let program = shader_from_glsl(vertex, fragment);
 
             let attributes: BTreeMap<_, _> = vert_gx2
                 .attributes
@@ -327,15 +326,15 @@ fn create_shader_database(
 }
 
 fn glsl_output_dependencies(frag: &str, output: &str) -> anyhow::Result<()> {
-    let frag_glsl = std::fs::read_to_string(frag)?;
-    let fragment = TranslationUnit::parse(&frag_glsl)?;
-
-    // TODO: make an argument for this?
+    // TODO: make an argument for the vertex path?
     let vert_glsl = std::fs::read_to_string(Path::new(&frag).with_extension("vert"))?;
-    let vert = TranslationUnit::parse(&vert_glsl)?;
+    let vert = GlslGraph::parse_glsl(&vert_glsl)?;
+
+    let frag_glsl = std::fs::read_to_string(frag)?;
+    let fragment = GlslGraph::parse_glsl(&frag_glsl)?;
 
     // TODO: graphviz support
-    let shader = shader_from_glsl(&vert, &fragment);
+    let shader = shader_from_glsl(vert, fragment);
     std::fs::write(output, shader_str(&shader)?)?;
     Ok(())
 }

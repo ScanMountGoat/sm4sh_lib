@@ -13,7 +13,6 @@ globwalk.workspace = true
 rayon.workspace = true
 xc3_shader = { workspace = true, features = ["latte", "glsl"] }
 log.workspace = true
-glsl-lang = "0.8.0" # TODO: avoid this dependency
 smol_str.workspace = true
 indexmap.workspace = true
 indoc.workspace = true
