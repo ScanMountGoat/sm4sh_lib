@@ -4,6 +4,7 @@ use std::{
     io::{Cursor, Seek, Write},
     path::Path,
 };
+use thiserror::Error;
 use vertex::{
     Vertices, buffer0_stride, buffer1_stride, read_vertex_indices, read_vertices,
     triangle_strip_to_list, write_vertex_indices, write_vertices,
@@ -16,7 +17,7 @@ use sm4sh_lib::{
         BoundingSphere, Material, MaterialProperty, MaterialTexture, Mesh, MeshGroup, Nud,
         VertexIndexFlags,
     },
-    nut::{CreateSurfaceError, Nut},
+    nut::{CreateNutError, CreateSurfaceError, Nut},
     vbn::Vbn,
 };
 
@@ -464,17 +465,27 @@ fn bounding_sphere(sphere: Vec4) -> BoundingSphere {
     }
 }
 
-fn nut_textures(nut: &Nut) -> Result<Vec<ImageTexture>, CreateSurfaceError> {
+// TODO: make this error public?
+#[derive(Debug, Error)]
+enum CreateImageTextureError {
+    #[error("error creating surface")]
+    Surface(#[from] CreateSurfaceError),
+
+    #[error("error converting NUT data")]
+    Nut(#[from] CreateNutError),
+}
+
+fn nut_textures(nut: &Nut) -> Result<Vec<ImageTexture>, CreateImageTextureError> {
     match nut {
         Nut::Ntwu(ntwu) => ntwu
             .textures
             .iter()
-            .map(|t| Ok(ImageTexture::from_surface(t.gidx.hash, t.to_surface()?)))
+            .map(|t| ImageTexture::from_surface(t.gidx.hash, t.to_surface()?).map_err(Into::into))
             .collect(),
         Nut::Ntp3(ntp3) => ntp3
             .textures
             .iter()
-            .map(|t| Ok(ImageTexture::from_surface(t.gidx.hash, t.to_surface()?)))
+            .map(|t| ImageTexture::from_surface(t.gidx.hash, t.to_surface()?).map_err(Into::into))
             .collect(),
     }
 }
@@ -534,15 +545,18 @@ impl ImageTexture {
         })
     }
 
-    pub fn from_surface<T: AsRef<[u8]>>(hash_id: u32, surface: image_dds::Surface<T>) -> Self {
-        Self {
+    pub fn from_surface<T: AsRef<[u8]>>(
+        hash_id: u32,
+        surface: image_dds::Surface<T>,
+    ) -> Result<Self, CreateNutError> {
+        Ok(Self {
             hash_id,
             width: surface.width,
             height: surface.height,
             mipmap_count: surface.mipmaps,
             layers: surface.layers,
-            image_format: surface.image_format.into(),
+            image_format: surface.image_format.try_into()?,
             image_data: surface.data.as_ref().to_vec(),
-        }
+        })
     }
 }

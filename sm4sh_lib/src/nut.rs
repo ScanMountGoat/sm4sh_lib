@@ -20,9 +20,9 @@ pub enum Nut {
 #[br(magic(b"NTP3"))]
 #[xc3(magic(b"NTP3"))]
 pub struct Ntp3 {
-    pub unk1: u16,
+    pub unk1: u16, // 512
     pub count: u16,
-    pub unk2: u64,
+    pub unk2: u64, // 0
 
     // TODO: Are these always not tiled?
     #[br(count = count as usize)]
@@ -34,9 +34,9 @@ pub struct Ntp3 {
 #[br(magic(b"NTWU"))]
 #[xc3(magic(b"NTWU"))]
 pub struct Ntwu {
-    pub unk1: u16,
+    pub unk1: u16, // 512, 526
     pub count: u16,
-    pub unk2: u64,
+    pub unk2: u64, // 0
 
     #[br(count = count as usize)]
     pub textures: Vec<Texture>,
@@ -54,7 +54,7 @@ pub struct Texture {
     pub size: u32, // TODO: data size + header size?
     pub unk1: u32,
     pub data_size: u32,
-    pub header_size: u16,
+    pub header_size: u16, // TODO: aligned to 16?
     pub unk2: u16,
     pub unk3: u8,
     pub mipmap_count: u8,
@@ -84,9 +84,10 @@ pub struct Texture {
 
     pub unk6: u32,
 
-    // TODO: cube map stuff?
+    /// The size in bytes for the base image and all mipmaps.
+    // TODO: This is completely different for cubemaps?
     #[br(count = (header_size - 80) / 4)]
-    pub unks: Vec<u32>,
+    pub unk_sizes: Vec<u32>,
 
     pub ext: Ext,
     pub gidx: Gidx,
@@ -186,18 +187,18 @@ pub enum NutFormat {
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"GIDX"))]
 pub struct Gidx {
-    pub unk1: u32,
+    pub unk1: u32, // 16
     pub hash: u32, // TODO: does this match with material texture hash?
-    pub unk3: u32,
+    pub unk3: u32, // 0
 }
 
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[derive(Debug, BinRead, BinWrite, PartialEq, Clone)]
 #[brw(magic(b"eXt\x00"))]
 pub struct Ext {
-    pub unk1: u32,
-    pub unk2: u32,
-    pub unk3: u32,
+    pub unk1: u32, // 32
+    pub unk2: u32, // 16
+    pub unk3: u32, // 0
 }
 
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -277,6 +278,12 @@ pub enum CreateSurfaceError {
     UnsupportedImageFormat(NutFormat),
 }
 
+#[derive(Debug, Error)]
+pub enum CreateNutError {
+    #[error("image format {0:?} is not supported")]
+    UnsupportedImageFormat(image_dds::ImageFormat),
+}
+
 impl SurfaceFormat {
     pub fn block_dim(&self) -> (u32, u32) {
         match self {
@@ -346,6 +353,62 @@ impl Texture {
         }
     }
 
+    // TODO: Add swizzle: bool param to support tiled or untiled
+    pub fn from_surface<T: AsRef<[u8]>>(
+        surface: Surface<T>,
+        hash: u32,
+    ) -> Result<Self, CreateNutError> {
+        // TODO: this is completely different for cubemaps?
+        let mut unk_sizes = Vec::new();
+        for i in 0..surface.mipmaps {
+            unk_sizes.push(surface.get(0, 0, i).unwrap().len() as u32);
+        }
+
+        // Align to 16 bytes.
+        unk_sizes.resize(unk_sizes.len().next_multiple_of(4), 0);
+
+        let header_size = 80 + unk_sizes.len() as u16 * 4;
+
+        let data_size = surface.data.as_ref().len() as u32;
+
+        // Create an untiled ntp3 texture.
+        // TODO: is it ok to mix and match tiled and untiled textures in a nut?
+        Ok(Self {
+            size: data_size + header_size as u32,
+            unk1: 0,
+            data_size,
+            header_size,
+            unk2: 0,
+            unk3: 0,
+            mipmap_count: surface.mipmaps as u8,
+            unk4: 0,
+            format: surface.image_format.try_into()?,
+            width: surface.width as u16,
+            height: surface.height as u16,
+            unk5: 0,
+            caps2: if surface.layers == 6 {
+                Caps2::CUBEMAP | Caps2::CUBEMAP_ALLFACES
+            } else {
+                Caps2::empty()
+            },
+            data: surface.data.as_ref().to_vec(),
+            mipmap_data_offset: 0,
+            gtx_header: None,
+            unk6: 0,
+            unk_sizes,
+            ext: Ext {
+                unk1: 32,
+                unk2: 16,
+                unk3: 0,
+            },
+            gidx: Gidx {
+                unk1: 16,
+                hash,
+                unk3: 0,
+            },
+        })
+    }
+
     pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
         let mut data = self.deswizzle()?;
         if self.format == NutFormat::Rgb5A1Unorm {
@@ -357,7 +420,7 @@ impl Texture {
             width: self.width as u32,
             height: self.height as u32,
             depth: 1,
-            layers: if self.caps2 == Caps2::CUBEMAP.union(Caps2::CUBEMAP_ALLFACES) {
+            layers: if self.caps2 == Caps2::CUBEMAP | Caps2::CUBEMAP_ALLFACES {
                 6
             } else {
                 1
@@ -394,17 +457,19 @@ impl TryFrom<NutFormat> for image_dds::ImageFormat {
     }
 }
 
-impl From<image_dds::ImageFormat> for NutFormat {
-    fn from(value: image_dds::ImageFormat) -> Self {
+impl TryFrom<image_dds::ImageFormat> for NutFormat {
+    type Error = CreateNutError;
+
+    fn try_from(value: image_dds::ImageFormat) -> Result<Self, Self::Error> {
         match value {
-            image_dds::ImageFormat::Rgba8Unorm => NutFormat::Rgba8Unorm,
-            image_dds::ImageFormat::R32Float => NutFormat::R32Float,
-            image_dds::ImageFormat::BC1RgbaUnorm => NutFormat::BC1Unorm,
-            image_dds::ImageFormat::BC2RgbaUnorm => NutFormat::BC2Unorm,
-            image_dds::ImageFormat::BC3RgbaUnorm => NutFormat::BC3Unorm,
-            image_dds::ImageFormat::BC5RgUnorm => NutFormat::BC5Unorm,
-            image_dds::ImageFormat::Bgr5A1Unorm => NutFormat::Rgb5A1Unorm,
-            _ => todo!(),
+            image_dds::ImageFormat::Rgba8Unorm => Ok(NutFormat::Rgba8Unorm),
+            image_dds::ImageFormat::R32Float => Ok(NutFormat::R32Float),
+            image_dds::ImageFormat::BC1RgbaUnorm => Ok(NutFormat::BC1Unorm),
+            image_dds::ImageFormat::BC2RgbaUnorm => Ok(NutFormat::BC2Unorm),
+            image_dds::ImageFormat::BC3RgbaUnorm => Ok(NutFormat::BC3Unorm),
+            image_dds::ImageFormat::BC5RgUnorm => Ok(NutFormat::BC5Unorm),
+            image_dds::ImageFormat::Bgr5A1Unorm => Ok(NutFormat::Rgb5A1Unorm),
+            f => Err(CreateNutError::UnsupportedImageFormat(f)),
         }
     }
 }

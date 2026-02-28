@@ -23,6 +23,7 @@ case.workspace = true
 zune-inflate = "0.2.54"
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 tracing.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 hexlit = "0.5.5"
