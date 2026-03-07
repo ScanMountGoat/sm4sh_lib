@@ -85,6 +85,7 @@ pub struct Texture {
     pub unk6: u32,
 
     /// The size in bytes for the base image and all mipmaps.
+    /// TODO: this is not present if mipmap count is 1?
     // TODO: This is completely different for cubemaps?
     #[br(count = (header_size - 80) / 4)]
     pub unk_sizes: Vec<u32>,
@@ -360,12 +361,14 @@ impl Texture {
     ) -> Result<Self, CreateNutError> {
         // TODO: this is completely different for cubemaps?
         let mut unk_sizes = Vec::new();
-        for i in 0..surface.mipmaps {
-            unk_sizes.push(surface.get(0, 0, i).unwrap().len() as u32);
-        }
+        if surface.mipmaps > 1 {
+            for i in 0..surface.mipmaps {
+                unk_sizes.push(surface.get(0, 0, i).unwrap().len() as u32);
+            }
 
-        // Align to 16 bytes.
-        unk_sizes.resize(unk_sizes.len().next_multiple_of(4), 0);
+            // Align to 16 bytes.
+            unk_sizes.resize(unk_sizes.len().next_multiple_of(4), 0);
+        }
 
         let header_size = 80 + unk_sizes.len() as u16 * 4;
 
