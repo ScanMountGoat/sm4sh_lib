@@ -19,4 +19,4 @@ aho-corasick = "1.1.4"
 tracing.workspace = true
 
 [build-dependencies]
-wgsl_to_wgpu = "0.16.0"
+wgsl_to_wgpu = { git = "https://github.com/ScanMountGoat/wgsl_to_wgpu", rev = "11ea948" }

@@ -201,6 +201,7 @@ impl Renderer {
             }),
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         self.model_bind_group0.set(&mut pass);
@@ -222,6 +223,7 @@ impl Renderer {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&self.variance_shadow_pipeline);
@@ -254,6 +256,7 @@ impl Renderer {
             }),
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         self.model_bind_group0.set(&mut pass);
@@ -278,6 +281,7 @@ impl Renderer {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&self.bloom_bright_pipeline);
@@ -305,6 +309,7 @@ impl Renderer {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&self.bloom_blur_pipeline);
@@ -327,6 +332,7 @@ impl Renderer {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&self.bloom_blur_combine_pipeline);
@@ -352,6 +358,7 @@ impl Renderer {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&self.bloom_add_pipeline);
@@ -374,6 +381,7 @@ impl Renderer {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         pass.set_pipeline(&self.blit_pipeline);
@@ -425,7 +433,7 @@ fn bloom_add_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgp
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -451,7 +459,7 @@ fn bloom_blur_combine_pipeline(
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -474,7 +482,7 @@ fn bloom_blur_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wg
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -500,7 +508,7 @@ fn bloom_bright_pipeline(
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -520,7 +528,7 @@ fn blit_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgpu::Re
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -543,7 +551,7 @@ fn variance_shadow_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
@@ -564,13 +572,13 @@ fn model_shadow_depth_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: Some(wgpu::DepthStencilState {
             format: SHADOW_FORMAT,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::LessEqual,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::LessEqual),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }

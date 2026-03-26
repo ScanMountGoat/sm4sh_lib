@@ -76,9 +76,9 @@ fn main() -> anyhow::Result<()> {
 
     // Load models in headless mode without a surface.
     // This simplifies testing for stability and performance.
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
-        ..Default::default()
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
     let adapter = block_on(instance.request_adapter(&RequestAdapterOptions {
         power_preference: PowerPreference::HighPerformance,

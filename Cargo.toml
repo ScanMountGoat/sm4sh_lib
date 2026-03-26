@@ -8,7 +8,7 @@ binrw = "0.15.0"
 half = "2.4.1"
 clap = {version = "4.5.28", features = ["derive"] }
 rayon = "1.10.0"
-wgpu = "27.0.1"
+wgpu = "29.0.1"
 glam = "0.30.9"
 log = "0.4.22"
 simple_logger = "5.0.0"

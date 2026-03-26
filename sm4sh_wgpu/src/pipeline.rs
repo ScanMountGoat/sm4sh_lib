@@ -111,8 +111,8 @@ pub fn model_pipeline(
                 },
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: DEPTH_FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    depth_write_enabled: Some(true),
+                    depth_compare: Some(wgpu::CompareFunction::LessEqual),
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),
@@ -125,7 +125,7 @@ pub fn model_pipeline(
                         write_mask: wgpu::ColorWrites::all(),
                     })]),
                 )),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             })
         })

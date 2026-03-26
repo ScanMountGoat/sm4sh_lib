@@ -1,29 +1,27 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use anyhow::Context;
 use clap::Parser;
 use futures::executor::block_on;
 use glam::{Vec3, Vec4, vec3};
-use log::{error, info};
+use log::info;
 use sm4sh_model::{
     animation::{Animation, load_animations},
     database::ShaderDatabase,
 };
 use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData, load_model};
 use winit::{
-    dpi::PhysicalPosition,
-    event::*,
-    event_loop::EventLoop,
-    keyboard::NamedKey,
-    window::{Window, WindowBuilder},
+    application::ApplicationHandler, dpi::PhysicalPosition, event::*, event_loop::EventLoop,
+    keyboard::NamedKey, window::Window,
 };
 
 const FOV_Y: f32 = 0.5;
 const Z_NEAR: f32 = 0.1;
 const Z_FAR: f32 = 100000.0;
 
-struct State<'a> {
-    surface: wgpu::Surface<'a>,
+struct State {
+    window: Arc<Window>,
+    surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     size: winit::dpi::PhysicalSize<u32>,
@@ -54,13 +52,21 @@ struct InputState {
     previous_cursor_position: PhysicalPosition<f64>,
 }
 
-impl<'a> State<'a> {
-    async fn new(window: &'a Window, cli: &Cli) -> anyhow::Result<Self> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+impl State {
+    async fn new(
+        window: Window,
+        cli: &Cli,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+    ) -> anyhow::Result<Self> {
+        let window = Arc::new(window);
+
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
-            ..Default::default()
+            ..wgpu::InstanceDescriptor::new_with_display_handle(Box::new(
+                event_loop.owned_display_handle(),
+            ))
         });
-        let surface = instance.create_surface(window)?;
+        let surface = instance.create_surface(window.clone())?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -110,6 +116,7 @@ impl<'a> State<'a> {
             .unwrap_or_default();
 
         Ok(Self {
+            window,
             surface,
             device,
             queue,
@@ -147,7 +154,7 @@ impl<'a> State<'a> {
         }
     }
 
-    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    fn render(&mut self, output: wgpu::SurfaceTexture) {
         if let Some((_, animation)) = self.animations.get(self.animation_index) {
             // Framerate independent animation timing.
             // This relies on interpolation or frame skipping.
@@ -164,7 +171,6 @@ impl<'a> State<'a> {
                 .update_bone_transforms(&self.queue, animation, current_frame);
         }
 
-        let output = self.surface.get_current_texture()?;
         let output_view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -180,11 +186,10 @@ impl<'a> State<'a> {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
-        Ok(())
     }
 
     // Make this a reusable library that only requires glam?
-    fn handle_input(&mut self, event: &WindowEvent, window: &Window) {
+    fn handle_input(&mut self, event: &WindowEvent) {
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
                 match &event.logical_key {
@@ -210,14 +215,14 @@ impl<'a> State<'a> {
                                     self.current_time_seconds = 0.0;
 
                                     self.animation_index += 1;
-                                    self.set_window_title(window);
+                                    self.set_window_title();
                                 }
                             }
                             "," => {
                                 if event.state == ElementState::Released {
                                     self.current_time_seconds = 0.0;
                                     self.animation_index = self.animation_index.saturating_sub(1);
-                                    self.set_window_title(window);
+                                    self.set_window_title();
                                 }
                             }
                             _ => (),
@@ -282,13 +287,13 @@ impl<'a> State<'a> {
         }
     }
 
-    fn set_window_title(&self, window: &Window) {
+    fn set_window_title(&self) {
         let mut title = concat!("sm4sh_viewer ", env!("CARGO_PKG_VERSION")).to_string();
         if let Some((name, _)) = self.animations.get(self.animation_index) {
             title = format!("{title} - {name}");
         }
 
-        window.set_title(&title);
+        self.window.set_title(&title);
     }
 }
 
@@ -344,6 +349,72 @@ struct Cli {
     anim: Option<String>,
 }
 
+struct App {
+    state: Option<State>,
+    cli: Cli,
+}
+
+impl ApplicationHandler<()> for App {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        if self.state.is_some() {
+            return;
+        }
+
+        let window = event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_title(concat!("sm4sh_viewer ", env!("CARGO_PKG_VERSION"))),
+            )
+            .unwrap();
+
+        self.state = block_on(State::new(window, &self.cli, event_loop)).ok();
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        if event == WindowEvent::CloseRequested {
+            event_loop.exit();
+            return;
+        };
+
+        // Window specific event handling.
+        if let Some(state) = self.state.as_mut() {
+            if window_id != state.window.id() {
+                return;
+            }
+
+            match event {
+                WindowEvent::Resized(physical_size) => {
+                    state.resize(physical_size);
+                    state.update_camera(physical_size);
+                    state.window.request_redraw();
+                }
+                WindowEvent::ScaleFactorChanged { .. } => {}
+                WindowEvent::RedrawRequested => {
+                    match state.surface.get_current_texture() {
+                        wgpu::CurrentSurfaceTexture::Success(output) => state.render(output),
+                        wgpu::CurrentSurfaceTexture::Suboptimal(_) => state.resize(state.size),
+                        wgpu::CurrentSurfaceTexture::Timeout => {}
+                        wgpu::CurrentSurfaceTexture::Occluded => {}
+                        wgpu::CurrentSurfaceTexture::Outdated => state.resize(state.size),
+                        wgpu::CurrentSurfaceTexture::Lost => state.resize(state.size),
+                        wgpu::CurrentSurfaceTexture::Validation => {}
+                    }
+                    state.window.request_redraw();
+                }
+                _ => {
+                    state.handle_input(&event);
+                    state.update_camera(state.window.inner_size());
+                }
+            }
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     simple_logger::SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
@@ -352,44 +423,10 @@ fn main() -> anyhow::Result<()> {
         .init()?;
 
     let cli = Cli::parse();
-
-    let event_loop = EventLoop::new()?;
-    let window = WindowBuilder::new()
-        .with_title(concat!("sm4sh_viewer ", env!("CARGO_PKG_VERSION")))
-        .build(&event_loop)?;
-
-    let mut state = block_on(State::new(&window, &cli))?;
-    state.set_window_title(&window);
+    let event_loop = EventLoop::new().unwrap();
+    let mut app = App { state: None, cli };
     event_loop
-        .run(|event, target| match event {
-            Event::WindowEvent {
-                ref event,
-                window_id,
-            } if window_id == window.id() => match event {
-                WindowEvent::CloseRequested => target.exit(),
-                WindowEvent::Resized(physical_size) => {
-                    state.resize(*physical_size);
-                    state.update_camera(*physical_size);
-                    window.request_redraw();
-                }
-                WindowEvent::ScaleFactorChanged { .. } => {}
-                WindowEvent::RedrawRequested => {
-                    match state.render() {
-                        Ok(_) => {}
-                        Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                        Err(wgpu::SurfaceError::OutOfMemory) => target.exit(),
-                        Err(e) => error!("{e:?}"),
-                    }
-                    window.request_redraw();
-                }
-                _ => {
-                    state.handle_input(event, &window);
-                    state.update_camera(window.inner_size());
-                    window.request_redraw();
-                }
-            },
-            _ => (),
-        })
+        .run_app(&mut app)
         .with_context(|| "failed to complete event loop")?;
     Ok(())
 }
