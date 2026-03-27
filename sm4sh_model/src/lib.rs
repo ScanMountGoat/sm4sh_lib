@@ -482,11 +482,22 @@ fn nut_textures(nut: &Nut) -> Result<Vec<ImageTexture>, CreateImageTextureError>
             .iter()
             .map(|t| ImageTexture::from_surface(t.gidx.hash, t.to_surface()?).map_err(Into::into))
             .collect(),
-        Nut::Ntp3(ntp3) => ntp3
-            .textures
-            .iter()
-            .map(|t| ImageTexture::from_surface(t.gidx.hash, t.to_surface()?).map_err(Into::into))
-            .collect(),
+        Nut::Ntp3(ntp3) => match &ntp3.inner {
+            sm4sh_lib::nut::Ntp3Inner::V1(v1) => v1
+                .textures
+                .iter()
+                .map(|t| {
+                    ImageTexture::from_surface(t.gidx.hash, t.to_surface()?).map_err(Into::into)
+                })
+                .collect(),
+            sm4sh_lib::nut::Ntp3Inner::V2(v2) => v2
+                .textures
+                .iter()
+                .map(|t| {
+                    ImageTexture::from_surface(t.gidx.hash, t.to_surface()?).map_err(Into::into)
+                })
+                .collect(),
+        },
     }
 }
 

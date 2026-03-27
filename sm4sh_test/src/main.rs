@@ -4,7 +4,15 @@ use binrw::{BinRead, BinWrite};
 use clap::Parser;
 use rayon::prelude::*;
 use sm4sh_lib::{
-    jtb::Jtb, mta::Mta, nhb::Nhb, nsh::Nsh, nud::Nud, nut::Nut, omo::Omo, pack::Pack, sb::Sb,
+    jtb::Jtb,
+    mta::Mta,
+    nhb::Nhb,
+    nsh::Nsh,
+    nud::Nud,
+    nut::{Ntp3TextureV1, Ntp3TextureV2, Nut},
+    omo::Omo,
+    pack::Pack,
+    sb::Sb,
     vbn::Vbn,
 };
 use sm4sh_model::{NudModel, animation::Animation};
@@ -184,6 +192,48 @@ fn check_nut(nut: Nut, path: &Path, original_bytes: &[u8]) {
     nut.write(&mut writer).unwrap();
     if writer.into_inner() != original_bytes {
         println!("Nut read/write not 1:1 for {path:?}");
+    }
+
+    match nut {
+        Nut::Ntwu(ntwu) => {
+            for texture in ntwu.textures {
+                let _surface = texture.to_surface().unwrap();
+                // TODO: support swizzling at some point
+            }
+        }
+        Nut::Ntp3(ntp3) => {
+            // NTP3 nuts aren't tiled and should rebuild 1:1.
+            match ntp3.inner {
+                sm4sh_lib::nut::Ntp3Inner::V1(v1) => {
+                    for texture in v1.textures {
+                        let surface = texture.to_surface().unwrap();
+                        let new_texture =
+                            Ntp3TextureV1::from_surface(surface, texture.gidx.hash).unwrap();
+                        if new_texture != texture {
+                            println!(
+                                "NTP3 V1 texture {:08X} from surface not 1:1 for {path:?}",
+                                texture.gidx.hash
+                            );
+                        }
+                    }
+                }
+                sm4sh_lib::nut::Ntp3Inner::V2(v2) => {
+                    for texture in v2.textures {
+                        let surface = texture.to_surface().unwrap();
+                        let new_texture =
+                            Ntp3TextureV2::from_surface(surface, texture.gidx.hash).unwrap();
+                        if new_texture != texture {
+                            println!(
+                                "NTP3 V2 texture {:08X} from surface not 1:1 for {path:?}",
+                                texture.gidx.hash
+                            );
+                        }
+                    }
+                }
+            }
+
+            // TODO: test sm4sh_model texture rebuilding
+        }
     }
 }
 

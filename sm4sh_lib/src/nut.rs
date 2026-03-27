@@ -1,3 +1,5 @@
+use std::io::SeekFrom;
+
 use binrw::{BinRead, BinWrite, binread};
 use bitflags::bitflags;
 use image_dds::{Surface, ddsfile::Dds};
@@ -14,19 +16,47 @@ pub enum Nut {
     Ntp3(Ntp3),
 }
 
-// TODO: Identical to ntwu other than magic?
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(magic(b"NTP3"))]
 #[xc3(magic(b"NTP3"))]
 pub struct Ntp3 {
-    pub unk1: u16, // 512
+    // TODO: 256 has texture data texture data
+    // TODO: 512 has texture texture data data
+    pub inner: Ntp3Inner,
+}
+
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
+pub enum Ntp3Inner {
+    #[br(magic(0x0100u16))]
+    #[xc3(magic(0x0100u16))]
+    V1(Ntp3InnerV1),
+
+    #[br(magic(0x0200u16))]
+    #[xc3(magic(0x0200u16))]
+    V2(Ntp3InnerV2),
+}
+
+// TODO: make this generic?
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Debug, BinRead, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
+pub struct Ntp3InnerV1 {
     pub count: u16,
     pub unk2: u64, // 0
 
-    // TODO: Are these always not tiled?
     #[br(count = count as usize)]
-    pub textures: Vec<Texture>,
+    pub textures: Vec<Ntp3TextureV1>,
+}
+
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Debug, BinRead, Xc3Write, PartialEq, Clone)]
+pub struct Ntp3InnerV2 {
+    pub count: u16,
+    pub unk2: u64, // 0
+
+    #[br(count = count as usize)]
+    pub textures: Vec<Ntp3TextureV2>,
 }
 
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -34,12 +64,12 @@ pub struct Ntp3 {
 #[br(magic(b"NTWU"))]
 #[xc3(magic(b"NTWU"))]
 pub struct Ntwu {
-    pub unk1: u16, // 512, 526
+    pub version: u16, // 512, 526
     pub count: u16,
     pub unk2: u64, // 0
 
     #[br(count = count as usize)]
-    pub textures: Vec<Texture>,
+    pub textures: Vec<NtwuTexture>,
 }
 
 #[binread]
@@ -47,7 +77,109 @@ pub struct Ntwu {
 #[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
 #[br(stream = r)]
 #[xc3(base_offset)]
-pub struct Texture {
+pub struct NtwuTexture {
+    #[br(temp, try_calc = r.stream_position())]
+    base_offset: u64,
+
+    pub size: u32, // TODO: data size + header size?
+    pub unk1: u32,
+    pub data_size: u32,
+    pub header_size: u16, // TODO: aligned to 16?
+    pub unk2: u16,
+    pub unk3: u8,
+    pub mipmap_count: u8,
+    pub unk4: u8,
+    pub format: NutFormat,
+    pub width: u16,
+    pub height: u16,
+    pub unk5: u32, // TODO: 0 for ntp3?
+    pub caps2: Caps2,
+
+    // TODO: all mipmaps?
+    // TODO: NTWU is 4096 or 8192 aligned?
+    #[br(parse_with = parse_ptr32_count(data_size as usize), offset = base_offset)]
+    #[xc3(offset(u32), align(4096))]
+    pub data: Vec<u8>,
+
+    // TODO: calculate this on export?
+    pub mipmap_data_offset: u32,
+
+    // TODO: null for ntp3 nuts?
+    #[br(parse_with = parse_opt_ptr32, offset = base_offset)]
+    #[xc3(offset(u32))]
+    pub gtx_header: Option<GtxHeader>,
+
+    pub unk6: u32,
+
+    /// The size in bytes for the base image and all mipmaps.
+    /// TODO: this is not present if mipmap count is 1?
+    // TODO: This is completely different for cubemaps?
+    #[br(count = (header_size - 80) / 4)]
+    pub unk_sizes: Vec<u32>,
+
+    pub ext: Ext,
+    pub gidx: Gidx,
+}
+
+#[binread]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
+#[br(stream = r)]
+#[xc3(base_offset)]
+pub struct Ntp3TextureV1 {
+    #[br(temp, try_calc = r.stream_position())]
+    base_offset: u64,
+
+    // TODO: type for shared fields?
+    pub size: u32, // TODO: data size + header size?
+    pub unk1: u32,
+    pub data_size: u32,
+    pub header_size: u16, // TODO: aligned to 16?
+
+    pub unk2: u16,
+    pub unk3: u8,
+    pub mipmap_count: u8,
+    pub unk4: u8,
+    pub format: NutFormat,
+    pub width: u16,
+    pub height: u16,
+    pub unk5: u32, // TODO: 0 for ntp3?
+    pub caps2: Caps2,
+    // TODO: end of shared fields?
+
+    // TODO: only this data offset field differs?
+
+    // TODO: calculate this on export?
+    pub mipmap_data_offset: u32,
+
+    // TODO: always null for ntp3 nuts?
+    #[br(assert(gtx_header == 0))]
+    pub gtx_header: u32,
+
+    pub unk6: u32,
+
+    /// The size in bytes for the base image and all mipmaps.
+    /// TODO: this is not present if mipmap count is 1?
+    // TODO: This is completely different for cubemaps?
+    #[br(count = (header_size - 76) / 4)]
+    pub unk_sizes: Vec<u32>,
+
+    pub ext: Ext,
+    pub gidx: Gidx,
+
+    // Don't restore the position since the next texture follows immediately for v1.
+    // TODO: NTP3 image data isn't aligned at all?
+    // TODO: all mipmaps?
+    #[br(seek_before = SeekFrom::Start(base_offset + header_size as u64), count = data_size as usize)]
+    pub data: Vec<u8>,
+}
+
+#[binread]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[derive(Debug, Xc3Write, Xc3WriteOffsets, PartialEq, Clone)]
+#[br(stream = r)]
+#[xc3(base_offset)]
+pub struct Ntp3TextureV2 {
     #[br(temp, try_calc = r.stream_position())]
     base_offset: u64,
 
@@ -69,18 +201,17 @@ pub struct Texture {
     // TODO: Separate type for non tiled texture?
 
     // TODO: all mipmaps?
-    // TODO: Some are aligned to 8192?
+    // TODO: NTWU is 4096 or 8192 aligned?
     #[br(parse_with = parse_ptr32_count(data_size as usize), offset = base_offset)]
-    #[xc3(offset(u32), align(4096))]
+    #[xc3(offset(u32))]
     pub data: Vec<u8>,
 
     // TODO: calculate this on export?
     pub mipmap_data_offset: u32,
 
-    // TODO: null for ntp3 nuts?
-    #[br(parse_with = parse_opt_ptr32, offset = base_offset)]
-    #[xc3(offset(u32))]
-    pub gtx_header: Option<GtxHeader>,
+    // TODO: always null for ntp3 nuts?
+    #[br(assert(gtx_header == 0))]
+    pub gtx_header: u32,
 
     pub unk6: u32,
 
@@ -180,7 +311,7 @@ pub enum NutFormat {
     Rgb5A1Unorm = 12,
     Rgba8Unorm = 14,
     R32Float = 16,
-    Rgba82 = 17,
+    Rgba82 = 17, // TODO: how is this different from type 14?
     BC5Unorm = 22,
 }
 
@@ -311,7 +442,39 @@ impl SurfaceFormat {
     }
 }
 
-impl Texture {
+impl Ntp3 {
+    pub fn from_textures_v1<T: AsRef<[u8]>>(
+        textures: impl Iterator<Item = (u32, Surface<T>)>,
+    ) -> Result<Self, CreateNutError> {
+        let textures = textures
+            .map(|(hash, surface)| Ntp3TextureV1::from_surface(surface, hash))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            inner: Ntp3Inner::V1(Ntp3InnerV1 {
+                count: textures.len() as u16,
+                unk2: 0,
+                textures,
+            }),
+        })
+    }
+
+    pub fn from_textures_v2<T: AsRef<[u8]>>(
+        textures: impl Iterator<Item = (u32, Surface<T>)>,
+    ) -> Result<Self, CreateNutError> {
+        let textures = textures
+            .map(|(hash, surface)| Ntp3TextureV2::from_surface(surface, hash))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            inner: Ntp3Inner::V2(Ntp3InnerV2 {
+                count: textures.len() as u16,
+                unk2: 0,
+                textures,
+            }),
+        })
+    }
+}
+
+impl NtwuTexture {
     pub fn deswizzle(&self) -> Result<Vec<u8>, wiiu_swizzle::SwizzleError> {
         if let Some(gtx_header) = &self.gtx_header {
             let mips_start = gtx_header.mipmap_offsets[0] as usize;
@@ -354,28 +517,131 @@ impl Texture {
         }
     }
 
-    // TODO: Add swizzle: bool param to support tiled or untiled
+    pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
+        let data = self.deswizzle()?;
+        create_surface(
+            self.width,
+            self.height,
+            self.mipmap_count,
+            self.format,
+            self.caps2,
+            data,
+        )
+    }
+
+    pub fn to_dds(&self) -> Result<Dds, image_dds::CreateDdsError> {
+        // TODO: Create error type to avoid unwrap.
+        self.to_surface().unwrap().to_dds()
+    }
+}
+
+impl Ntp3TextureV1 {
+    // TODO: share code with v2
     pub fn from_surface<T: AsRef<[u8]>>(
         surface: Surface<T>,
         hash: u32,
     ) -> Result<Self, CreateNutError> {
-        // TODO: this is completely different for cubemaps?
         let mut unk_sizes = Vec::new();
-        if surface.mipmaps > 1 {
+        if surface.layers == 6 {
+            // TODO: Why is this completely different for cubemaps?
+            let unk_size = surface.get(0, 0, 0).unwrap().len();
+            unk_sizes.push(unk_size as u32);
+            unk_sizes.push(unk_size as u32);
+        } else if surface.mipmaps > 1 {
             for i in 0..surface.mipmaps {
-                unk_sizes.push(surface.get(0, 0, i).unwrap().len() as u32);
+                // TODO: Why is the minimum 16 even if the actual mip data is smaller?
+                let unk_size = surface.get(0, 0, i).unwrap().len();
+                unk_sizes.push(unk_size.max(16) as u32);
             }
-
-            // Align to 16 bytes.
-            unk_sizes.resize(unk_sizes.len().next_multiple_of(4), 0);
         }
+        // Align to 16 bytes.
+        unk_sizes.resize(unk_sizes.len().next_multiple_of(4), 0);
 
         let header_size = 80 + unk_sizes.len() as u16 * 4;
 
         let data_size = surface.data.as_ref().len() as u32;
 
-        // Create an untiled ntp3 texture.
-        // TODO: is it ok to mix and match tiled and untiled textures in a nut?
+        // Create an untiled  texture.
+        Ok(Self {
+            size: data_size + header_size as u32,
+            unk1: 0,
+            data_size,
+            header_size,
+            unk2: 0,
+            unk3: 0,
+            mipmap_count: surface.mipmaps as u8,
+            unk4: 0,
+            format: surface.image_format.try_into()?,
+            width: surface.width as u16,
+            height: surface.height as u16,
+            unk5: 0,
+            caps2: if surface.layers == 6 {
+                Caps2::CUBEMAP | Caps2::CUBEMAP_ALLFACES
+            } else {
+                Caps2::empty()
+            },
+            mipmap_data_offset: 0,
+            gtx_header: 0,
+            unk6: 0,
+            unk_sizes,
+            ext: Ext {
+                unk1: 32,
+                unk2: 16,
+                unk3: 0,
+            },
+            gidx: Gidx {
+                unk1: 16,
+                hash,
+                unk3: 0,
+            },
+            data: surface.data.as_ref().to_vec(),
+        })
+    }
+
+    pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
+        create_surface(
+            self.width,
+            self.height,
+            self.mipmap_count,
+            self.format,
+            self.caps2,
+            self.data.clone(),
+        )
+    }
+
+    pub fn to_dds(&self) -> Result<Dds, image_dds::CreateDdsError> {
+        // TODO: Create error type to avoid unwrap.
+        self.to_surface().unwrap().to_dds()
+    }
+}
+
+impl Ntp3TextureV2 {
+    // TODO: share code with v1
+    pub fn from_surface<T: AsRef<[u8]>>(
+        surface: Surface<T>,
+        hash: u32,
+    ) -> Result<Self, CreateNutError> {
+        let mut unk_sizes = Vec::new();
+        if surface.layers == 6 {
+            // TODO: Why is this completely different for cubemaps?
+            let unk_size = surface.get(0, 0, 0).unwrap().len();
+            unk_sizes.push(unk_size as u32);
+            unk_sizes.push(unk_size as u32);
+        } else if surface.mipmaps > 1 {
+            for i in 0..surface.mipmaps {
+                // TODO: Why is the minimum 16 even if the actual mip data is smaller?
+                let unk_size = surface.get(0, 0, i).unwrap().len();
+                unk_sizes.push(unk_size.max(16) as u32);
+            }
+        }
+        // Align to 16 bytes.
+        unk_sizes.resize(unk_sizes.len().next_multiple_of(4), 0);
+
+        let header_size = 80 + unk_sizes.len() as u16 * 4;
+
+        let data_size = surface.data.as_ref().len() as u32;
+
+        // Create an untiled  texture.
         Ok(Self {
             size: data_size + header_size as u32,
             unk1: 0,
@@ -396,7 +662,7 @@ impl Texture {
             },
             data: surface.data.as_ref().to_vec(),
             mipmap_data_offset: 0,
-            gtx_header: None,
+            gtx_header: 0,
             unk6: 0,
             unk_sizes,
             ext: Ext {
@@ -413,31 +679,48 @@ impl Texture {
     }
 
     pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
-        let mut data = self.deswizzle()?;
-        if self.format == NutFormat::Rgb5A1Unorm {
-            // image_dds only supports Bgr5A1Unorm.
-            swap_red_blue_bgr5a1(&mut data);
-        }
-
-        Ok(Surface {
-            width: self.width as u32,
-            height: self.height as u32,
-            depth: 1,
-            layers: if self.caps2 == Caps2::CUBEMAP | Caps2::CUBEMAP_ALLFACES {
-                6
-            } else {
-                1
-            },
-            mipmaps: self.mipmap_count as u32,
-            image_format: self.format.try_into()?,
-            data,
-        })
+        create_surface(
+            self.width,
+            self.height,
+            self.mipmap_count,
+            self.format,
+            self.caps2,
+            self.data.clone(),
+        )
     }
 
     pub fn to_dds(&self) -> Result<Dds, image_dds::CreateDdsError> {
         // TODO: Create error type to avoid unwrap.
         self.to_surface().unwrap().to_dds()
     }
+}
+
+fn create_surface(
+    width: u16,
+    height: u16,
+    mipmaps: u8,
+    format: NutFormat,
+    caps2: Caps2,
+    mut image_data: Vec<u8>,
+) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
+    if format == NutFormat::Rgb5A1Unorm {
+        // image_dds only supports Bgr5A1Unorm.
+        swap_red_blue_bgr5a1(&mut image_data);
+    }
+
+    Ok(Surface {
+        width: width as u32,
+        height: height as u32,
+        depth: 1,
+        layers: if caps2 == Caps2::CUBEMAP | Caps2::CUBEMAP_ALLFACES {
+            6
+        } else {
+            1
+        },
+        mipmaps: mipmaps as u32,
+        image_format: format.try_into()?,
+        data: image_data,
+    })
 }
 
 impl TryFrom<NutFormat> for image_dds::ImageFormat {
@@ -499,24 +782,28 @@ xc3_write_binwrite_impl!(
     SurfaceDim
 );
 
-impl Xc3WriteOffsets for Ntp3Offsets<'_> {
+impl Xc3WriteOffsets for Ntp3InnerOffsets<'_> {
     type Args = ();
 
     fn write_offsets<W: std::io::Write + std::io::Seek>(
         &self,
         writer: &mut W,
-        _base_offset: u64,
+        base_offset: u64,
         data_ptr: &mut u64,
         endian: xc3_write::Endian,
         args: Self::Args,
     ) -> xc3_write::Xc3Result<()> {
-        for t in &self.textures.0 {
-            t.data
-                .write_full(writer, t.base_offset, data_ptr, endian, args)?;
-        }
-        for t in &self.textures.0 {
-            t.gtx_header
-                .write_full(writer, t.base_offset, data_ptr, endian, args)?;
+        match self {
+            Ntp3InnerOffsets::V1(v1) => {
+                v1.write_offsets(writer, base_offset, data_ptr, endian, args)?;
+            }
+            Ntp3InnerOffsets::V2(v2) => {
+                for t in &v2.textures.0 {
+                    // NTP3 image data is not tiled and doesn't require alignment.
+                    t.data
+                        .write_full(writer, t.base_offset, data_ptr, endian, args)?;
+                }
+            }
         }
         Ok(())
     }
@@ -534,6 +821,7 @@ impl Xc3WriteOffsets for NtwuOffsets<'_> {
         args: Self::Args,
     ) -> xc3_write::Xc3Result<()> {
         for t in &self.textures.0 {
+            *data_ptr = data_ptr.next_multiple_of(4096);
             t.data
                 .write_full(writer, t.base_offset, data_ptr, endian, args)?;
         }
