@@ -630,7 +630,8 @@ impl Ntp3TextureV2 {
         } else if surface.mipmaps > 1 {
             for i in 0..surface.mipmaps {
                 // TODO: Why is the minimum 16 even if the actual mip data is smaller?
-                let unk_size = surface.get(0, 0, i).unwrap().len();
+                // TODO: Why does surface.get(...) return none for nud_model.to_nut()?
+                let unk_size = surface.get(0, 0, i).unwrap_or_default().len();
                 unk_sizes.push(unk_size.max(16) as u32);
             }
         }

@@ -17,7 +17,7 @@ use sm4sh_lib::{
         BoundingSphere, Material, MaterialProperty, MaterialTexture, Mesh, MeshGroup, Nud,
         VertexIndexFlags,
     },
-    nut::{CreateNutError, CreateSurfaceError, Nut},
+    nut::{Ntp3, Nut},
     vbn::Vbn,
 };
 
@@ -154,6 +154,15 @@ pub struct VbnBone {
     pub translation: Vec3,
     pub rotation: Vec3,
     pub scale: Vec3,
+}
+
+#[derive(Debug, Error)]
+pub enum CreateNutError {
+    #[error("error creating surface")]
+    Surface(#[from] sm4sh_lib::nut::CreateSurfaceError),
+
+    #[error("error converting NUT data")]
+    Nut(#[from] sm4sh_lib::nut::CreateNutError),
 }
 
 impl NudModel {
@@ -337,6 +346,18 @@ impl NudModel {
             vertex_buffer1,
         })
     }
+
+    pub fn to_nut(&self) -> Result<Nut, CreateNutError> {
+        // TODO: add option for tiled ntwu nut?
+        // TODO: add option for different nut versions and types?
+        let textures = self
+            .textures
+            .iter()
+            .map(|t| Ok((t.hash_id, t.to_surface()?)))
+            .collect::<Result<Vec<_>, CreateNutError>>()?;
+        let ntp3 = Ntp3::from_textures_v2(textures.into_iter())?;
+        Ok(Nut::Ntp3(ntp3))
+    }
 }
 
 impl NudMesh {
@@ -469,10 +490,10 @@ fn bounding_sphere(sphere: Vec4) -> BoundingSphere {
 #[derive(Debug, Error)]
 enum CreateImageTextureError {
     #[error("error creating surface")]
-    Surface(#[from] CreateSurfaceError),
+    Surface(#[from] sm4sh_lib::nut::CreateSurfaceError),
 
     #[error("error converting NUT data")]
-    Nut(#[from] CreateNutError),
+    Nut(#[from] sm4sh_lib::nut::CreateNutError),
 }
 
 fn nut_textures(nut: &Nut) -> Result<Vec<ImageTexture>, CreateImageTextureError> {
@@ -544,7 +565,9 @@ fn nud_material(material: &sm4sh_lib::nud::Material) -> NudMaterial {
 impl ImageTexture {
     /// Create a view of all image data in this texture
     /// to use with encode or decode operations.
-    pub fn to_surface(&self) -> Result<image_dds::Surface<&[u8]>, CreateSurfaceError> {
+    pub fn to_surface(
+        &self,
+    ) -> Result<image_dds::Surface<&[u8]>, sm4sh_lib::nut::CreateSurfaceError> {
         Ok(image_dds::Surface {
             width: self.width,
             height: self.height,
@@ -559,7 +582,7 @@ impl ImageTexture {
     pub fn from_surface<T: AsRef<[u8]>>(
         hash_id: u32,
         surface: image_dds::Surface<T>,
-    ) -> Result<Self, CreateNutError> {
+    ) -> Result<Self, sm4sh_lib::nut::CreateNutError> {
         Ok(Self {
             hash_id,
             width: surface.width,
