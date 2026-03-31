@@ -2,7 +2,7 @@ use std::io::SeekFrom;
 
 use binrw::{BinRead, BinWrite, binread};
 use bitflags::bitflags;
-use image_dds::{Surface, ddsfile::Dds};
+use image_dds::{Surface, ddsfile::Dds, mip_dimension};
 use thiserror::Error;
 use xc3_write::{Xc3Write, Xc3WriteOffsets};
 
@@ -416,28 +416,36 @@ pub enum CreateNutError {
     UnsupportedImageFormat(image_dds::ImageFormat),
 }
 
-impl SurfaceFormat {
-    pub fn block_dim(&self) -> (u32, u32) {
+impl NutFormat {
+    pub fn block_dim(&self) -> (usize, usize) {
         match self {
-            SurfaceFormat::R5G5B5A1Unorm => (1, 1),
-            SurfaceFormat::R8G8B8A8Unorm => (1, 1),
-            SurfaceFormat::BC1Unorm => (4, 4),
-            SurfaceFormat::BC2Unorm => (4, 4),
-            SurfaceFormat::BC3Unorm => (4, 4),
-            SurfaceFormat::BC4Unorm => (4, 4),
-            SurfaceFormat::BC5Unorm => (4, 4),
+            NutFormat::BC1Unorm => (4, 4),
+            NutFormat::BC2Unorm => (4, 4),
+            NutFormat::BC3Unorm => (4, 4),
+            NutFormat::Bgr5A1Unorm => (1, 1),
+            NutFormat::Bgr5A1Unorm2 => (1, 1),
+            NutFormat::B5G6R5Unorm => (1, 1),
+            NutFormat::Rgb5A1Unorm => (1, 1),
+            NutFormat::Rgba8Unorm => (1, 1),
+            NutFormat::R32Float => (1, 1),
+            NutFormat::Rgba82 => (1, 1),
+            NutFormat::BC5Unorm => (4, 4),
         }
     }
 
-    pub fn bytes_per_pixel(&self) -> u32 {
+    pub fn block_size_in_bytes(&self) -> usize {
         match self {
-            SurfaceFormat::R5G5B5A1Unorm => 2,
-            SurfaceFormat::R8G8B8A8Unorm => 4,
-            SurfaceFormat::BC1Unorm => 8,
-            SurfaceFormat::BC2Unorm => 16,
-            SurfaceFormat::BC3Unorm => 16,
-            SurfaceFormat::BC4Unorm => 8,
-            SurfaceFormat::BC5Unorm => 16,
+            NutFormat::BC1Unorm => 8,
+            NutFormat::BC2Unorm => 16,
+            NutFormat::BC3Unorm => 16,
+            NutFormat::Bgr5A1Unorm => 2,
+            NutFormat::Bgr5A1Unorm2 => 2,
+            NutFormat::B5G6R5Unorm => 2,
+            NutFormat::Rgb5A1Unorm => 2,
+            NutFormat::Rgba8Unorm => 4,
+            NutFormat::R32Float => 4,
+            NutFormat::Rgba82 => 4,
+            NutFormat::BC5Unorm => 16,
         }
     }
 }
@@ -541,23 +549,9 @@ impl Ntp3TextureV1 {
         surface: Surface<T>,
         hash: u32,
     ) -> Result<Self, CreateNutError> {
-        let mut unk_sizes = Vec::new();
-        if surface.layers == 6 {
-            // TODO: Why is this completely different for cubemaps?
-            let unk_size = surface.get(0, 0, 0).unwrap().len();
-            unk_sizes.push(unk_size as u32);
-            unk_sizes.push(unk_size as u32);
-        } else if surface.mipmaps > 1 {
-            for i in 0..surface.mipmaps {
-                // TODO: Why is the minimum 16 even if the actual mip data is smaller?
-                let unk_size = surface.get(0, 0, i).unwrap().len();
-                unk_sizes.push(unk_size.max(16) as u32);
-            }
-        }
-        // Align to 16 bytes.
-        unk_sizes.resize(unk_sizes.len().next_multiple_of(4), 0);
+        let (data, unk_sizes) = ntp3_image_data_unk_sizes(&surface);
 
-        let header_size = 80 + unk_sizes.len() as u16 * 4;
+        let header_size = 80 + unk_sizes.len() as u16 * std::mem::size_of::<u32>() as u16;
 
         let data_size = surface.data.as_ref().len() as u32;
 
@@ -594,18 +588,27 @@ impl Ntp3TextureV1 {
                 hash,
                 unk3: 0,
             },
-            data: surface.data.as_ref().to_vec(),
+            data,
         })
     }
 
     pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
+        let data = unaligned_image_data(
+            self.width,
+            self.height,
+            self.mipmap_count,
+            self.format,
+            self.caps2,
+            &self.unk_sizes,
+            &self.data,
+        );
         create_surface(
             self.width,
             self.height,
             self.mipmap_count,
             self.format,
             self.caps2,
-            self.data.clone(),
+            data,
         )
     }
 
@@ -621,26 +624,11 @@ impl Ntp3TextureV2 {
         surface: Surface<T>,
         hash: u32,
     ) -> Result<Self, CreateNutError> {
-        let mut unk_sizes = Vec::new();
-        if surface.layers == 6 {
-            // TODO: Why is this completely different for cubemaps?
-            let unk_size = surface.get(0, 0, 0).unwrap().len();
-            unk_sizes.push(unk_size as u32);
-            unk_sizes.push(unk_size as u32);
-        } else if surface.mipmaps > 1 {
-            for i in 0..surface.mipmaps {
-                // TODO: Why is the minimum 16 even if the actual mip data is smaller?
-                // TODO: Why does surface.get(...) return none for nud_model.to_nut()?
-                let unk_size = surface.get(0, 0, i).unwrap_or_default().len();
-                unk_sizes.push(unk_size.max(16) as u32);
-            }
-        }
-        // Align to 16 bytes.
-        unk_sizes.resize(unk_sizes.len().next_multiple_of(4), 0);
+        let (data, unk_sizes) = ntp3_image_data_unk_sizes(&surface);
 
-        let header_size = 80 + unk_sizes.len() as u16 * 4;
+        let header_size = 80 + unk_sizes.len() as u16 * std::mem::size_of::<u32>() as u16;
 
-        let data_size = surface.data.as_ref().len() as u32;
+        let data_size = data.len() as u32;
 
         // Create an untiled  texture.
         Ok(Self {
@@ -661,7 +649,7 @@ impl Ntp3TextureV2 {
             } else {
                 Caps2::empty()
             },
-            data: surface.data.as_ref().to_vec(),
+            data,
             mipmap_data_offset: 0,
             gtx_header: 0,
             unk6: 0,
@@ -680,20 +668,77 @@ impl Ntp3TextureV2 {
     }
 
     pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
+        let data = unaligned_image_data(
+            self.width,
+            self.height,
+            self.mipmap_count,
+            self.format,
+            self.caps2,
+            &self.unk_sizes,
+            &self.data,
+        );
         create_surface(
             self.width,
             self.height,
             self.mipmap_count,
             self.format,
             self.caps2,
-            self.data.clone(),
+            data,
         )
     }
 
     pub fn to_dds(&self) -> Result<Dds, image_dds::CreateDdsError> {
         // TODO: Create error type to avoid unwrap.
+        // TODO: remove alignment for mipmaps
         self.to_surface().unwrap().to_dds()
     }
+}
+
+fn ntp3_image_data_unk_sizes<T: AsRef<[u8]>>(surface: &Surface<T>) -> (Vec<u8>, Vec<u32>) {
+    // Each mipmap is aligned to 16 bytes.
+    let mut data = Vec::new();
+    let mut unk_sizes = Vec::new();
+    for layer in 0..surface.layers {
+        for mipmap in 0..surface.mipmaps {
+            // Each mipmap must be a multiple of 16 bytes.
+            // TODO: Why does surface.get(...) return none in some cases?
+            let mut mip_data = surface.get(layer, 0, mipmap).unwrap_or_default().to_vec();
+            mip_data.resize(mip_data.len().next_multiple_of(16), 0);
+
+            if surface.mipmaps > 1 {
+                unk_sizes.push(mip_data.len() as u32);
+            }
+
+            data.extend_from_slice(&mip_data);
+        }
+    }
+
+    if surface.layers == 6 {
+        // TODO: Why is this completely different for cubemaps?
+        let unk_size = surface.get(0, 0, 0).unwrap().len();
+        unk_sizes = vec![unk_size as u32, unk_size as u32];
+    }
+
+    // Align to 16 bytes.
+    unk_sizes.resize(unk_sizes.len().next_multiple_of(4), 0);
+
+    (data, unk_sizes)
+}
+
+fn mip_size(
+    width: usize,
+    height: usize,
+    depth: usize,
+    block_width: usize,
+    block_height: usize,
+    block_depth: usize,
+    block_size_in_bytes: usize,
+) -> Option<usize> {
+    width
+        .div_ceil(block_width)
+        .checked_mul(height.div_ceil(block_height))
+        .and_then(|v| v.checked_mul(depth.div_ceil(block_depth)))
+        .and_then(|v| v.checked_mul(block_size_in_bytes))
 }
 
 fn create_surface(
@@ -722,6 +767,47 @@ fn create_surface(
         image_format: format.try_into()?,
         data: image_data,
     })
+}
+
+fn unaligned_image_data(
+    width: u16,
+    height: u16,
+    mipmaps: u8,
+    format: NutFormat,
+    caps2: Caps2,
+    unk_sizes: &[u32],
+    image_data: &[u8],
+) -> Vec<u8> {
+    if unk_sizes.is_empty() || caps2 == Caps2::CUBEMAP | Caps2::CUBEMAP_ALLFACES {
+        // TODO: How to implement this for cube maps?
+        image_data.to_vec()
+    } else {
+        // Remove mipmap alignment.
+        let mut data = Vec::new();
+        let (block_width, block_height) = format.block_dim();
+        let block_size_in_bytes = format.block_size_in_bytes();
+
+        let mut offset = 0;
+        for (i, size) in unk_sizes.iter().enumerate().take(mipmaps as usize) {
+            let width = mip_dimension(width as u32, i as u32);
+            let height = mip_dimension(height as u32, i as u32);
+            let actual_size = mip_size(
+                width as usize,
+                height as usize,
+                1,
+                block_width,
+                block_height,
+                1,
+                block_size_in_bytes,
+            )
+            .unwrap();
+            data.extend_from_slice(&image_data[offset..offset + actual_size]);
+
+            offset += *size as usize;
+        }
+
+        data
+    }
 }
 
 impl TryFrom<NutFormat> for image_dds::ImageFormat {

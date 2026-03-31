@@ -186,20 +186,13 @@ fn check_nud_model(nud: Nud, path: &Path, _original_bytes: &[u8]) {
             // Check nut conversions.
             // TODO: Find a way to test tiled ntwu nuts and v1 ntp3.
             let new_nut = model.to_nut().unwrap();
-            if let Nut::Ntp3(new_ntp3) = new_nut {
-                if let Some(Nut::Ntp3(ntp3)) = nut {
-                    match (ntp3.inner, new_ntp3.inner) {
-                        (
-                            sm4sh_lib::nut::Ntp3Inner::V2(v2),
-                            sm4sh_lib::nut::Ntp3Inner::V2(new_v2),
-                        ) => {
-                            if v2 != new_v2 {
-                                println!("Nud model NTP3 V2 nut export not 1:1 for {path:?}");
-                            }
-                        }
-                        _ => (),
-                    }
-                }
+            if let Nut::Ntp3(new_ntp3) = new_nut
+                && let Some(Nut::Ntp3(ntp3)) = nut
+                && let (sm4sh_lib::nut::Ntp3Inner::V2(v2), sm4sh_lib::nut::Ntp3Inner::V2(new_v2)) =
+                    (ntp3.inner, new_ntp3.inner)
+                && v2 != new_v2
+            {
+                println!("Nud model NTP3 V2 nut export not 1:1 for {path:?}");
             }
         }
         Err(e) => println!("Error converting {path:?}: {e}"),
