@@ -10,7 +10,6 @@ pub fn create_texture(
 ) -> wgpu::Texture {
     let (format, data) = image_format_data(texture);
 
-    // TODO: Fix not enough data for mipmaps for some textures.
     device.create_texture_with_data(
         queue,
         &wgpu::TextureDescriptor {
@@ -20,7 +19,7 @@ pub fn create_texture(
                 height: texture.height,
                 depth_or_array_layers: texture.layers,
             },
-            mip_level_count: 1,
+            mip_level_count: texture.mipmap_count,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
@@ -33,16 +32,14 @@ pub fn create_texture(
 }
 
 fn image_format_data(texture: &ImageTexture) -> (wgpu::TextureFormat, Cow<'_, [u8]>) {
-    // TODO: Why do final mipmaps not work for some non square textures?
     // Convert unsupported formats to rgba8 for compatibility.
     match texture_format(texture.image_format) {
         Some(format) => (format, Cow::Borrowed(&texture.image_data)),
         None => {
-            // TODO: Fix mipmaps for some textures.
             let rgba8 = texture
                 .to_surface()
                 .unwrap()
-                .decode_layers_mipmaps_rgba8(0..1, 0..1)
+                .decode_rgba8()
                 .unwrap_or_else(|_| panic!("{:?}", texture.image_format));
             (wgpu::TextureFormat::Rgba8Unorm, Cow::Owned(rgba8.data))
         }

@@ -95,8 +95,8 @@ pub struct NtwuTexture {
     pub unk5: u32, // TODO: 0 for ntp3?
     pub caps2: Caps2,
 
-    // TODO: all mipmaps?
     // TODO: NTWU is 4096 or 8192 aligned?
+    /// Data for all mipmaps.
     #[br(parse_with = parse_ptr32_count(data_size as usize), offset = base_offset)]
     #[xc3(offset(u32), align(4096))]
     pub data: Vec<u8>,
@@ -168,8 +168,7 @@ pub struct Ntp3TextureV1 {
     pub gidx: Gidx,
 
     // Don't restore the position since the next texture follows immediately for v1.
-    // TODO: NTP3 image data isn't aligned at all?
-    // TODO: all mipmaps?
+    /// Data for all mipmaps.
     #[br(seek_before = SeekFrom::Start(base_offset + header_size as u64), count = data_size as usize)]
     pub data: Vec<u8>,
 }
@@ -197,11 +196,8 @@ pub struct Ntp3TextureV2 {
     pub unk5: u32, // TODO: 0 for ntp3?
     pub caps2: Caps2,
 
-    // TODO: NTP3 image data isn't aligned at all?
-    // TODO: Separate type for non tiled texture?
-
-    // TODO: all mipmaps?
     // TODO: NTWU is 4096 or 8192 aligned?
+    /// Data for all mipmaps.
     #[br(parse_with = parse_ptr32_count(data_size as usize), offset = base_offset)]
     #[xc3(offset(u32))]
     pub data: Vec<u8>,
@@ -689,7 +685,6 @@ impl Ntp3TextureV2 {
 
     pub fn to_dds(&self) -> Result<Dds, image_dds::CreateDdsError> {
         // TODO: Create error type to avoid unwrap.
-        // TODO: remove alignment for mipmaps
         self.to_surface().unwrap().to_dds()
     }
 }
@@ -701,8 +696,7 @@ fn ntp3_image_data_unk_sizes<T: AsRef<[u8]>>(surface: &Surface<T>) -> (Vec<u8>, 
     for layer in 0..surface.layers {
         for mipmap in 0..surface.mipmaps {
             // Each mipmap must be a multiple of 16 bytes.
-            // TODO: Why does surface.get(...) return none in some cases?
-            let mut mip_data = surface.get(layer, 0, mipmap).unwrap_or_default().to_vec();
+            let mut mip_data = surface.get(layer, 0, mipmap).unwrap().to_vec();
             mip_data.resize(mip_data.len().next_multiple_of(16), 0);
 
             if surface.mipmaps > 1 {
