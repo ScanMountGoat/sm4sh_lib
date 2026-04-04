@@ -589,7 +589,7 @@ impl Ntp3TextureV1 {
     }
 
     pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
-        let data = unaligned_image_data(
+        let data = ntp3_image_data(
             self.width,
             self.height,
             self.mipmap_count,
@@ -664,7 +664,7 @@ impl Ntp3TextureV2 {
     }
 
     pub fn to_surface(&self) -> Result<Surface<Vec<u8>>, CreateSurfaceError> {
-        let data = unaligned_image_data(
+        let data = ntp3_image_data(
             self.width,
             self.height,
             self.mipmap_count,
@@ -704,6 +704,18 @@ fn ntp3_image_data_unk_sizes<T: AsRef<[u8]>>(surface: &Surface<T>) -> (Vec<u8>, 
             }
 
             data.extend_from_slice(&mip_data);
+        }
+    }
+
+    if surface.image_format == image_dds::ImageFormat::Rgba8Unorm {
+        // NTP3 nuts swap the channel order compared to NTWU.
+        for pixel in data.chunks_exact_mut(4) {
+            if let [r, g, b, a] = *pixel {
+                pixel[0] = a;
+                pixel[1] = r;
+                pixel[2] = g;
+                pixel[3] = b;
+            }
         }
     }
 
@@ -763,7 +775,7 @@ fn create_surface(
     })
 }
 
-fn unaligned_image_data(
+fn ntp3_image_data(
     width: u16,
     height: u16,
     mipmaps: u8,
@@ -772,7 +784,7 @@ fn unaligned_image_data(
     unk_sizes: &[u32],
     image_data: &[u8],
 ) -> Vec<u8> {
-    if unk_sizes.is_empty() || caps2 == Caps2::CUBEMAP | Caps2::CUBEMAP_ALLFACES {
+    let mut data = if unk_sizes.is_empty() || caps2 == Caps2::CUBEMAP | Caps2::CUBEMAP_ALLFACES {
         // TODO: How to implement this for cube maps?
         image_data.to_vec()
     } else {
@@ -801,7 +813,21 @@ fn unaligned_image_data(
         }
 
         data
+    };
+
+    if matches!(format, NutFormat::Rgba8Unorm | NutFormat::Rgba82) {
+        // NTP3 nuts swap the channel order compared to NTWU.
+        for pixel in data.chunks_exact_mut(4) {
+            if let [a, r, g, b] = *pixel {
+                pixel[0] = r;
+                pixel[1] = g;
+                pixel[2] = b;
+                pixel[3] = a;
+            }
+        }
     }
+
+    data
 }
 
 impl TryFrom<NutFormat> for image_dds::ImageFormat {
