@@ -572,7 +572,7 @@ impl ImageTexture {
             width: self.width,
             height: self.height,
             depth: 1,
-            layers: 1,
+            layers: self.layers,
             mipmaps: self.mipmap_count,
             image_format: self.image_format.try_into()?,
             data: &self.image_data,
