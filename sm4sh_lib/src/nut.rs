@@ -780,7 +780,7 @@ impl TryFrom<NutFormat> for image_dds::ImageFormat {
             NutFormat::Bgr5A1Unorm => Ok(image_dds::ImageFormat::Bgr5A1Unorm),
             NutFormat::Bgr5A1Unorm2 => Ok(image_dds::ImageFormat::Bgr5A1Unorm),
             NutFormat::B5G6R5Unorm => Err(CreateSurfaceError::UnsupportedImageFormat(value)),
-            NutFormat::Rgb5A1Unorm => Ok(image_dds::ImageFormat::Bgr5A1Unorm),
+            NutFormat::Rgb5A1Unorm => Ok(image_dds::ImageFormat::Bgr5A1Unorm), // handled by channel swap
             NutFormat::Rgba8Unorm => Ok(image_dds::ImageFormat::Rgba8Unorm),
             NutFormat::R32Float => Ok(image_dds::ImageFormat::R32Float),
             NutFormat::Rgba82 => Ok(image_dds::ImageFormat::Rgba8Unorm),
@@ -800,7 +800,7 @@ impl TryFrom<image_dds::ImageFormat> for NutFormat {
             image_dds::ImageFormat::BC2RgbaUnorm => Ok(NutFormat::BC2Unorm),
             image_dds::ImageFormat::BC3RgbaUnorm => Ok(NutFormat::BC3Unorm),
             image_dds::ImageFormat::BC5RgUnorm => Ok(NutFormat::BC5Unorm),
-            image_dds::ImageFormat::Bgr5A1Unorm => Ok(NutFormat::Rgb5A1Unorm),
+            image_dds::ImageFormat::Bgr5A1Unorm => Ok(NutFormat::Bgr5A1Unorm),
             f => Err(CreateNutError::UnsupportedImageFormat(f)),
         }
     }
