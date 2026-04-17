@@ -6,6 +6,7 @@ use futures::executor::block_on;
 use glam::{Vec3, Vec4, vec3};
 use log::info;
 use sm4sh_model::{
+    NudModel,
     animation::{Animation, load_animations},
     database::ShaderDatabase,
 };
@@ -56,6 +57,8 @@ impl State {
     async fn new(
         window: Window,
         cli: &Cli,
+        nud_model: &NudModel,
+        database: ShaderDatabase,
         event_loop: &winit::event_loop::ActiveEventLoop,
     ) -> anyhow::Result<Self> {
         let window = Arc::new(window);
@@ -98,10 +101,7 @@ impl State {
 
         let renderer = Renderer::new(&device, size.width, size.height, config.format);
 
-        let database = ShaderDatabase::from_file(&cli.database)?;
         let shared_data = SharedData::new(&device, &queue, database);
-
-        let nud_model = sm4sh_model::load_model(&cli.file)?;
         let model = load_model(&device, &queue, &nud_model, &shared_data);
 
         // Initialize the camera transform.
@@ -352,6 +352,8 @@ struct Cli {
 struct App {
     state: Option<State>,
     cli: Cli,
+    database: ShaderDatabase,
+    model: NudModel,
 }
 
 impl ApplicationHandler<()> for App {
@@ -367,7 +369,14 @@ impl ApplicationHandler<()> for App {
             )
             .unwrap();
 
-        self.state = block_on(State::new(window, &self.cli, event_loop)).ok();
+        self.state = block_on(State::new(
+            window,
+            &self.cli,
+            &self.model,
+            self.database.clone(),
+            event_loop,
+        ))
+        .ok();
     }
 
     fn window_event(
@@ -423,8 +432,17 @@ fn main() -> anyhow::Result<()> {
         .init()?;
 
     let cli = Cli::parse();
-    let event_loop = EventLoop::new().unwrap();
-    let mut app = App { state: None, cli };
+
+    let database = ShaderDatabase::from_file(&cli.database)?;
+    let model = sm4sh_model::load_model(&cli.file)?;
+
+    let event_loop = EventLoop::new()?;
+    let mut app = App {
+        state: None,
+        cli,
+        database,
+        model,
+    };
     event_loop
         .run_app(&mut app)
         .with_context(|| "failed to complete event loop")?;
