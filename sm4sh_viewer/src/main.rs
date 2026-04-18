@@ -102,7 +102,7 @@ impl State {
         let renderer = Renderer::new(&device, size.width, size.height, config.format);
 
         let shared_data = SharedData::new(&device, &queue, database);
-        let model = load_model(&device, &queue, &nud_model, &shared_data);
+        let model = load_model(&device, &queue, nud_model, &shared_data);
 
         // Initialize the camera transform.
         let (translation, rotation_xyz, camera) = frame_bounds(size, model.bounding_sphere);
@@ -200,30 +200,24 @@ impl State {
                         NamedKey::ArrowUp => self.translation.y -= 0.1,
                         NamedKey::ArrowDown => self.translation.y += 0.1,
                         // Animation playback.
-                        NamedKey::Space => {
-                            if event.state == ElementState::Released {
-                                self.current_time_seconds = 0.0;
-                            }
+                        NamedKey::Space if event.state == ElementState::Released => {
+                            self.current_time_seconds = 0.0;
                         }
                         _ => (),
                     },
                     winit::keyboard::Key::Character(c) => {
                         match c.as_str() {
                             // Animation playback.
-                            "." => {
-                                if event.state == ElementState::Released {
-                                    self.current_time_seconds = 0.0;
+                            "." if event.state == ElementState::Released => {
+                                self.current_time_seconds = 0.0;
 
-                                    self.animation_index += 1;
-                                    self.set_window_title();
-                                }
+                                self.animation_index += 1;
+                                self.set_window_title();
                             }
-                            "," => {
-                                if event.state == ElementState::Released {
-                                    self.current_time_seconds = 0.0;
-                                    self.animation_index = self.animation_index.saturating_sub(1);
-                                    self.set_window_title();
-                                }
+                            "," if event.state == ElementState::Released => {
+                                self.current_time_seconds = 0.0;
+                                self.animation_index = self.animation_index.saturating_sub(1);
+                                self.set_window_title();
                             }
                             _ => (),
                         }
