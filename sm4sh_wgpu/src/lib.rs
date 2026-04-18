@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
+
 use encase::{ShaderSize, ShaderType, StorageBuffer, UniformBuffer, internal::WriteInto};
 use glam::{Mat4, Vec4, vec2, vec4};
-use sm4sh_model::database::ShaderDatabase;
+use sm4sh_model::{database::ShaderDatabase, texture::global_textures};
 use wgpu::util::DeviceExt;
 
 mod material;
@@ -14,6 +16,8 @@ mod texture;
 
 pub use model::{Mesh, Model, load_model};
 pub use renderer::Renderer;
+
+use crate::texture::create_texture;
 
 /// The features required by [Renderer].
 pub const FEATURES: wgpu::Features = wgpu::Features::TEXTURE_COMPRESSION_BC
@@ -123,7 +127,7 @@ pub struct SharedData {
     database: ShaderDatabase,
     default_texture: wgpu::TextureView,
     default_cube_texture: wgpu::TextureView,
-    light_map_texture: wgpu::TextureView,
+    global_textures: BTreeMap<u32, wgpu::TextureView>,
 }
 
 impl SharedData {
@@ -139,16 +143,29 @@ impl SharedData {
             },
         );
 
-        // TODO: proper loading for global textures.
-        let light_map_texture = create_solid_texture(device, queue, [255u8; 4])
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let global_textures = global_textures()
+            .iter()
+            .map(|t| {
+                (
+                    t.hash_id,
+                    create_texture(device, queue, t).create_view(&wgpu::TextureViewDescriptor {
+                        dimension: Some(if t.layers == 6 {
+                            wgpu::TextureViewDimension::Cube
+                        } else {
+                            wgpu::TextureViewDimension::D2
+                        }),
+                        ..Default::default()
+                    }),
+                )
+            })
+            .collect();
 
         Self {
             model_layout: crate::shader::model::create_pipeline_layout(device),
             database,
             default_texture,
             default_cube_texture,
-            light_map_texture,
+            global_textures,
         }
     }
 }

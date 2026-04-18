@@ -31,6 +31,7 @@ pub use sm4sh_lib::vbn::BoneType;
 pub mod animation;
 pub mod database;
 pub mod skinning;
+pub mod texture;
 pub mod vertex;
 
 /// Load a nud model from `path` and the corresponding `"model.nut"` and `"model.vbn"` if present.

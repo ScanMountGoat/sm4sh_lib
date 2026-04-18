@@ -74,7 +74,9 @@ pub fn load_model(
         })
         .collect();
 
-    textures.insert(0x10080000, shared_data.light_map_texture.clone());
+    for (hash, t) in &shared_data.global_textures {
+        textures.insert(*hash, t.clone());
+    }
 
     let bone_transforms = model
         .skeleton
