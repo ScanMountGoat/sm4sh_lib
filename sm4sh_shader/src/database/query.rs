@@ -968,3 +968,65 @@ pub fn unary_op<'a>(
         None
     }
 }
+
+fn latte_texture_cube_query(c: char) -> String {
+    // cube.xyzw = cube(R.zzxy, R.yxzz)
+    // texture(s0, cube.yx / abs(cube.z) + 1.5))
+    formatdoc! {"
+        void main() {{
+            cube_z = 1.0 / abs(cube_z);
+            cube_x = cube(R_z, R_y); 
+            cube_y = cube(R_z, R_x); 
+            result_s = fma(cube_y, cube_z, 1.5);
+            result_t = fma(cube_x, cube_z, 1.5);
+            result = texture(tex, vec2(result_s, result_t)).{c};
+        }}
+    "}
+}
+
+static LATTE_TEXTURE_CUBE_X: LazyLock<Graph> = LazyLock::new(|| {
+    let query = latte_texture_cube_query('x');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static LATTE_TEXTURE_CUBE_Y: LazyLock<Graph> = LazyLock::new(|| {
+    let query = latte_texture_cube_query('y');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static LATTE_TEXTURE_CUBE_Z: LazyLock<Graph> = LazyLock::new(|| {
+    let query = latte_texture_cube_query('z');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static LATTE_TEXTURE_CUBE_W: LazyLock<Graph> = LazyLock::new(|| {
+    let query = latte_texture_cube_query('w');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+pub fn latte_texture_cube_coords<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<Expr> {
+    // Find the reflection vector R from latte cube coordinates.
+    let (result, channel) = query_nodes(expr, graph, &LATTE_TEXTURE_CUBE_X)
+        .map(|r| (r, 'x'))
+        .or_else(|| query_nodes(expr, graph, &LATTE_TEXTURE_CUBE_Y).map(|r| (r, 'y')))
+        .or_else(|| query_nodes(expr, graph, &LATTE_TEXTURE_CUBE_Z).map(|r| (r, 'z')))
+        .or_else(|| query_nodes(expr, graph, &LATTE_TEXTURE_CUBE_W).map(|r| (r, 'w')))?;
+
+    let args = [
+        result.get("tex")?,
+        result.get("R_x")?,
+        result.get("R_y")?,
+        result.get("R_z")?,
+    ];
+
+    // Convert a latte specific cube map lookup to a standard GLSL call.
+    // TODO: add the vec3 call?
+    Some(Expr::Func {
+        name: "textureCube".into(),
+        args: args
+            .into_iter()
+            .map(|a| graph.exprs.iter().position(|e| e == *a).unwrap())
+            .collect(),
+        channel: Some(channel),
+    })
+}

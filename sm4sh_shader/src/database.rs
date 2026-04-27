@@ -126,8 +126,12 @@ impl xc3_shader::expr::Operation for Operation {
             })
     }
 
-    fn preprocess_expr<'a>(_graph: &'a Graph, expr: &'a Expr) -> Cow<'a, Expr> {
-        Cow::Borrowed(expr)
+    fn preprocess_expr<'a>(graph: &'a Graph, expr: &'a Expr) -> Cow<'a, Expr> {
+        if let Some(new_expr) = latte_texture_cube_coords(graph, expr) {
+            Cow::Owned(new_expr)
+        } else {
+            Cow::Borrowed(expr)
+        }
     }
 
     fn preprocess_value_expr<'a>(_graph: &'a Graph, expr: &'a Expr) -> Cow<'a, Expr> {

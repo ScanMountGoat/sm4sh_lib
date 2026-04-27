@@ -199,6 +199,7 @@ fn write_sampler_2d_or_cube(
             Some(())
         }
         [u, v, w] => {
+            // Assume 3D textures aren't used, so UVW coordinates should always be a cube map.
             write!(
                 wgsl,
                 "textureSample({}, {}, vec3({VAR_PREFIX}{u}, {VAR_PREFIX}{v}, {VAR_PREFIX}{w}))",
