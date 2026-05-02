@@ -30,6 +30,7 @@ pub use sm4sh_lib::vbn::BoneType;
 
 pub mod animation;
 pub mod database;
+pub mod model;
 pub mod skinning;
 pub mod texture;
 pub mod vertex;
