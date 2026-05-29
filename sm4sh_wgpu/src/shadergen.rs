@@ -303,6 +303,8 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
     let arg5 = args.get(5);
     let arg6 = args.get(6);
     let arg7 = args.get(7);
+    let arg8 = args.get(8);
+    let arg9 = args.get(9);
 
     let a = VAR_PREFIX;
     match op {
@@ -394,6 +396,14 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
         Operation::VarianceShadow => write!(wgsl,
             "variance_shadow({a}{}, {a}{}, {a}{}, {a}{})",
             arg0?, arg1?, arg2?, arg3?
+        ).unwrap(),
+        Operation::BlinnPhongSpec => write!(wgsl,
+            "blinn_phong_spec(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}), {a}{})",
+            arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, arg7?, arg8?, arg9?
+        ).unwrap(),
+        Operation::Fresnel => write!(wgsl,
+            "fresnel(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}), {a}{})",
+            arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?,
         ).unwrap(),
 
     }

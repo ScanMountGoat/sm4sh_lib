@@ -907,7 +907,18 @@ pub fn op_div<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'
     Some((Operation::Div, vec![a, b]))
 }
 
-static OP_NORMALIZE: LazyLock<Graph> = LazyLock::new(|| {
+static OP_NORMALIZE_XYZ: LazyLock<Graph> = LazyLock::new(|| {
+    let query = indoc! {"
+        void main() {
+            length = dot(vec4(x, y, z, 0.0), vec4(x, y, z, 0.0));
+            inverse_length = inversesqrt(length);
+            result = value * inverse_length;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+static OP_NORMALIZE_XYZW: LazyLock<Graph> = LazyLock::new(|| {
     let query = indoc! {"
         void main() {
             length = dot(vec4(x, y, z, w), vec4(x, y, z, w));
@@ -919,7 +930,7 @@ static OP_NORMALIZE: LazyLock<Graph> = LazyLock::new(|| {
 });
 
 pub fn op_normalize<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
-    let result = query_nodes(expr, graph, &OP_NORMALIZE)?;
+    let result = query_nodes(expr, graph, &OP_NORMALIZE_XYZW)?;
     let value = result.get("value")?;
     let x = result.get("x")?;
     let y = result.get("y")?;
@@ -1100,5 +1111,98 @@ pub fn op_variance_shadow<'a>(
     Some((
         Operation::VarianceShadow,
         vec![m1, m2, light_position_z, offset],
+    ))
+}
+
+static OP_BLINN_PHONG_SPEC: LazyLock<Graph> = LazyLock::new(|| {
+    // Blinn-Phong using the halfway vector H.
+    // pow(dot(N, H), MC.specularParams.y)
+    let query = indoc! {"
+        void main() {
+            h_inv_length = inversesqrt(h_length);
+            h_x = eye_x - light_dir_x;
+            h_x = h_x * h_inv_length;
+
+            h_y = eye_y - light_dir_y;
+            h_y = h_y * h_inv_length;
+
+            h_z = eye_z - light_dir_z;
+            h_z = h_z * h_inv_length;
+
+            spec = dot(vec4(normal_x, normal_y, normal_z, 0.0), vec4(h_x, h_y, h_z, 0.0));
+            spec = max(spec, 0.001);
+            spec = log2(spec);
+            spec = exponent * spec;
+            spec = exp2(spec);
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_blinn_phong_spec<'a>(
+    graph: &'a Graph,
+    expr: &'a Expr,
+) -> Option<(Operation, Vec<&'a Expr>)> {
+    let result = query_nodes(expr, graph, &OP_BLINN_PHONG_SPEC)?;
+
+    let nx = result.get("normal_x")?;
+    let ny = result.get("normal_y")?;
+    let nz = result.get("normal_z")?;
+    let light_dir_x = result.get("light_dir_x")?;
+    let light_dir_y = result.get("light_dir_y")?;
+    let light_dir_z = result.get("light_dir_z")?;
+    let eye_x = result.get("eye_x")?;
+    let eye_y = result.get("eye_y")?;
+    let eye_z = result.get("eye_z")?;
+    let exponent = result.get("exponent")?;
+
+    Some((
+        Operation::BlinnPhongSpec,
+        vec![
+            nx,
+            ny,
+            nz,
+            light_dir_x,
+            light_dir_y,
+            light_dir_z,
+            eye_x,
+            eye_y,
+            eye_z,
+            exponent,
+        ],
+    ))
+}
+
+static OP_FRESNEL: LazyLock<Graph> = LazyLock::new(|| {
+    // Fresnel shading using MC.fresnelParams.x as the exponent.
+    let query = indoc! {"
+        void main() {
+            eye_x = eye_x * eye_inv_length;
+            dot_product = dot(vec4(eye_x, eye_y, eye_z, 0.0), vec4(n_x, n_y, n_z, 0.0));
+            dot_product = clamp(dot_product, 0.0, 1.0);
+            fresnel = -dot_product + 1.0;
+            exponent = param + 1.0;
+            fresnel = log2(fresnel);
+            fresnel = exponent * fresnel;
+            fresnel = exp2(fresnel);
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_fresnel<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+    let result = query_nodes(expr, graph, &OP_FRESNEL)?;
+
+    let nx = result.get("n_x")?;
+    let ny = result.get("n_y")?;
+    let nz = result.get("n_z")?;
+    let eye_x = result.get("eye_x")?;
+    let eye_y = result.get("eye_y")?;
+    let eye_z = result.get("eye_z")?;
+    let param = result.get("param")?;
+
+    Some((
+        Operation::Fresnel,
+        vec![nx, ny, nz, eye_x, eye_y, eye_z, param],
     ))
 }

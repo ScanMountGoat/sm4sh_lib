@@ -493,6 +493,21 @@ fn variance_shadow(m1: f32, m2: f32, light_position_z: f32, offset: f32) -> f32 
     return shadow;
 }
 
+fn blinn_phong_spec(normal: vec3<f32>, light_dir: vec3<f32>, eye: vec3<f32>, exponent: f32) -> f32 {
+    // Blinn-phong specular reflections.
+    // The exponent is MC.specularParams.y.
+    let h = normalize(eye - light_dir); // TODO: why is this sub and not add?
+    let spec = max(dot(normal, h), 0.001);
+    return pow(spec, exponent);
+}
+
+fn fresnel(normal: vec3<f32>, eye: vec3<f32>, param: f32) -> f32 {
+    // Fresnel edge lighting.
+    // The param is MC.fresnelParams.x.
+    let fresnel = 1.0 - clamp(dot(eye.xyz, normal.xyz), 0.0, 1.0);
+    return pow(fresnel, 1.0 + param);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Required for wgsl_to_wgpu reachability analysis to include these resources.

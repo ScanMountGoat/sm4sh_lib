@@ -75,6 +75,8 @@ pub enum Operation {
     LocalToWorldVectorY,
     LocalToWorldVectorZ,
     VarianceShadow,
+    BlinnPhongSpec,
+    Fresnel,
 }
 
 impl std::fmt::Display for Operation {
@@ -90,6 +92,8 @@ impl xc3_shader::expr::Operation for Operation {
 
         op_normal_map(graph, expr)
             // .or_else(|| op_mix(graph, expr))
+            .or_else(|| op_blinn_phong_spec(graph, expr))
+            .or_else(|| op_fresnel(graph, expr))
             .or_else(|| op_variance_shadow(graph, expr))
             .or_else(|| op_sphere_map_coords(graph, expr))
             .or_else(|| op_local_to_world_point(graph, expr))
@@ -239,6 +243,8 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::LocalToWorldVectorY => Self::LocalToWorldVectorY,
             Operation::LocalToWorldVectorZ => Self::LocalToWorldVectorZ,
             Operation::VarianceShadow => Self::VarianceShadow,
+            Operation::BlinnPhongSpec => Self::BlinnPhongSpec,
+            Operation::Fresnel => Self::Fresnel,
         }
     }
 }
