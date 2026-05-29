@@ -8,7 +8,7 @@ sm4sh_lib = { path = "../sm4sh_lib" }
 binrw.workspace = true
 bilge.workspace = true
 half.workspace = true
-image_dds = { workspace = true, default-features = false, features = ["ddsfile"] }
+image_dds = { workspace = true, default-features = false, features = ["image", "ddsfile"] }
 glam.workspace = true
 approx.workspace = true
 log.workspace = true
