@@ -74,6 +74,7 @@ pub enum Operation {
     LocalToWorldVectorX,
     LocalToWorldVectorY,
     LocalToWorldVectorZ,
+    VarianceShadow,
 }
 
 impl std::fmt::Display for Operation {
@@ -85,8 +86,11 @@ impl std::fmt::Display for Operation {
 impl xc3_shader::expr::Operation for Operation {
     fn query_operation_args<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Self, Vec<&'a Expr>)> {
         // TODO: Figure out why op_mix doesn't work with simplification.
+        // TODO: detect reflect to simplify cube maps
+
         op_normal_map(graph, expr)
             // .or_else(|| op_mix(graph, expr))
+            .or_else(|| op_variance_shadow(graph, expr))
             .or_else(|| op_sphere_map_coords(graph, expr))
             .or_else(|| op_local_to_world_point(graph, expr))
             .or_else(|| op_local_to_world_vector(graph, expr))
@@ -234,6 +238,7 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::LocalToWorldVectorX => Self::LocalToWorldVectorX,
             Operation::LocalToWorldVectorY => Self::LocalToWorldVectorY,
             Operation::LocalToWorldVectorZ => Self::LocalToWorldVectorZ,
+            Operation::VarianceShadow => Self::VarianceShadow,
         }
     }
 }

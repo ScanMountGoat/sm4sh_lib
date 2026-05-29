@@ -6,7 +6,7 @@ struct Camera {
     view_rot_inv_billboard: mat4x4<f32>,
     view_rot_inv_billboard_y: mat4x4<f32>,
     position: vec4<f32>,
-    resolution: vec2<f32>
+    resolution: vec2<f32>,
 }
 
 @group(0) @binding(0)
@@ -106,7 +106,7 @@ var<uniform> fb1: Fb1;
 // FB3 in shaders.
 struct Fb3 {
     hdr_range: vec4<f32>,
-    colr_hdr_range: vec4<f32>
+    colr_hdr_range: vec4<f32>,
 }
 
 @group(0) @binding(3)
@@ -114,7 +114,7 @@ var<uniform> fb3: Fb3;
 
 // FB4 in shaders.
 struct Fb4 {
-    effect_light_entry: vec4<f32>
+    effect_light_entry: vec4<f32>,
 }
 
 @group(0) @binding(4)
@@ -122,7 +122,7 @@ var<uniform> fb4: Fb4;
 
 // FB5 in shaders.
 struct Fb5 {
-    effect_light_area: vec4<u32>
+    effect_light_area: vec4<u32>,
 }
 
 @group(0) @binding(5)
@@ -361,7 +361,6 @@ fn vs_shadow(in0: VertexInput0) -> @builtin(position) vec4<f32> {
     return fb0.shadow_map_matrix * vec4(position, 1.0);
 }
 
-
 fn bitangent_w(tangent: vec3<f32>, bitangent: vec3<f32>, normal: vec3<f32>) -> f32 {
     let cos_angle = dot(tangent, cross(bitangent, normal));
     if cos_angle > 0 {
@@ -477,6 +476,21 @@ fn sphere_map_coords(position: vec3<f32>, normal: vec3<f32>, param: f32) -> vec4
     // The in game shaders use 1.0 - view_normal.y due to graphics API differences.
     let coords = vec2(view_normal.x, view_normal.y);
     return vec4((-param * 0.25 + 0.5) * coords + 0.5, 0.0, 0.0);
+}
+
+fn variance_shadow(m1: f32, m2: f32, light_position_z: f32, offset: f32) -> f32 {
+    // Translated variance shadow mapping from in game.
+    // Adapted from texas_cross.35.frag.
+    let current_depth = min(light_position_z, 1.0);
+
+    // The offset is FB1.ShadowMapParam.x.
+    let sigma2 = clamp(m2 - m1 * m1 + offset, 0.0, 1.0);
+    let tDif = max(current_depth - m1, 0.0);
+    // Approximate Pr(x >= t) using one of Chebychev's inqequalities.
+    var shadow = sigma2 / (sigma2 + tDif * tDif);
+    // TODO: Why is there a pow(shadow, 4.0) in game?
+    shadow = pow(shadow, 4.0);
+    return shadow;
 }
 
 @fragment

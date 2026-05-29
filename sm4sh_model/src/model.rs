@@ -52,7 +52,10 @@ pub fn create_mesh_groups(meshes: &[NudMeshGroupMesh]) -> Vec<NudMeshGroup> {
                 let split_meshes: Vec<_> = split_meshes.collect();
                 groups.push(NudMeshGroup {
                     name: name.clone(),
-                    meshes: split_meshes.iter().map(|m| m.mesh.clone()).collect(),
+                    meshes: split_meshes
+                        .iter()
+                        .map(|m| mesh_without_bone_weights(&m.mesh))
+                        .collect(),
                     sort_bias: split_meshes
                         .first()
                         .map(|m| m.sort_bias)
@@ -68,7 +71,7 @@ pub fn create_mesh_groups(meshes: &[NudMeshGroupMesh]) -> Vec<NudMeshGroup> {
                 meshes: group_meshes
                     .iter()
                     .map(|m| match m.parent_bone_index {
-                        Some(p) => mesh_with_parent_bone_weights(m, p),
+                        Some(p) => mesh_with_parent_bone_weights(&m.mesh, p),
                         None => m.mesh.clone(),
                     })
                     .collect(),
@@ -84,21 +87,28 @@ pub fn create_mesh_groups(meshes: &[NudMeshGroupMesh]) -> Vec<NudMeshGroup> {
     groups
 }
 
-fn mesh_with_parent_bone_weights(m: &NudMeshGroupMesh, parent_bone_index: usize) -> NudMesh {
+fn mesh_without_bone_weights(m: &NudMesh) -> NudMesh {
+    NudMesh {
+        vertices: Vertices {
+            bones: None,
+            ..m.vertices.clone()
+        },
+        ..m.clone()
+    }
+}
+
+fn mesh_with_parent_bone_weights(m: &NudMesh, parent_bone_index: usize) -> NudMesh {
     // TODO: What element type to use?
     NudMesh {
         vertices: Vertices {
             bones: Some(Bones {
-                bone_indices: vec![
-                    [parent_bone_index as u32, 0, 0, 0];
-                    m.mesh.vertices.positions.len()
-                ],
-                weights: vec![vec4(1.0, 0.0, 0.0, 0.0); m.mesh.vertices.positions.len()],
+                bone_indices: vec![[parent_bone_index as u32, 0, 0, 0]; m.vertices.positions.len()],
+                weights: vec![vec4(1.0, 0.0, 0.0, 0.0); m.vertices.positions.len()],
                 element_type: BoneElementType::Byte,
             }),
-            ..m.mesh.vertices.clone()
+            ..m.vertices.clone()
         },
-        ..m.mesh.clone()
+        ..m.clone()
     }
 }
 
@@ -118,13 +128,14 @@ mod tests {
             vertices: Vertices {
                 positions: vec![Vec3::ZERO],
                 normals: Normals::None(Vec::new()),
-                bones: Some(Bones {
-                    bone_indices: bone_indices
-                        .map(|indices| vec![indices])
-                        .unwrap_or_default(),
-                    weights: weights.map(|weights| vec![weights]).unwrap_or_default(),
-                    element_type: BoneElementType::Byte,
-                }),
+                bones: match (bone_indices, weights) {
+                    (Some(indices), Some(weights)) => Some(Bones {
+                        bone_indices: vec![indices],
+                        weights: vec![weights],
+                        element_type: BoneElementType::Byte,
+                    }),
+                    _ => None,
+                },
                 colors: None,
                 uvs: Uvs::Float16(Vec::new()),
             },

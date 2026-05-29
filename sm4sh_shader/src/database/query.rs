@@ -939,6 +939,40 @@ pub fn op_normalize<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, 
     Some((op, vec![x, y, z, w]))
 }
 
+static OP_REFLECT_X: LazyLock<Graph> = LazyLock::new(|| {
+    // reflect(I, N) = I - 2.0 * dot(N, I) * N
+    // -2.0 * dot(-I, N) - I = 2 * dot(N, I) - I = I -
+    let query = indoc! {"
+        void main() {
+            dot_product = dot(vec4(-I_x, -I_y, -I_z, -0.0), vec4(N_x, N_y, N_z, -0.0));
+            two_dot_product = dot_product + dot_product;
+            result = fma(-two_dot_product, N_x, -I_x);
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_reflect<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+    let result = query_nodes(expr, graph, &OP_REFLECT_X)?;
+    let value = result.get("value")?;
+    let x = result.get("x")?;
+    let y = result.get("y")?;
+    let z = result.get("z")?;
+    let w = result.get("w")?;
+
+    let op = if value == x {
+        Operation::NormalizeX
+    } else if value == y {
+        Operation::NormalizeY
+    } else if value == z {
+        Operation::NormalizeZ
+    } else {
+        return None;
+    };
+
+    Some((op, vec![x, y, z, w]))
+}
+
 pub fn binary_op<'a>(
     graph: &'a Graph,
     expr: &'a Expr,
@@ -1029,4 +1063,42 @@ pub fn latte_texture_cube_coords<'a>(graph: &'a Graph, expr: &'a Expr) -> Option
             .collect(),
         channel: Some(channel),
     })
+}
+
+static OP_VARIANCE_SHADOW: LazyLock<Graph> = LazyLock::new(|| {
+    // variance shadow mapping using the first and second moments from the VSM texture.
+    // shadow = pow(sigma2 / (max(tDif, 0.0)^2 + sigma2), 4)
+    let query = indoc! {"
+        void main() {
+            light_position_z = min(light_position_z, 1.0);
+            sigma2 = fma(-m1, m1, m2);
+            tdif = -m1 + light_position_z;
+            sigma2 = sigma2 + offset;
+            sigma2 = clamp(sigma2, 0.0, 1.0);
+            max_tdif = max(tdif, 0.0);
+            denom = fma(max_tdif, max_tdif, sigma2);
+            one_over_denom = 1.0 / denom;
+            shadow = sigma2 * one_over_denom;
+            shadow2 = shadow * shadow;
+            shadow4 = shadow2 * shadow2;
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_variance_shadow<'a>(
+    graph: &'a Graph,
+    expr: &'a Expr,
+) -> Option<(Operation, Vec<&'a Expr>)> {
+    let result = query_nodes(expr, graph, &OP_VARIANCE_SHADOW)?;
+
+    let m1 = result.get("m1")?;
+    let m2 = result.get("m2")?;
+    let light_position_z = result.get("light_position_z")?;
+    let offset = result.get("offset")?;
+
+    Some((
+        Operation::VarianceShadow,
+        vec![m1, m2, light_position_z, offset],
+    ))
 }

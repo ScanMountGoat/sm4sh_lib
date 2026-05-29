@@ -115,6 +115,7 @@ pub enum Operation {
     LocalToWorldVectorX,
     LocalToWorldVectorY,
     LocalToWorldVectorZ,
+    VarianceShadow,
 }
 
 impl std::fmt::Display for Operation {

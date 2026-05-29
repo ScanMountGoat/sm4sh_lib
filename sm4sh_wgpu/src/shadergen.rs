@@ -289,7 +289,7 @@ fn write_parameter_inner(
     index: Option<usize>,
     channel: Option<char>,
 ) {
-    write!(wgsl, "{buffer_name}.{}", field.to_snake(),).unwrap();
+    write!(wgsl, "{buffer_name}.{}", field.to_snake()).unwrap();
     write_index(wgsl, index);
     write_channel(wgsl, channel);
 }
@@ -391,6 +391,11 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
         Operation::LocalToWorldVectorX => write!(wgsl, "{a}{}", arg0?).unwrap(),
         Operation::LocalToWorldVectorY => write!(wgsl, "{a}{}", arg1?).unwrap(),
         Operation::LocalToWorldVectorZ => write!(wgsl, "{a}{}", arg2?).unwrap(),
+        Operation::VarianceShadow => write!(wgsl,
+            "variance_shadow({a}{}, {a}{}, {a}{}, {a}{})",
+            arg0?, arg1?, arg2?, arg3?
+        ).unwrap(),
+
     }
     Some(())
 }
