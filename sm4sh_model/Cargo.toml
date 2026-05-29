@@ -9,6 +9,7 @@ binrw.workspace = true
 bilge.workspace = true
 half.workspace = true
 image_dds = { workspace = true, default-features = false, features = ["image", "ddsfile"] }
+image = { workspace = true, features = ["png"] }
 glam.workspace = true
 approx.workspace = true
 log.workspace = true
