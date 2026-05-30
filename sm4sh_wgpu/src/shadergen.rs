@@ -410,7 +410,18 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
             "fresnel(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}), {a}{})",
             arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?,
         ).unwrap(),
-
+        Operation::TintColorX => write!(wgsl,
+            "tint_color(vec3({a}{}, {a}{}, {a}{}), {a}{}).x",
+            arg0?, arg1?, arg2?, arg3?, 
+        ).unwrap(),
+        Operation::TintColorY => write!(wgsl,
+            "tint_color(vec3({a}{}, {a}{}, {a}{}), {a}{}).y",
+            arg0?, arg1?, arg2?, arg3?, 
+        ).unwrap(),
+        Operation::TintColorZ => write!(wgsl,
+            "tint_color(vec3({a}{}, {a}{}, {a}{}), {a}{}).z",
+            arg0?, arg1?, arg2?, arg3?, 
+        ).unwrap(),
     }
     Some(())
 }

@@ -119,6 +119,9 @@ pub enum Operation {
     BlinnPhongSpecular,
     AnisotropicSpecular,
     Fresnel,
+    TintColorX,
+    TintColorY,
+    TintColorZ,
 }
 
 impl std::fmt::Display for Operation {

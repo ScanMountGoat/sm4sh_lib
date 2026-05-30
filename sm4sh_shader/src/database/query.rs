@@ -1332,3 +1332,40 @@ pub fn fragment_tangent(graph: &Graph, expr: &Expr) -> Option<Expr> {
             })
         })
 }
+
+static OP_TINT_COLOR: LazyLock<Graph> = LazyLock::new(|| {
+    // Color tint from diffuse color from texas_cross.105.frag.
+    // The amount is typically controlled by alpha like NU_specularColor.a.
+    // TODO: detect + - as subtract.
+    let query = indoc! {"
+        void main() {
+            max_component = max(color_x, color_y);
+            max_component = max(color_z, max_component);
+            result = color + -max_component;
+            result = fma(result, amount, 1.0);
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_tint_color<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+    let result = query_nodes(expr, graph, &OP_TINT_COLOR)?;
+
+    let x = result.get("color_x")?;
+    let y = result.get("color_y")?;
+    let z = result.get("color_z")?;
+    let color = result.get("color")?;
+    let amount = result.get("amount")?;
+
+    let op = if color == x {
+        Operation::TintColorX
+    } else if color == y {
+        Operation::TintColorY
+    } else if color == z {
+        Operation::TintColorZ
+    } else {
+        return None;
+    };
+
+    Some((op, vec![x, y, z, amount]))
+}

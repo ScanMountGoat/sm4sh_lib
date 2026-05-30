@@ -531,6 +531,12 @@ fn fresnel(normal: vec3<f32>, eye: vec3<f32>, param: f32) -> f32 {
     return pow(fresnel, 1.0 + param);
 }
 
+fn tint_color(color: vec3<f32>, amount: f32) -> vec3<f32> {
+    // Diffuse color tint from texas_cross.105.frag.
+    let max_component = max(max(color.x, color.y), color.z);
+    return (color - max_component) * amount + 1.0;
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     // Required for wgsl_to_wgpu reachability analysis to include these resources.

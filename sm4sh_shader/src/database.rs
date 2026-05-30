@@ -78,6 +78,9 @@ pub enum Operation {
     BlinnPhongSpecular,
     AnisotropicSpecular,
     Fresnel,
+    TintColorX,
+    TintColorY,
+    TintColorZ,
 }
 
 impl std::fmt::Display for Operation {
@@ -100,6 +103,7 @@ impl xc3_shader::expr::Operation for Operation {
             .or_else(|| op_sphere_map_coords(graph, expr))
             .or_else(|| op_local_to_world_point(graph, expr))
             .or_else(|| op_local_to_world_vector(graph, expr))
+            .or_else(|| op_tint_color(graph, expr))
             .or_else(|| op_normalize(graph, expr))
             .or_else(|| op_pow(graph, expr))
             .or_else(|| op_sqrt(graph, expr))
@@ -250,6 +254,9 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::BlinnPhongSpecular => Self::BlinnPhongSpecular,
             Operation::AnisotropicSpecular => Self::AnisotropicSpecular,
             Operation::Fresnel => Self::Fresnel,
+            Operation::TintColorX => Self::TintColorX,
+            Operation::TintColorY => Self::TintColorY,
+            Operation::TintColorZ => Self::TintColorZ,
         }
     }
 }
