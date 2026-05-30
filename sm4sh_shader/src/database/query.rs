@@ -85,10 +85,15 @@ pub fn op_normal_map<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation,
         .or_else(|| {
             query_nodes(expr, graph, &OP_NORMAL_MAP_Z).map(|r| (Operation::NormalMapZ, r))
         })?;
-    let x = result.get("normal_map_x")?;
-    let y = result.get("normal_map_y")?;
-    let z = result.get("normal_map_z")?;
-    Some((op, vec![x, y, z]))
+
+    Some((
+        op,
+        vec![
+            result.get("normal_map_x")?,
+            result.get("normal_map_y")?,
+            result.get("normal_map_z")?,
+        ],
+    ))
 }
 
 fn transform_normal_query(c: char) -> String {
@@ -759,10 +764,10 @@ pub fn op_mix<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'
     // TODO: This is matching things it shouldn't but only when simplified?
     let result =
         query_nodes(expr, graph, &OP_MIX).or_else(|| query_nodes(expr, graph, &OP_MIX2))?;
-    let a = result.get("a")?;
-    let b = result.get("b")?;
-    let ratio = result.get("ratio")?;
-    Some((Operation::Mix, vec![a, b, ratio]))
+    Some((
+        Operation::Mix,
+        vec![result.get("a")?, result.get("b")?, result.get("ratio")?],
+    ))
 }
 
 static OP_POW: LazyLock<Graph> = LazyLock::new(|| {
@@ -793,9 +798,7 @@ static OP_POW2: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_pow<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let result =
         query_nodes(expr, graph, &OP_POW).or_else(|| query_nodes(expr, graph, &OP_POW2))?;
-    let a = result.get("a")?;
-    let b = result.get("b")?;
-    Some((Operation::Power, vec![a, b]))
+    Some((Operation::Power, vec![result.get("a")?, result.get("b")?]))
 }
 
 static OP_SQRT: LazyLock<Graph> = LazyLock::new(|| {
@@ -818,8 +821,7 @@ static OP_SQRT2: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_sqrt<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let result =
         query_nodes(expr, graph, &OP_SQRT).or_else(|| query_nodes(expr, graph, &OP_SQRT2))?;
-    let result = result.get("result")?;
-    Some((Operation::Sqrt, vec![result]))
+    Some((Operation::Sqrt, vec![result.get("result")?]))
 }
 
 static OP_DOT4: LazyLock<Graph> = LazyLock::new(|| {
@@ -845,29 +847,33 @@ static OP_DOT3: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_dot<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     query_nodes(expr, graph, &OP_DOT4)
         .and_then(|result| {
-            let ax = *result.get("ax")?;
-            let ay = *result.get("ay")?;
-            let az = *result.get("az")?;
-            let aw = *result.get("aw")?;
-
-            let bx = *result.get("bx")?;
-            let by = *result.get("by")?;
-            let bz = *result.get("bz")?;
-            let bw = *result.get("bw")?;
-
-            Some((Operation::Dot, vec![ax, ay, az, aw, bx, by, bz, bw]))
+            Some((
+                Operation::Dot,
+                vec![
+                    *result.get("ax")?,
+                    *result.get("ay")?,
+                    *result.get("az")?,
+                    *result.get("aw")?,
+                    *result.get("bx")?,
+                    *result.get("by")?,
+                    *result.get("bz")?,
+                    *result.get("bw")?,
+                ],
+            ))
         })
         .or_else(|| {
             query_nodes(expr, graph, &OP_DOT3).and_then(|result| {
-                let ax = *result.get("ax")?;
-                let ay = *result.get("ay")?;
-                let az = *result.get("az")?;
-
-                let bx = *result.get("bx")?;
-                let by = *result.get("by")?;
-                let bz = *result.get("bz")?;
-
-                Some((Operation::Dot, vec![ax, ay, az, bx, by, bz]))
+                Some((
+                    Operation::Dot,
+                    vec![
+                        *result.get("ax")?,
+                        *result.get("ay")?,
+                        *result.get("az")?,
+                        *result.get("bx")?,
+                        *result.get("by")?,
+                        *result.get("bz")?,
+                    ],
+                ))
             })
         })
 }
@@ -902,9 +908,7 @@ static OP_DIV2: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_div<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let result =
         query_nodes(expr, graph, &OP_DIV).or_else(|| query_nodes(expr, graph, &OP_DIV2))?;
-    let a = result.get("a")?;
-    let b = result.get("b")?;
-    Some((Operation::Div, vec![a, b]))
+    Some((Operation::Div, vec![result.get("a")?, result.get("b")?]))
 }
 
 static OP_NORMALIZE_XYZ: LazyLock<Graph> = LazyLock::new(|| {
@@ -1102,15 +1106,14 @@ pub fn op_variance_shadow<'a>(
     expr: &'a Expr,
 ) -> Option<(Operation, Vec<&'a Expr>)> {
     let result = query_nodes(expr, graph, &OP_VARIANCE_SHADOW)?;
-
-    let m1 = result.get("m1")?;
-    let m2 = result.get("m2")?;
-    let light_position_z = result.get("light_position_z")?;
-    let offset = result.get("offset")?;
-
     Some((
         Operation::VarianceShadow,
-        vec![m1, m2, light_position_z, offset],
+        vec![
+            result.get("m1")?,
+            result.get("m2")?,
+            result.get("light_position_z")?,
+            result.get("offset")?,
+        ],
     ))
 }
 
@@ -1144,31 +1147,19 @@ pub fn op_blinn_phong_spec<'a>(
     expr: &'a Expr,
 ) -> Option<(Operation, Vec<&'a Expr>)> {
     let result = query_nodes(expr, graph, &OP_BLINN_PHONG_SPEC)?;
-
-    let nx = result.get("n_x")?;
-    let ny = result.get("n_y")?;
-    let nz = result.get("n_z")?;
-    let light_dir_x = result.get("light_dir_x")?;
-    let light_dir_y = result.get("light_dir_y")?;
-    let light_dir_z = result.get("light_dir_z")?;
-    let eye_x = result.get("eye_x")?;
-    let eye_y = result.get("eye_y")?;
-    let eye_z = result.get("eye_z")?;
-    let exponent = result.get("exponent")?;
-
     Some((
         Operation::BlinnPhongSpecular,
         vec![
-            nx,
-            ny,
-            nz,
-            light_dir_x,
-            light_dir_y,
-            light_dir_z,
-            eye_x,
-            eye_y,
-            eye_z,
-            exponent,
+            result.get("n_x")?,
+            result.get("n_y")?,
+            result.get("n_z")?,
+            result.get("light_dir_x")?,
+            result.get("light_dir_y")?,
+            result.get("light_dir_z")?,
+            result.get("eye_x")?,
+            result.get("eye_y")?,
+            result.get("eye_z")?,
+            result.get("exponent")?,
         ],
     ))
 }
@@ -1178,7 +1169,8 @@ static OP_BLINN_PHONG_SPEC_ANISOTROPIC: LazyLock<Graph> = LazyLock::new(|| {
     // The tangent is recalculated in the fragment shader.
     // TODO: why is log2(e) = 1.442695 used with the exponent?
     // TODO: simplify should turn + - into -
-    // TODO: what is the b vector?
+    // TODO: what does the b vector represent?
+    // TODO: extend query to include lighting direction?
     let query = indoc! {"
         void main() {
             param_x = param_x * 3.0;
@@ -1264,18 +1256,17 @@ static OP_FRESNEL: LazyLock<Graph> = LazyLock::new(|| {
 
 pub fn op_fresnel<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let result = query_nodes(expr, graph, &OP_FRESNEL)?;
-
-    let nx = result.get("n_x")?;
-    let ny = result.get("n_y")?;
-    let nz = result.get("n_z")?;
-    let eye_x = result.get("eye_x")?;
-    let eye_y = result.get("eye_y")?;
-    let eye_z = result.get("eye_z")?;
-    let param = result.get("param")?;
-
     Some((
         Operation::Fresnel,
-        vec![nx, ny, nz, eye_x, eye_y, eye_z, param],
+        vec![
+            result.get("n_x")?,
+            result.get("n_y")?,
+            result.get("n_z")?,
+            result.get("eye_x")?,
+            result.get("eye_y")?,
+            result.get("eye_z")?,
+            result.get("param")?,
+        ],
     ))
 }
 
