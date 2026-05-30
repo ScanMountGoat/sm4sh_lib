@@ -116,7 +116,8 @@ pub enum Operation {
     LocalToWorldVectorY,
     LocalToWorldVectorZ,
     VarianceShadow,
-    BlinnPhongSpec,
+    BlinnPhongSpecular,
+    AnisotropicSpecular,
     Fresnel,
 }
 

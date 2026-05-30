@@ -75,7 +75,8 @@ pub enum Operation {
     LocalToWorldVectorY,
     LocalToWorldVectorZ,
     VarianceShadow,
-    BlinnPhongSpec,
+    BlinnPhongSpecular,
+    AnisotropicSpecular,
     Fresnel,
 }
 
@@ -93,6 +94,7 @@ impl xc3_shader::expr::Operation for Operation {
         op_normal_map(graph, expr)
             // .or_else(|| op_mix(graph, expr))
             .or_else(|| op_blinn_phong_spec(graph, expr))
+            .or_else(|| op_blinn_phong_spec_anisotropic(graph, expr))
             .or_else(|| op_fresnel(graph, expr))
             .or_else(|| op_variance_shadow(graph, expr))
             .or_else(|| op_sphere_map_coords(graph, expr))
@@ -135,7 +137,9 @@ impl xc3_shader::expr::Operation for Operation {
     }
 
     fn preprocess_expr<'a>(graph: &'a Graph, expr: &'a Expr) -> Cow<'a, Expr> {
-        if let Some(new_expr) = latte_texture_cube_coords(graph, expr) {
+        if let Some(new_expr) =
+            latte_texture_cube_coords(graph, expr).or_else(|| fragment_tangent(graph, expr))
+        {
             Cow::Owned(new_expr)
         } else {
             Cow::Borrowed(expr)
@@ -243,7 +247,8 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::LocalToWorldVectorY => Self::LocalToWorldVectorY,
             Operation::LocalToWorldVectorZ => Self::LocalToWorldVectorZ,
             Operation::VarianceShadow => Self::VarianceShadow,
-            Operation::BlinnPhongSpec => Self::BlinnPhongSpec,
+            Operation::BlinnPhongSpecular => Self::BlinnPhongSpecular,
+            Operation::AnisotropicSpecular => Self::AnisotropicSpecular,
             Operation::Fresnel => Self::Fresnel,
         }
     }

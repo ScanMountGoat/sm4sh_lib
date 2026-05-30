@@ -1115,7 +1115,7 @@ pub fn op_variance_shadow<'a>(
 }
 
 static OP_BLINN_PHONG_SPEC: LazyLock<Graph> = LazyLock::new(|| {
-    // Blinn-Phong using the halfway vector H.
+    // Blinn-Phong using the halfway vector H from texas_cross.64.frag.
     // pow(dot(N, H), MC.specularParams.y)
     let query = indoc! {"
         void main() {
@@ -1129,7 +1129,7 @@ static OP_BLINN_PHONG_SPEC: LazyLock<Graph> = LazyLock::new(|| {
             h_z = eye_z - light_dir_z;
             h_z = h_z * h_inv_length;
 
-            spec = dot(vec4(normal_x, normal_y, normal_z, 0.0), vec4(h_x, h_y, h_z, 0.0));
+            spec = dot(vec4(n_x, n_y, n_z, 0.0), vec4(h_x, h_y, h_z, 0.0));
             spec = max(spec, 0.001);
             spec = log2(spec);
             spec = exponent * spec;
@@ -1145,9 +1145,9 @@ pub fn op_blinn_phong_spec<'a>(
 ) -> Option<(Operation, Vec<&'a Expr>)> {
     let result = query_nodes(expr, graph, &OP_BLINN_PHONG_SPEC)?;
 
-    let nx = result.get("normal_x")?;
-    let ny = result.get("normal_y")?;
-    let nz = result.get("normal_z")?;
+    let nx = result.get("n_x")?;
+    let ny = result.get("n_y")?;
+    let nz = result.get("n_z")?;
     let light_dir_x = result.get("light_dir_x")?;
     let light_dir_y = result.get("light_dir_y")?;
     let light_dir_z = result.get("light_dir_z")?;
@@ -1157,7 +1157,7 @@ pub fn op_blinn_phong_spec<'a>(
     let exponent = result.get("exponent")?;
 
     Some((
-        Operation::BlinnPhongSpec,
+        Operation::BlinnPhongSpecular,
         vec![
             nx,
             ny,
@@ -1173,8 +1173,80 @@ pub fn op_blinn_phong_spec<'a>(
     ))
 }
 
+static OP_BLINN_PHONG_SPEC_ANISOTROPIC: LazyLock<Graph> = LazyLock::new(|| {
+    // Anisotropic specular shading from texas_cross.105.frag.
+    // The tangent is recalculated in the fragment shader.
+    // TODO: why is log2(e) = 1.442695 used with the exponent?
+    // TODO: simplify should turn + - into -
+    // TODO: what is the b vector?
+    let query = indoc! {"
+        void main() {
+            param_x = param_x * 3.0;
+            param_x2 = param_x * param_x;
+            one_over_param_x2 = 1.0 / param_x2;
+
+            dot_eye_n = dot(vec4(eye_x, eye_y, eye_z, 0.0), vec4(normal_x, normal_y, normal_z, 0.0));
+            dot_eye_n2 = dot_eye_n * dot_eye_n;
+            one_over_dot_eye_n2 = 1.0 / dot_eye_n2;
+            dot_eye_n2_minus_one = dot_eye_n2 + -1.0;
+
+            b_x = fma(-normal_x, dot_eye_n, eye_x);
+            b_y = fma(-normal_y, dot_eye_n, eye_y);
+            b_z = fma(-normal_z, dot_eye_n, eye_z);
+
+            b_x = b_x * inverse_b_length;
+            b_y = b_y * inverse_b_length;
+            b_z = b_z * inverse_b_length;
+
+            dot_tangent_b = dot(vec4(tangent_x, tangent_y, tangent_z, 0.0), vec4(b_x, b_y, b_z, 0.0));
+            dot_tangent_b2 = dot_tangent_b * dot_tangent_b;
+            
+            x_term = dot_tangent_b2 * one_over_param_x2;
+
+            param_y = param_y * 3.0;
+            param_y2 = param_y * param_y;
+            one_over_param_y2 = 1.0 / param_y2;
+
+            one_minus_dot_tangent_b2 = 1.0 - dot_tangent_b2;
+            y_term = one_minus_dot_tangent_b2 * one_over_param_y2;
+
+            xy_terms = x_term + y_term;
+
+            spec = dot_eye_n2_minus_one * one_over_dot_eye_n2;
+            spec = spec * xy_terms;
+            spec = spec * 1.442695;
+            spec = exp2(spec);
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_blinn_phong_spec_anisotropic<'a>(
+    graph: &'a Graph,
+    expr: &'a Expr,
+) -> Option<(Operation, Vec<&'a Expr>)> {
+    let result = query_nodes(expr, graph, &OP_BLINN_PHONG_SPEC_ANISOTROPIC)?;
+
+    Some((
+        Operation::AnisotropicSpecular,
+        vec![
+            result.get("normal_x")?,
+            result.get("normal_y")?,
+            result.get("normal_z")?,
+            result.get("tangent_x")?,
+            result.get("tangent_y")?,
+            result.get("tangent_z")?,
+            result.get("eye_x")?,
+            result.get("eye_y")?,
+            result.get("eye_z")?,
+            result.get("param_x")?,
+            result.get("param_y")?,
+        ],
+    ))
+}
+
 static OP_FRESNEL: LazyLock<Graph> = LazyLock::new(|| {
-    // Fresnel shading using MC.fresnelParams.x as the exponent.
+    // Fresnel shading using MC.fresnelParams.x as the exponent from texas_cross.64.frag.
     let query = indoc! {"
         void main() {
             eye_x = eye_x * eye_inv_length;
@@ -1205,4 +1277,67 @@ pub fn op_fresnel<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Ve
         Operation::Fresnel,
         vec![nx, ny, nz, eye_x, eye_y, eye_z, param],
     ))
+}
+
+fn fragment_tangent_query(a0: char, a1: char, b0: char, b1: char) -> String {
+    // tangent = cross(bitangent, normal) from texas_cross.105.frag.
+    // cross(a, b).{c} has the form a0*b0 - b1*a1.
+    formatdoc! {"
+        void main() {{
+            inv_b_length = inversesqrt(b_length);
+            b0 = b.{b0} * inv_b_length;
+            b1 = b.{b1} * inv_b_length;
+
+            inv_a_length = inversesqrt(a_length);
+            a0 = a.{a0} * inv_a_length;
+            a1 = a.{a1} * inv_a_length;
+
+            a0_b0 = a0 * b0;
+            tangent = fma(-b1, a1, a0_b0);
+            result = bitangent_sign * tangent;
+        }}
+    "}
+}
+
+static FRAGMENT_TANGENT_X: LazyLock<Graph> = LazyLock::new(|| {
+    // tangent = cross(bitangent, normal) from texas_cross.105.frag.
+    // cross(a, b).x = a.y * b.z - b.y * a.z
+    let query = fragment_tangent_query('y', 'z', 'z', 'y');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static FRAGMENT_TANGENT_Y: LazyLock<Graph> = LazyLock::new(|| {
+    // tangent = cross(bitangent, normal) from texas_cross.105.frag.
+    // cross(a, b).y = a.z * b.x - b.z * a.x
+    let query = fragment_tangent_query('z', 'x', 'x', 'z');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+static FRAGMENT_TANGENT_Z: LazyLock<Graph> = LazyLock::new(|| {
+    // tangent = cross(bitangent, normal) from texas_cross.105.frag.
+    // cross(a, b).z = a.x * b.y - b.x * a.y
+    let query = fragment_tangent_query('x', 'y', 'y', 'x');
+    Graph::parse_glsl(&query).unwrap().simplify()
+});
+
+pub fn fragment_tangent(graph: &Graph, expr: &Expr) -> Option<Expr> {
+    // tangent = cross(normal, bitangent) from texas_cross.105.frag.
+    // TODO: Should this be a separate attribute than the vertex tangent?
+    query_nodes(expr, graph, &FRAGMENT_TANGENT_X)
+        .map(|_| Expr::Global {
+            name: "a_Tangent".into(),
+            channel: Some('x'),
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &FRAGMENT_TANGENT_Y).map(|_| Expr::Global {
+                name: "a_Tangent".into(),
+                channel: Some('y'),
+            })
+        })
+        .or_else(|| {
+            query_nodes(expr, graph, &FRAGMENT_TANGENT_Z).map(|_| Expr::Global {
+                name: "a_Tangent".into(),
+                channel: Some('z'),
+            })
+        })
 }

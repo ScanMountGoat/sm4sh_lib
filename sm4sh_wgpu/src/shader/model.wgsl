@@ -479,8 +479,7 @@ fn sphere_map_coords(position: vec3<f32>, normal: vec3<f32>, param: f32) -> vec4
 }
 
 fn variance_shadow(m1: f32, m2: f32, light_position_z: f32, offset: f32) -> f32 {
-    // Translated variance shadow mapping from in game.
-    // Adapted from texas_cross.35.frag.
+    // Variance shadow mapping adapted from texas_cross.35.frag.
     let current_depth = min(light_position_z, 1.0);
 
     // The offset is FB1.ShadowMapParam.x.
@@ -494,15 +493,39 @@ fn variance_shadow(m1: f32, m2: f32, light_position_z: f32, offset: f32) -> f32 
 }
 
 fn blinn_phong_spec(normal: vec3<f32>, light_dir: vec3<f32>, eye: vec3<f32>, exponent: f32) -> f32 {
-    // Blinn-phong specular reflections.
+    // Blinn-phong specular reflections adapted from texas_cross.64.frag.
     // The exponent is MC.specularParams.y.
     let h = normalize(eye - light_dir); // TODO: why is this sub and not add?
     let spec = max(dot(normal, h), 0.001);
     return pow(spec, exponent);
 }
 
+fn anisotropic_spec(normal: vec3<f32>, tangent: vec3<f32>, eye: vec3<f32>, params: vec2<f32>) -> f32 {
+    // Anisotropic specular from texas_cross.105.frag.
+    // TODO: Where is the lighting direction?
+    let param_x = params.x * 3.0;
+    let param_x2 = param_x * param_x;
+
+    let param_y = params.y * 3.0;
+    let param_y2 = param_y * param_y;
+
+    let dot_eye_n = dot(eye, normal);
+    let dot_eye_n2 = dot_eye_n * dot_eye_n;
+
+    let b = normalize(-normal * dot_eye_n + eye);
+    let dot_tangent_b = dot(tangent, b);
+    let dot_tangent_b2 = dot_tangent_b * dot_tangent_b;
+
+    let x_term = dot_tangent_b2 / param_x2;
+    let y_term = (1.0 - dot_tangent_b2) / param_y2;
+
+    // TODO: where is the matching log2 expression?
+    let spec = (dot_eye_n2 - 1.0) / dot_eye_n2 * (x_term + y_term) * 1.442695;
+    return exp2(spec);
+}
+
 fn fresnel(normal: vec3<f32>, eye: vec3<f32>, param: f32) -> f32 {
-    // Fresnel edge lighting.
+    // Fresnel edge lighting adapted from texas_cross.64.frag.
     // The param is MC.fresnelParams.x.
     let fresnel = 1.0 - clamp(dot(eye.xyz, normal.xyz), 0.0, 1.0);
     return pow(fresnel, 1.0 + param);

@@ -305,6 +305,7 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
     let arg7 = args.get(7);
     let arg8 = args.get(8);
     let arg9 = args.get(9);
+    let arg10 = args.get(10);
 
     let a = VAR_PREFIX;
     match op {
@@ -397,9 +398,13 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
             "variance_shadow({a}{}, {a}{}, {a}{}, {a}{})",
             arg0?, arg1?, arg2?, arg3?
         ).unwrap(),
-        Operation::BlinnPhongSpec => write!(wgsl,
+        Operation::BlinnPhongSpecular => write!(wgsl,
             "blinn_phong_spec(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}), {a}{})",
             arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, arg7?, arg8?, arg9?
+        ).unwrap(),
+        Operation::AnisotropicSpecular => write!(wgsl,
+            "anisotropic_spec(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}), vec2({a}{}, {a}{}))",
+            arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, arg7?, arg8?, arg9?, arg10?
         ).unwrap(),
         Operation::Fresnel => write!(wgsl,
             "fresnel(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}), {a}{})",
