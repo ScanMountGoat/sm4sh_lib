@@ -502,6 +502,7 @@ fn blinn_phong_spec(normal: vec3<f32>, light_dir: vec3<f32>, eye: vec3<f32>, exp
 
 fn anisotropic_spec(normal: vec3<f32>, tangent: vec3<f32>, eye: vec3<f32>, params: vec2<f32>) -> f32 {
     // Anisotropic specular from texas_cross.105.frag.
+    // This appears to be a slightly modified Ward BRDF BRDF.
     // TODO: Where is the lighting direction?
     let param_x = params.x * 3.0;
     let param_x2 = param_x * param_x;
@@ -512,16 +513,15 @@ fn anisotropic_spec(normal: vec3<f32>, tangent: vec3<f32>, eye: vec3<f32>, param
     let dot_eye_n = dot(eye, normal);
     let dot_eye_n2 = dot_eye_n * dot_eye_n;
 
-    let b = normalize(-normal * dot_eye_n + eye);
+    // Orthogonalize eye to normal using the Gram-Schmidt process.
+    let b = normalize(eye - normal * dot_eye_n);
     let dot_tangent_b = dot(tangent, b);
     let dot_tangent_b2 = dot_tangent_b * dot_tangent_b;
 
     let x_term = dot_tangent_b2 / param_x2;
     let y_term = (1.0 - dot_tangent_b2) / param_y2;
 
-    // TODO: where is the matching log2 expression?
-    let spec = (dot_eye_n2 - 1.0) / dot_eye_n2 * (x_term + y_term) * 1.442695;
-    return exp2(spec);
+    return exp((dot_eye_n2 - 1.0) / dot_eye_n2 * (x_term + y_term));
 }
 
 fn fresnel(normal: vec3<f32>, eye: vec3<f32>, param: f32) -> f32 {

@@ -30,17 +30,17 @@ fn op_normal_map_query(c: char) -> String {
     // TODO: binormal channels require eliminating transforms from vertex shader.
     formatdoc! {"
         void main() {{
-            normal_map_x = normal_map_x + -0.00196078;
+            normal_map_x = normal_map_x - 0.00196078;
             normal_map_x = normal_map_x * 2.0;
-            normal_map_x = normal_map_x + -1.0;
+            normal_map_x = normal_map_x - 1.0;
 
-            normal_map_y = normal_map_y + -0.00196078;
+            normal_map_y = normal_map_y - 0.00196078;
             normal_map_y = normal_map_y * 2.0;
-            normal_map_y = normal_map_y + -1.0;
+            normal_map_y = normal_map_y - 1.0;
 
-            normal_map_z = normal_map_z + -0.00196078;
+            normal_map_z = normal_map_z - 0.00196078;
             normal_map_z = normal_map_z * 2.0;
-            normal_map_z = normal_map_z + -1.0;
+            normal_map_z = normal_map_z - 1.0;
 
             // bitangent_w = bitangent.w;
             tangent = bitangent_w * tangent;
@@ -224,7 +224,7 @@ static TRANSFORM_BINORMAL_W: LazyLock<Graph> = LazyLock::new(|| {
             PV18.x = temp18;
             R1.z = PV18.x > 0.0 ? 1.0 : 0.0;
             R3.w = 0.0 > PV18.x ? 1.0 : 0.0;
-            R15.w = R1.z + -R3.w;
+            R15.w = R1.z - R3.w;
             result = R15.w;
         }
     "};
@@ -1166,11 +1166,10 @@ pub fn op_blinn_phong_spec<'a>(
 
 static OP_BLINN_PHONG_SPEC_ANISOTROPIC: LazyLock<Graph> = LazyLock::new(|| {
     // Anisotropic specular shading from texas_cross.105.frag.
+    // This appears to be a slightly modified Ward BRDF.
     // The tangent is recalculated in the fragment shader.
-    // TODO: why is log2(e) = 1.442695 used with the exponent?
-    // TODO: simplify should turn + - into -
-    // TODO: what does the b vector represent?
-    // TODO: extend query to include lighting direction?
+    // log2(e) = 1.442695 is used to express exp using the faster exp2.
+    // The vector b is the eye vector orthogonalized to the normal with the Gram-Schmidt process.
     let query = indoc! {"
         void main() {
             param_x = param_x * 3.0;
@@ -1180,7 +1179,7 @@ static OP_BLINN_PHONG_SPEC_ANISOTROPIC: LazyLock<Graph> = LazyLock::new(|| {
             dot_eye_n = dot(vec4(eye_x, eye_y, eye_z, 0.0), vec4(normal_x, normal_y, normal_z, 0.0));
             dot_eye_n2 = dot_eye_n * dot_eye_n;
             one_over_dot_eye_n2 = 1.0 / dot_eye_n2;
-            dot_eye_n2_minus_one = dot_eye_n2 + -1.0;
+            dot_eye_n2_minus_one = dot_eye_n2 - 1.0;
 
             b_x = fma(-normal_x, dot_eye_n, eye_x);
             b_y = fma(-normal_y, dot_eye_n, eye_y);
@@ -1336,12 +1335,11 @@ pub fn fragment_tangent(graph: &Graph, expr: &Expr) -> Option<Expr> {
 static OP_TINT_COLOR: LazyLock<Graph> = LazyLock::new(|| {
     // Color tint from diffuse color from texas_cross.105.frag.
     // The amount is typically controlled by alpha like NU_specularColor.a.
-    // TODO: detect + - as subtract.
     let query = indoc! {"
         void main() {
             max_component = max(color_x, color_y);
             max_component = max(color_z, max_component);
-            result = color + -max_component;
+            result = color - max_component;
             result = fma(result, amount, 1.0);
         }
     "};
