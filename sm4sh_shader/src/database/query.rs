@@ -833,49 +833,22 @@ static OP_DOT4: LazyLock<Graph> = LazyLock::new(|| {
     Graph::parse_glsl(query).unwrap().simplify()
 });
 
-static OP_DOT3: LazyLock<Graph> = LazyLock::new(|| {
-    let query = indoc! {"
-        void main() {
-            result = ax * bx;
-            result = fma(ay, by, result);
-            result = fma(az, bz, result);
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
-});
-
 pub fn op_dot<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
-    query_nodes(expr, graph, &OP_DOT4)
-        .and_then(|result| {
-            Some((
-                Operation::Dot,
-                vec![
-                    *result.get("ax")?,
-                    *result.get("ay")?,
-                    *result.get("az")?,
-                    *result.get("aw")?,
-                    *result.get("bx")?,
-                    *result.get("by")?,
-                    *result.get("bz")?,
-                    *result.get("bw")?,
-                ],
-            ))
-        })
-        .or_else(|| {
-            query_nodes(expr, graph, &OP_DOT3).and_then(|result| {
-                Some((
-                    Operation::Dot,
-                    vec![
-                        *result.get("ax")?,
-                        *result.get("ay")?,
-                        *result.get("az")?,
-                        *result.get("bx")?,
-                        *result.get("by")?,
-                        *result.get("bz")?,
-                    ],
-                ))
-            })
-        })
+    query_nodes(expr, graph, &OP_DOT4).and_then(|result| {
+        Some((
+            Operation::Dot,
+            vec![
+                *result.get("ax")?,
+                *result.get("ay")?,
+                *result.get("az")?,
+                *result.get("aw")?,
+                *result.get("bx")?,
+                *result.get("by")?,
+                *result.get("bz")?,
+                *result.get("bw")?,
+            ],
+        ))
+    })
 }
 
 pub fn ternary<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
