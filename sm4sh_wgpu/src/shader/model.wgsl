@@ -114,7 +114,8 @@ var<uniform> fb3: Fb3;
 
 // FB4 in shaders.
 struct Fb4 {
-    effect_light_entry: vec4<f32>,
+    // TODO: What should the actual count be?
+    effect_light_entry: array<vec4<f32>, 4096>,
 }
 
 @group(0) @binding(4)
@@ -122,7 +123,9 @@ var<uniform> fb4: Fb4;
 
 // FB5 in shaders.
 struct Fb5 {
-    effect_light_area: vec4<u32>,
+    // This is actually vec4<u32> stored in floats.
+    // TODO: What should the actual count be?
+    effect_light_area: array<vec4<f32>, 4096>,
 }
 
 @group(0) @binding(5)
@@ -557,8 +560,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput {
     _unused = fb0.lens_flare_param;
     _unused = fb1.shadow_map_param;
     _unused = fb3.colr_hdr_range;
-    _unused = fb4.effect_light_entry;
-    _unused = vec4<f32>(fb5.effect_light_area);
+    _unused = fb4.effect_light_entry[0];
+    _unused = vec4<f32>(fb5.effect_light_area[0]);
     _unused = camera.projection[0];
     let REMOVE_END = 0.0;
 

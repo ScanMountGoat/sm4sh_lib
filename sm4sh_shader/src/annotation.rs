@@ -291,60 +291,70 @@ fn uniform_block_var_index(
         // TODO: Don't assume vec4 for all uniforms when converting indices to offsets.
         // TODO: Are uniform var offsets in terms of floats?
         // TODO: group uniforms into blocks to make this easier.
-        if let Some(Expr::Int(i)) = index.and_then(|i| graph.exprs.get(i).cloned()) {
+        if let Some(index_expr) = index.and_then(|i| graph.exprs.get(i).cloned()) {
             vars.iter().find_map(|v| {
                 // TODO: Will array uniforms always have a uniform without brackets for the entire array?
                 if v.uniform_block_index == block_index as i32 && !v.name.contains("[") {
-                    let (new_index, new_channel) =
-                        uniform_array_indices_channel(i as usize, channel, v)?;
+                    if let Expr::Int(i) = &index_expr {
+                        let (new_index, new_channel) =
+                            uniform_array_indices_channel(*i as usize, channel, v)?;
 
-                    let (index, field) = match &new_index[..] {
-                        [] => (None, SmolStr::from(&v.name)),
-                        [new_index] => {
-                            // The new index expr might not be part of the graph yet.
-                            let new_index_expr = Expr::Int(*new_index as i32);
-                            (
-                                Some(
-                                    graph
-                                        .exprs
-                                        .iter()
-                                        .position(|e| e == &new_index_expr)
-                                        .unwrap_or_else(|| {
-                                            let i = graph.exprs.len();
-                                            graph.exprs.push(new_index_expr);
-                                            i
-                                        }),
-                                ),
-                                SmolStr::from(&v.name),
-                            )
-                        }
-                        [new_index, column_index] => {
-                            // The new index expr might not be part of the graph yet.
-                            let column_index_expr = Expr::Int(*column_index as i32);
-                            (
-                                Some(
-                                    graph
-                                        .exprs
-                                        .iter()
-                                        .position(|e| e == &column_index_expr)
-                                        .unwrap_or_else(|| {
-                                            let i = graph.exprs.len();
-                                            graph.exprs.push(column_index_expr);
-                                            i
-                                        }),
-                                ),
-                                SmolStr::from(&format!("{}[{new_index}]", v.name)),
-                            )
-                        }
-                        _ => (None, SmolStr::from(&v.name)),
-                    };
+                        let (index, field) = match &new_index[..] {
+                            [] => (None, SmolStr::from(&v.name)),
+                            [new_index] => {
+                                // The new index expr might not be part of the graph yet.
+                                let new_index_expr = Expr::Int(*new_index as i32);
+                                (
+                                    Some(
+                                        graph
+                                            .exprs
+                                            .iter()
+                                            .position(|e| e == &new_index_expr)
+                                            .unwrap_or_else(|| {
+                                                let i = graph.exprs.len();
+                                                graph.exprs.push(new_index_expr);
+                                                i
+                                            }),
+                                    ),
+                                    SmolStr::from(&v.name),
+                                )
+                            }
+                            [new_index, column_index] => {
+                                // The new index expr might not be part of the graph yet.
+                                let column_index_expr = Expr::Int(*column_index as i32);
+                                (
+                                    Some(
+                                        graph
+                                            .exprs
+                                            .iter()
+                                            .position(|e| e == &column_index_expr)
+                                            .unwrap_or_else(|| {
+                                                let i = graph.exprs.len();
+                                                graph.exprs.push(column_index_expr);
+                                                i
+                                            }),
+                                    ),
+                                    SmolStr::from(&format!("{}[{new_index}]", v.name)),
+                                )
+                            }
+                            _ => (None, SmolStr::from(&v.name)),
+                        };
 
-                    Some(Expr::Parameter {
-                        name: SmolStr::from(&block.name),
-                        field: Some(field),
-                        index,
-                        channel: Some(new_channel),
-                    })
+                        Some(Expr::Parameter {
+                            name: SmolStr::from(&block.name),
+                            field: Some(field),
+                            index,
+                            channel: Some(new_channel),
+                        })
+                    } else {
+                        // Assume the buffer has only one field if the index is an expr.
+                        Some(Expr::Parameter {
+                            name: SmolStr::from(&block.name),
+                            field: Some(SmolStr::from(&v.name)),
+                            index,
+                            channel: None,
+                        })
+                    }
                 } else {
                     None
                 }
@@ -459,15 +469,30 @@ fn write_uniform_blocks(
             .collect();
         block_vars.sort_by_key(|v| v.offset);
 
-        for var in block_vars {
-            // TODO: will arrays always have a var representing the entire array?
-            if !var.name.contains("[") {
+        match &block_vars[..] {
+            [v0, v1] if v1.name == format!("{}[0]", v0.name) => {
+                // Assume a buffer with a single array field fills the buffer.
                 // TODO: Calculate the appropriate position based on offsets.
-                let ty = data_type(var);
-                if var.count > 1 {
-                    writeln!(annotated, "    {ty} {}[{}];", var.name, var.count)?;
-                } else {
-                    writeln!(annotated, "    {ty} {};", var.name)?;
+                let ty = data_type(*v0);
+
+                // TODO: Why is the block size only for a single entry?
+                // Assume a 64k buffer size for now to match in game buffer sizes in RenderDoc.
+                let count = (65536 - v0.offset) / size_in_bytes(v0);
+                writeln!(annotated, "    {ty} {}[{}];", v0.name, count)?;
+            }
+            _ => {
+                for var in block_vars {
+                    // TODO: will arrays always have a var representing the entire array like "var" and "var[0]"?
+                    if !var.name.contains("[") {
+                        // TODO: Calculate the appropriate position based on offsets.
+                        let ty = data_type(var);
+
+                        if var.count > 1 {
+                            writeln!(annotated, "    {ty} {}[{}];", var.name, var.count)?;
+                        } else {
+                            writeln!(annotated, "    {ty} {};", var.name)?;
+                        }
+                    }
                 }
             }
         }
@@ -491,6 +516,23 @@ fn data_type(var: &sm4sh_lib::gx2::UniformVar) -> &'static str {
         sm4sh_lib::gx2::VarType::Mat2x4 => "mat2x2",
         sm4sh_lib::gx2::VarType::Mat3x4 => "mat3x4",
         sm4sh_lib::gx2::VarType::Mat4 => "mat4",
+    }
+}
+
+fn size_in_bytes(var: &sm4sh_lib::gx2::UniformVar) -> u32 {
+    match var.data_type {
+        VarType::Void => todo!(),
+        VarType::Bool => todo!(),
+        VarType::Float => 4,
+        VarType::Vec2 => 2 * 4,
+        VarType::Vec3 => 3 * 4,
+        VarType::Vec4 => 4 * 4,
+        VarType::IVec2 => 2 * 4,
+        VarType::IVec4 => 4 * 4,
+        VarType::UVec4 => 4 * 4,
+        VarType::Mat2x4 => 2 * 4 * 4,
+        VarType::Mat3x4 => 3 * 4 * 4,
+        VarType::Mat4 => 4 * 4 * 4,
     }
 }
 

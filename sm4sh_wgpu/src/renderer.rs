@@ -63,13 +63,13 @@ impl Renderer {
         let fb4_buffer = device.create_uniform_buffer(
             "FB4",
             &crate::shader::model::Fb4 {
-                effect_light_entry: Vec4::ZERO,
+                effect_light_entry: [Vec4::ZERO; 4096],
             },
         );
         let fb5_buffer = device.create_uniform_buffer(
             "FB5",
             &crate::shader::model::Fb5 {
-                effect_light_area: UVec4::ZERO,
+                effect_light_area: [Vec4::ZERO; 4096],
             },
         );
 

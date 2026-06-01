@@ -238,7 +238,8 @@ fn write_parameter(wgsl: &mut String, p: &Parameter) -> Option<()> {
         "FB0" => write_parameter_inner(wgsl, "fb0", &p.field, p.index, p.channel),
         "FB1" => write_parameter_inner(wgsl, "fb1", &p.field, p.index, p.channel),
         "FB3" => write_parameter_inner(wgsl, "fb3", &p.field, p.index, p.channel),
-        "FB4" => write_parameter_inner(wgsl, "fb4", &p.field, p.index, p.channel),
+        // TODO: fix shader handling for effect_light_entry
+        // "FB4" => write_parameter_inner(wgsl, "fb4", &p.field, p.index, p.channel),
         "FB5" => write_parameter_inner(wgsl, "fb5", &p.field, p.index, p.channel),
         "PerDraw" => match p.field.as_str() {
             "LocalToWorldMatrix" => {
@@ -272,8 +273,6 @@ fn write_parameter(wgsl: &mut String, p: &Parameter) -> Option<()> {
                 return None;
             }
         },
-        "CB10" => return None, // TODO: figure out why C10.xyzw is used
-        "CB11" => return None, // TODO: figure out why C11.xyzw is used
         _ => {
             error!("Unrecognized uniform {p}");
             return None;
