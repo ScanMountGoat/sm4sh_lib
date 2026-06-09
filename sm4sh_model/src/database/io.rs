@@ -34,10 +34,6 @@ pub struct ShaderDatabaseIndexed {
 
     #[br(parse_with = parse_set)]
     #[bw(write_with = write_set)]
-    parameters: IndexSet<ParameterIndexed>,
-
-    #[br(parse_with = parse_set)]
-    #[bw(write_with = write_set)]
     output_exprs: IndexSet<OutputExprIndexed>,
 
     // Storing multiple string lists enables 8-bit instead of 16-bit indices.
@@ -150,7 +146,7 @@ enum ValueIndexed {
     ),
 
     #[brw(magic(1u8))]
-    Parameter(VarInt),
+    Parameter(ParameterIndexed),
 
     #[brw(magic(2u8))]
     Texture(TextureIndexed),
@@ -295,13 +291,6 @@ impl ShaderDatabaseIndexed {
         VarInt(index)
     }
 
-    fn add_parameter(&mut self, b: Parameter) -> VarInt {
-        let value = self.parameter_indexed(b);
-        let (index, _) = self.parameters.insert_full(value);
-
-        VarInt(index)
-    }
-
     fn program_from_indexed(&self, p: &ShaderProgramIndexed) -> ShaderProgram {
         // Remap exprs indexed for all programs to exprs indexed for this program.
         let mut exprs = IndexSet::default();
@@ -376,9 +365,7 @@ impl ShaderDatabaseIndexed {
         match v {
             ValueIndexed::Int(i) => Value::Int(*i),
             ValueIndexed::Float(f) => Value::Float(*f),
-            ValueIndexed::Parameter(p) => {
-                Value::Parameter(self.parameter_from_indexed(&self.parameters[p.0]))
-            }
+            ValueIndexed::Parameter(p) => Value::Parameter(self.parameter_from_indexed(p)),
             ValueIndexed::Texture(t) => Value::Texture(Texture {
                 name: self.texture_names[t.name.0].clone(),
                 channel: t.channel.into(),
@@ -404,7 +391,7 @@ impl ShaderDatabaseIndexed {
         match v {
             Value::Int(i) => ValueIndexed::Int(i),
             Value::Float(c) => ValueIndexed::Float(c),
-            Value::Parameter(p) => ValueIndexed::Parameter(self.add_parameter(p)),
+            Value::Parameter(p) => ValueIndexed::Parameter(self.parameter_indexed(p)),
             Value::Texture(t) => ValueIndexed::Texture(TextureIndexed {
                 name: add_string(&mut self.texture_names, t.name),
                 channel: t.channel.into(),
@@ -421,21 +408,21 @@ impl ShaderDatabaseIndexed {
         }
     }
 
-    fn parameter_from_indexed(&self, b: &ParameterIndexed) -> Parameter {
+    fn parameter_from_indexed(&self, p: &ParameterIndexed) -> Parameter {
         Parameter {
-            name: self.buffer_names[b.name.0].clone(),
-            field: self.buffer_field_names[b.field.0].clone(),
-            index: b.index.0,
-            channel: b.channel.into(),
+            name: self.buffer_names[p.name.0].clone(),
+            field: self.buffer_field_names[p.field.0].clone(),
+            index: p.index.0,
+            channel: p.channel.into(),
         }
     }
 
-    fn parameter_indexed(&mut self, b: Parameter) -> ParameterIndexed {
+    fn parameter_indexed(&mut self, p: Parameter) -> ParameterIndexed {
         ParameterIndexed {
-            name: add_string(&mut self.buffer_names, b.name),
-            field: add_string(&mut self.buffer_field_names, b.field),
-            index: OptVarInt(b.index),
-            channel: b.channel.into(),
+            name: add_string(&mut self.buffer_names, p.name),
+            field: add_string(&mut self.buffer_field_names, p.field),
+            index: OptVarInt(p.index),
+            channel: p.channel.into(),
         }
     }
 }
