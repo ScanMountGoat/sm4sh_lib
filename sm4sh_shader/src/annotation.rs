@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, fmt::Write, path::Path};
 
 use log::error;
 use sm4sh_lib::gx2::{Gx2PixelShader, Gx2VertexShader, VarType};
-use smol_str::SmolStr;
+use smol_str::{SmolStr, format_smolstr};
 use xc3_shader::graph::{Expr, Graph};
 
 pub fn annotate_shader(vert_asm_path: &Path) -> anyhow::Result<()> {
@@ -53,7 +53,7 @@ fn annotate_vertex_shader(
                 let index: usize = node.output.name.trim_start_matches(prefix).parse()?;
                 outputs.insert(index);
 
-                node.output.name = format!("out_attr{index}").into();
+                node.output.name = format_smolstr!("out_attr{index}");
             }
         }
     }
@@ -165,7 +165,7 @@ fn annotate_fragment_shader(
                 let index: usize = node.output.name.trim_start_matches(prefix).parse()?;
                 outputs.insert(index);
 
-                node.output.name = format!("out_attr{index}").into();
+                node.output.name = format_smolstr!("out_attr{index}");
             }
         }
     }
@@ -334,7 +334,7 @@ fn uniform_block_var_index(
                                                 i
                                             }),
                                     ),
-                                    SmolStr::from(&format!("{}[{new_index}]", v.name)),
+                                    format_smolstr!("{}[{new_index}]", v.name),
                                 )
                             }
                             _ => (None, SmolStr::from(&v.name)),

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use log::error;
-use smol_str::SmolStr;
+use smol_str::{SmolStr, format_smolstr};
 use xc3_shader::{
     expr::{
         ExprCache, OutputExpr, output_expr,
@@ -193,7 +193,7 @@ pub fn shader_from_glsl(vertex: GlslGraph, fragment: GlslGraph) -> ShaderProgram
             let expr = &graph.exprs[last_node.input];
 
             let value = output_expr(expr, &graph, &mut exprs);
-            output_dependencies.insert(format!("{output_name}.{c}").into(), value);
+            output_dependencies.insert(format_smolstr!("{output_name}.{c}"), value);
         }
     }
 
@@ -205,12 +205,12 @@ pub fn shader_from_glsl(vertex: GlslGraph, fragment: GlslGraph) -> ShaderProgram
 
     for output_name in frag_attributes.output_locations.left_values() {
         if let (Some(x), Some(y), Some(z)) = (
-            output_dependencies.get(&SmolStr::from(&format!("{output_name}.x"))),
-            output_dependencies.get(&SmolStr::from(&format!("{output_name}.y"))),
-            output_dependencies.get(&SmolStr::from(&format!("{output_name}.z"))),
+            output_dependencies.get(&format_smolstr!("{output_name}.x")),
+            output_dependencies.get(&format_smolstr!("{output_name}.y")),
+            output_dependencies.get(&format_smolstr!("{output_name}.z")),
         ) && let Some(xyz) = merge_xyz_exprs(*x, *y, *z, &exprs, &mut exprs_xyz)
         {
-            output_dependencies_xyz.insert(format!("{output_name}.xyz").into(), xyz);
+            output_dependencies_xyz.insert(format_smolstr!("{output_name}.xyz"), xyz);
         }
     }
 
