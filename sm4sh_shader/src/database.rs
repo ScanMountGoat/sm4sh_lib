@@ -186,11 +186,13 @@ pub fn shader_from_glsl(vertex: GlslGraph, fragment: GlslGraph) -> ShaderProgram
 
     for output_name in frag_attributes.output_locations.left_values() {
         for c in "xyzw".chars() {
-            let dependent_lines = graph.dependencies_recursive(output_name, Some(c), None);
-
-            let last_node_index = dependent_lines.last().unwrap();
-            let last_node = graph.nodes.get(*last_node_index).unwrap();
-            let expr = &graph.exprs[last_node.input];
+            // Find the most recent assignment for the output variable.
+            let node = graph
+                .nodes
+                .iter()
+                .rfind(|n| &n.output.name == output_name && n.output.channel == Some(c))
+                .unwrap();
+            let expr = &graph.exprs[node.input];
 
             let value = output_expr(expr, &graph, &mut exprs);
             output_dependencies.insert(format_smolstr!("{output_name}.{c}"), value);
