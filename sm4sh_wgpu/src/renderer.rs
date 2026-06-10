@@ -1,4 +1,4 @@
-use glam::{Mat4, UVec4, Vec4, vec4};
+use glam::{Mat4, Vec4, vec4};
 
 use crate::{CameraData, DeviceBufferExt, Model, QueueBufferExt, skeleton::BoneRenderer};
 

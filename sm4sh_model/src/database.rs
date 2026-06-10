@@ -3,8 +3,10 @@ use std::{collections::BTreeMap, path::Path};
 use binrw::BinResult;
 use smol_str::SmolStr;
 use strum::FromRepr;
-use xc3_shader::expr::xyz::OutputExprXyz;
-pub use xc3_shader::expr::{Attribute, OutputExpr, Parameter, Texture, Value};
+pub use xc3_shader::expr::{
+    Attribute, OutputExpr, Parameter, Texture, Value,
+    xyz::{ChannelXyz, OutputExprXyz, ValueXyz},
+};
 
 use crate::database::uniforms::uniform_parameter_value;
 
@@ -175,8 +177,6 @@ pub enum OperationXyz {
     GreaterEqual,
     NormalMap,
     Normalize,
-    SphereMapCoordX,
-    SphereMapCoordY,
     LocalToWorldPoint,
     LocalToWorldVector,
     VarianceShadow,

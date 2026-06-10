@@ -341,8 +341,6 @@ impl From<OperationXyz> for sm4sh_model::database::OperationXyz {
             OperationXyz::GreaterEqual => Self::GreaterEqual,
             OperationXyz::NormalMap => Self::NormalMap,
             OperationXyz::Normalize => Self::Normalize,
-            OperationXyz::SphereMapCoordX => Self::SphereMapCoordX,
-            OperationXyz::SphereMapCoordY => Self::SphereMapCoordY,
             OperationXyz::LocalToWorldPoint => Self::LocalToWorldPoint,
             OperationXyz::LocalToWorldVector => Self::LocalToWorldVector,
             OperationXyz::VarianceShadow => Self::VarianceShadow,
@@ -409,8 +407,6 @@ pub enum OperationXyz {
     GreaterEqual,
     NormalMap,
     Normalize,
-    SphereMapCoordX,
-    SphereMapCoordY,
     LocalToWorldPoint,
     LocalToWorldVector,
     VarianceShadow,
@@ -468,8 +464,8 @@ impl OperationXyzChannel for Operation {
             Operation::NormalizeX => Some((OperationXyz::Normalize, Some('x'))),
             Operation::NormalizeY => Some((OperationXyz::Normalize, Some('y'))),
             Operation::NormalizeZ => Some((OperationXyz::Normalize, Some('z'))),
-            Operation::SphereMapCoordX => Some((OperationXyz::SphereMapCoordX, None)),
-            Operation::SphereMapCoordY => Some((OperationXyz::SphereMapCoordY, None)),
+            Operation::SphereMapCoordX => None,
+            Operation::SphereMapCoordY => None,
             Operation::LocalToWorldPointX => Some((OperationXyz::LocalToWorldPoint, Some('x'))),
             Operation::LocalToWorldPointY => Some((OperationXyz::LocalToWorldPoint, Some('y'))),
             Operation::LocalToWorldPointZ => Some((OperationXyz::LocalToWorldPoint, Some('z'))),
@@ -536,6 +532,15 @@ impl MergeXyzArgs<Operation> for OperationXyz {
                     merge_xyz_exprs(args_x[10], args_y[10], args_z[10], exprs, exprs_xyz)?;
 
                 Some(vec![normal, tangent, eye, param_x, param_y])
+            }
+            OperationXyz::Fresnel => {
+                // TODO: Check that all args are the same.
+                let normal = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+                let eye = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;
+
+                let param = merge_xyz_exprs(args_x[6], args_y[6], args_z[6], exprs, exprs_xyz)?;
+
+                Some(vec![normal, eye, param])
             }
             _ => {
                 let mut args = Vec::new();
