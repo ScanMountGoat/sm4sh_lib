@@ -5,6 +5,9 @@ use log::error;
 use ordered_float::OrderedFloat;
 use smol_str::{SmolStr, ToSmolStr};
 use varint_rs::{VarintReader, VarintWriter};
+use xc3_shader::expr::xyz::{OutputExprXyz, ValueXyz};
+
+use crate::database::OperationXyz;
 
 use super::{Attribute, Operation, OutputExpr, Parameter, ShaderProgram, Texture, Value};
 
@@ -36,6 +39,14 @@ pub struct ShaderDatabaseIndexed {
     #[bw(write_with = write_set)]
     output_exprs: IndexSet<OutputExprIndexed>,
 
+    #[br(parse_with = parse_set)]
+    #[bw(write_with = write_set)]
+    output_exprs_xyz: IndexSet<OutputExprXyzIndexed>,
+
+    #[br(parse_with = parse_set)]
+    #[bw(write_with = write_set)]
+    values_xyz: IndexSet<ValueXyzIndexed>,
+
     // Storing multiple string lists enables 8-bit instead of 16-bit indices.
     #[br(parse_with = parse_strings)]
     #[bw(write_with = write_strings)]
@@ -66,6 +77,10 @@ struct ShaderProgramIndexed {
     #[br(parse_with = parse_vec)]
     #[bw(write_with = write_vec)]
     output_dependencies: Vec<(VarInt, VarInt)>,
+
+    #[br(parse_with = parse_vec)]
+    #[bw(write_with = write_vec)]
+    output_dependencies_xyz: Vec<(VarInt, VarInt)>,
 
     #[br(parse_with = parse_vec)]
     #[bw(write_with = write_vec)]
@@ -183,6 +198,105 @@ struct AttributeIndexed {
     channel: Channel,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, BinRead, BinWrite)]
+enum OutputExprXyzIndexed {
+    #[brw(magic(0u8))]
+    Value(VarInt),
+
+    #[brw(magic(1u8))]
+    Func {
+        // TODO: Avoid unwrap
+        #[br(map(|x: u8| OperationXyz::from_repr(x as usize).unwrap()))]
+        #[bw(map(|x| *x as u8))]
+        op: OperationXyz,
+
+        #[br(parse_with = parse_vec)]
+        #[bw(write_with = write_vec)]
+        args: Vec<VarInt>,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, BinRead, BinWrite)]
+enum ValueXyzIndexed {
+    #[brw(magic(0u8))]
+    Float(
+        #[br(map(|f: [f32; 3]| f.map(Into::into)))]
+        #[bw(map(|f| f.map(|f| f.0)))]
+        [OrderedFloat<f32>; 3],
+    ),
+
+    #[brw(magic(1u8))]
+    Parameter(ParameterXyzIndexed),
+
+    #[brw(magic(2u8))]
+    Texture(TextureXyzIndexed),
+
+    #[brw(magic(3u8))]
+    Attribute(AttributeXyzIndexed),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, BinRead, BinWrite)]
+struct ParameterXyzIndexed {
+    name: VarInt,
+    field: VarInt,
+    index: OptVarInt,
+    channel: ChannelXyz,
+}
+
+#[binrw]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+struct TextureXyzIndexed {
+    name: VarInt,
+    channel: ChannelXyz,
+
+    #[br(parse_with = parse_vec)]
+    #[bw(write_with = write_vec)]
+    texcoords: Vec<VarInt>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, BinRead, BinWrite)]
+struct AttributeXyzIndexed {
+    name: VarInt,
+    channel: ChannelXyz,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, BinRead, BinWrite)]
+#[brw(repr(u8))]
+pub enum ChannelXyz {
+    None = 0,
+    Xyz = 1,
+    X = 2,
+    Y = 3,
+    Z = 4,
+    W = 5,
+}
+
+impl From<ChannelXyz> for Option<xc3_shader::expr::xyz::ChannelXyz> {
+    fn from(value: ChannelXyz) -> Self {
+        match value {
+            ChannelXyz::None => None,
+            ChannelXyz::Xyz => Some(xc3_shader::expr::xyz::ChannelXyz::Xyz),
+            ChannelXyz::X => Some(xc3_shader::expr::xyz::ChannelXyz::X),
+            ChannelXyz::Y => Some(xc3_shader::expr::xyz::ChannelXyz::Y),
+            ChannelXyz::Z => Some(xc3_shader::expr::xyz::ChannelXyz::Z),
+            ChannelXyz::W => Some(xc3_shader::expr::xyz::ChannelXyz::W),
+        }
+    }
+}
+
+impl From<Option<xc3_shader::expr::xyz::ChannelXyz>> for ChannelXyz {
+    fn from(value: Option<xc3_shader::expr::xyz::ChannelXyz>) -> Self {
+        match value {
+            Some(xc3_shader::expr::xyz::ChannelXyz::Xyz) => Self::Xyz,
+            Some(xc3_shader::expr::xyz::ChannelXyz::X) => Self::X,
+            Some(xc3_shader::expr::xyz::ChannelXyz::Y) => Self::Y,
+            Some(xc3_shader::expr::xyz::ChannelXyz::Z) => Self::Z,
+            Some(xc3_shader::expr::xyz::ChannelXyz::W) => Self::Z,
+            None => Self::None,
+        }
+    }
+}
+
 impl ShaderDatabaseIndexed {
     pub fn from_file<P: AsRef<Path>>(path: P) -> BinResult<Self> {
         let mut reader = Cursor::new(std::fs::read(path)?);
@@ -217,6 +331,20 @@ impl ShaderDatabaseIndexed {
     fn program_indexed(&mut self, p: &ShaderProgram) -> ShaderProgramIndexed {
         // Remap exprs indexed for this program to exprs indexed for all programs.
         let mut expr_indices = IndexMap::default();
+        for i in 0..p.exprs.len() {
+            self.add_output_expr(i, &p.exprs, &mut expr_indices);
+        }
+
+        let mut expr_xyz_indices = IndexMap::default();
+        for i in 0..p.exprs_xyz.len() {
+            self.add_output_expr_xyz(
+                i,
+                &p.exprs_xyz,
+                &mut expr_xyz_indices,
+                &p.exprs,
+                &mut expr_indices,
+            );
+        }
 
         ShaderProgramIndexed {
             output_dependencies: p
@@ -224,10 +352,15 @@ impl ShaderDatabaseIndexed {
                 .iter()
                 .map(|(output, value)| {
                     let output_index = add_string(&mut self.outputs, output.clone());
-                    (
-                        output_index,
-                        self.add_output_expr(&p.exprs[*value], &p.exprs, &mut expr_indices),
-                    )
+                    (output_index, expr_indices[value])
+                })
+                .collect(),
+            output_dependencies_xyz: p
+                .output_dependencies_xyz
+                .iter()
+                .map(|(output, value)| {
+                    let output_index = add_string(&mut self.outputs, output.clone());
+                    (output_index, expr_xyz_indices[value])
                 })
                 .collect(),
             attributes: p
@@ -248,25 +381,25 @@ impl ShaderDatabaseIndexed {
         }
     }
 
-    fn add_output_expr<'a>(
+    fn add_output_expr(
         &mut self,
-        value: &'a OutputExpr<Operation>,
-        exprs: &'a [OutputExpr<Operation>],
-        expr_indices: &mut IndexMap<&'a OutputExpr<Operation>, VarInt>,
+        value: usize,
+        exprs: &[OutputExpr<Operation>],
+        expr_indices: &mut IndexMap<usize, VarInt>,
     ) -> VarInt {
-        match expr_indices.get(value) {
+        match expr_indices.get(&value) {
             Some(i) => *i,
             None => {
                 // Insert values that this value depends on first.
-                let v = match &value {
-                    OutputExpr::Value(d) => {
-                        OutputExprIndexed::Value(self.add_value(d.clone(), exprs, expr_indices))
+                let v = match &exprs[value] {
+                    OutputExpr::Value(v) => {
+                        OutputExprIndexed::Value(self.add_value(v.clone(), exprs, expr_indices))
                     }
                     OutputExpr::Func { op, args } => OutputExprIndexed::Func {
                         op: *op,
                         args: args
                             .iter()
-                            .map(|a| self.add_output_expr(&exprs[*a], exprs, expr_indices))
+                            .map(|a| self.add_output_expr(*a, exprs, expr_indices))
                             .collect(),
                     },
                 };
@@ -279,14 +412,69 @@ impl ShaderDatabaseIndexed {
         }
     }
 
-    fn add_value<'a>(
+    fn add_output_expr_xyz(
         &mut self,
-        d: Value,
-        exprs: &'a [OutputExpr<Operation>],
-        expr_indices: &mut IndexMap<&'a OutputExpr<Operation>, VarInt>,
+        value: usize,
+        exprs_xyz: &[OutputExprXyz<OperationXyz>],
+        expr_xyz_indices: &mut IndexMap<usize, VarInt>,
+        exprs: &[OutputExpr<Operation>],
+        expr_indices: &mut IndexMap<usize, VarInt>,
     ) -> VarInt {
-        let value = self.value_indexed(d, exprs, expr_indices);
+        match expr_xyz_indices.get(&value) {
+            Some(i) => *i,
+            None => {
+                // Insert values that this value depends on first.
+                let v = match &exprs_xyz[value] {
+                    OutputExprXyz::Value(v) => OutputExprXyzIndexed::Value(self.add_value_xyz(
+                        v.clone(),
+                        exprs,
+                        expr_indices,
+                    )),
+                    OutputExprXyz::Func { op, args } => OutputExprXyzIndexed::Func {
+                        op: *op,
+                        args: args
+                            .iter()
+                            .map(|a| {
+                                self.add_output_expr_xyz(
+                                    *a,
+                                    exprs_xyz,
+                                    expr_xyz_indices,
+                                    exprs,
+                                    expr_indices,
+                                )
+                            })
+                            .collect(),
+                    },
+                };
+
+                let (index, _) = self.output_exprs_xyz.insert_full(v);
+                expr_xyz_indices.insert(value, VarInt(index));
+
+                VarInt(index)
+            }
+        }
+    }
+
+    fn add_value(
+        &mut self,
+        v: Value,
+        exprs: &[OutputExpr<Operation>],
+        expr_indices: &mut IndexMap<usize, VarInt>,
+    ) -> VarInt {
+        let value = self.value_indexed(v, exprs, expr_indices);
         let (index, _) = self.values.insert_full(value);
+
+        VarInt(index)
+    }
+
+    fn add_value_xyz(
+        &mut self,
+        v: ValueXyz,
+        exprs: &[OutputExpr<Operation>],
+        expr_indices: &mut IndexMap<usize, VarInt>,
+    ) -> VarInt {
+        let value = self.value_xyz_indexed(v, exprs, expr_indices);
+        let (index, _) = self.values_xyz.insert_full(value);
 
         VarInt(index)
     }
@@ -296,18 +484,42 @@ impl ShaderDatabaseIndexed {
         let mut exprs = IndexSet::default();
         let mut expr_to_index = IndexMap::default();
 
+        let mut exprs_xyz = IndexSet::default();
+        let mut expr_xyz_to_index = IndexMap::default();
+
+        let output_dependencies = p
+            .output_dependencies
+            .iter()
+            .map(|(output, value)| {
+                (
+                    self.outputs[output.0].clone(),
+                    self.output_expr_from_indexed(value.0, &mut exprs, &mut expr_to_index),
+                )
+            })
+            .collect();
+
+        let output_dependencies_xyz = p
+            .output_dependencies_xyz
+            .iter()
+            .map(|(output, value)| {
+                (
+                    self.outputs[output.0].clone(),
+                    self.output_expr_xyz_from_indexed(
+                        value.0,
+                        &mut exprs_xyz,
+                        &mut expr_xyz_to_index,
+                        &mut exprs,
+                        &mut expr_to_index,
+                    ),
+                )
+            })
+            .collect();
+
         ShaderProgram {
-            output_dependencies: p
-                .output_dependencies
-                .iter()
-                .map(|(output, value)| {
-                    (
-                        self.outputs[output.0].clone(),
-                        self.output_expr_from_indexed(value.0, &mut exprs, &mut expr_to_index),
-                    )
-                })
-                .collect(),
+            output_dependencies,
             exprs: exprs.into_iter().collect(),
+            output_dependencies_xyz,
+            exprs_xyz: exprs_xyz.into_iter().collect(),
             attributes: p
                 .attributes
                 .iter()
@@ -382,11 +594,11 @@ impl ShaderDatabaseIndexed {
         }
     }
 
-    fn value_indexed<'a>(
+    fn value_indexed(
         &mut self,
         v: Value,
-        exprs: &'a [OutputExpr<Operation>],
-        expr_indices: &mut IndexMap<&'a OutputExpr<Operation>, VarInt>,
+        exprs: &[OutputExpr<Operation>],
+        expr_indices: &mut IndexMap<usize, VarInt>,
     ) -> ValueIndexed {
         match v {
             Value::Int(i) => ValueIndexed::Int(i),
@@ -398,7 +610,7 @@ impl ShaderDatabaseIndexed {
                 texcoords: t
                     .texcoords
                     .iter()
-                    .map(|t| self.add_output_expr(&exprs[*t], exprs, expr_indices))
+                    .map(|t| self.add_output_expr(*t, exprs, expr_indices))
                     .collect(),
             }),
             Value::Attribute(a) => ValueIndexed::Attribute(AttributeIndexed {
@@ -423,6 +635,114 @@ impl ShaderDatabaseIndexed {
             field: add_string(&mut self.buffer_field_names, p.field),
             index: OptVarInt(p.index),
             channel: p.channel.into(),
+        }
+    }
+
+    fn output_expr_xyz_from_indexed(
+        &self,
+        value: usize,
+        exprs_xyz: &mut IndexSet<OutputExprXyz<OperationXyz>>,
+        expr_xyz_to_index: &mut IndexMap<usize, usize>,
+        exprs: &mut IndexSet<OutputExpr<Operation>>,
+        expr_to_index: &mut IndexMap<usize, usize>,
+    ) -> usize {
+        match expr_xyz_to_index.get(&value) {
+            Some(i) => *i,
+            None => {
+                let expr = match &self.output_exprs_xyz[value] {
+                    OutputExprXyzIndexed::Value(v) => OutputExprXyz::Value(
+                        self.value_xyz_from_indexed(&self.values_xyz[v.0], exprs, expr_to_index),
+                    ),
+                    OutputExprXyzIndexed::Func { op, args } => OutputExprXyz::Func {
+                        op: *op,
+                        args: args
+                            .iter()
+                            .map(|a| {
+                                self.output_expr_xyz_from_indexed(
+                                    a.0,
+                                    exprs_xyz,
+                                    expr_xyz_to_index,
+                                    exprs,
+                                    expr_to_index,
+                                )
+                            })
+                            .collect(),
+                    },
+                };
+                let index = exprs_xyz.insert_full(expr).0;
+                expr_xyz_to_index.insert(value, index);
+                index
+            }
+        }
+    }
+
+    fn value_xyz_indexed(
+        &mut self,
+        v: ValueXyz,
+        exprs: &[OutputExpr<Operation>],
+        expr_indices: &mut IndexMap<usize, VarInt>,
+    ) -> ValueXyzIndexed {
+        match v {
+            ValueXyz::Texture {
+                name,
+                channel,
+                texcoords,
+            } => ValueXyzIndexed::Texture(TextureXyzIndexed {
+                name: add_string(&mut self.texture_names, name),
+                channel: channel.into(),
+                texcoords: texcoords
+                    .iter()
+                    .map(|t| self.add_output_expr(*t, exprs, expr_indices))
+                    .collect(),
+            }),
+            ValueXyz::Attribute { name, channel } => {
+                ValueXyzIndexed::Attribute(AttributeXyzIndexed {
+                    name: add_string(&mut self.attribute_names, name),
+                    channel: channel.into(),
+                })
+            }
+            ValueXyz::Parameter {
+                name,
+                field,
+                index,
+                channel,
+            } => ValueXyzIndexed::Parameter(ParameterXyzIndexed {
+                name: add_string(&mut self.buffer_names, name),
+                field: add_string(&mut self.buffer_field_names, field),
+                index: OptVarInt(index),
+                channel: channel.into(),
+            }),
+            ValueXyz::Float(f) => ValueXyzIndexed::Float(f),
+        }
+    }
+
+    fn value_xyz_from_indexed(
+        &self,
+        v: &ValueXyzIndexed,
+        exprs: &mut IndexSet<OutputExpr<Operation>>,
+        expr_to_index: &mut IndexMap<usize, usize>,
+    ) -> ValueXyz {
+        match v {
+            ValueXyzIndexed::Float(f) => ValueXyz::Float(*f),
+            ValueXyzIndexed::Parameter(p) => ValueXyz::Parameter {
+                name: self.buffer_names[p.name.0].clone(),
+                field: self.buffer_field_names[p.field.0].clone(),
+                index: p.index.0,
+                channel: p.channel.into(),
+            },
+            ValueXyzIndexed::Texture(t) => ValueXyz::Texture {
+                name: self.texture_names[t.name.0].clone(),
+                channel: t.channel.into(),
+                texcoords: t
+                    .texcoords
+                    .iter()
+                    .map(|coord| self.output_expr_from_indexed(coord.0, exprs, expr_to_index))
+                    .collect(),
+            },
+            ValueXyzIndexed::Attribute(a) => ValueXyz::Attribute {
+                name: self.attribute_names[a.name.0].clone(),
+                channel: a.channel.into(),
+            },
         }
     }
 }

@@ -234,6 +234,18 @@ pub fn convert_expr(e: OutputExpr<Operation>) -> OutputExpr<sm4sh_model::databas
     }
 }
 
+pub fn convert_expr_xyz(
+    e: OutputExprXyz<OperationXyz>,
+) -> OutputExprXyz<sm4sh_model::database::OperationXyz> {
+    match e {
+        OutputExprXyz::Value(value) => OutputExprXyz::Value(value),
+        OutputExprXyz::Func { op, args } => OutputExprXyz::Func {
+            op: op.into(),
+            args,
+        },
+    }
+}
+
 impl From<Operation> for sm4sh_model::database::Operation {
     fn from(value: Operation) -> Self {
         match value {
@@ -293,6 +305,55 @@ impl From<Operation> for sm4sh_model::database::Operation {
     }
 }
 
+impl From<OperationXyz> for sm4sh_model::database::OperationXyz {
+    fn from(value: OperationXyz) -> Self {
+        match value {
+            OperationXyz::Unk => Self::Unk,
+            OperationXyz::Add => Self::Add,
+            OperationXyz::Sub => Self::Sub,
+            OperationXyz::Mul => Self::Mul,
+            OperationXyz::Div => Self::Div,
+            OperationXyz::Mix => Self::Mix,
+            OperationXyz::Clamp => Self::Clamp,
+            OperationXyz::Min => Self::Min,
+            OperationXyz::Max => Self::Max,
+            OperationXyz::Abs => Self::Abs,
+            OperationXyz::Floor => Self::Floor,
+            OperationXyz::Power => Self::Power,
+            OperationXyz::Sqrt => Self::Sqrt,
+            OperationXyz::InverseSqrt => Self::InverseSqrt,
+            OperationXyz::Fma => Self::Fma,
+            OperationXyz::Dot => Self::Dot,
+            OperationXyz::Sin => Self::Sin,
+            OperationXyz::Cos => Self::Cos,
+            OperationXyz::Exp2 => Self::Exp2,
+            OperationXyz::Log2 => Self::Log2,
+            OperationXyz::Fract => Self::Fract,
+            OperationXyz::IntBitsToFloat => Self::IntBitsToFloat,
+            OperationXyz::FloatBitsToInt => Self::FloatBitsToInt,
+            OperationXyz::Select => Self::Select,
+            OperationXyz::Negate => Self::Negate,
+            OperationXyz::Equal => Self::Equal,
+            OperationXyz::NotEqual => Self::NotEqual,
+            OperationXyz::Less => Self::Less,
+            OperationXyz::Greater => Self::Greater,
+            OperationXyz::LessEqual => Self::LessEqual,
+            OperationXyz::GreaterEqual => Self::GreaterEqual,
+            OperationXyz::NormalMap => Self::NormalMap,
+            OperationXyz::Normalize => Self::Normalize,
+            OperationXyz::SphereMapCoordX => Self::SphereMapCoordX,
+            OperationXyz::SphereMapCoordY => Self::SphereMapCoordY,
+            OperationXyz::LocalToWorldPoint => Self::LocalToWorldPoint,
+            OperationXyz::LocalToWorldVector => Self::LocalToWorldVector,
+            OperationXyz::VarianceShadow => Self::VarianceShadow,
+            OperationXyz::BlinnPhongSpecular => Self::BlinnPhongSpecular,
+            OperationXyz::AnisotropicSpecular => Self::AnisotropicSpecular,
+            OperationXyz::Fresnel => Self::Fresnel,
+            OperationXyz::TintColor => Self::TintColor,
+        }
+    }
+}
+
 fn modify_attributes(graph: &Graph, expr: &Expr) -> Expr {
     // Remove attribute transforms so queries can detect attribute channels.
     // TODO: keep track of what space each attribute is in like model, view, etc.
@@ -346,9 +407,7 @@ pub enum OperationXyz {
     Greater,
     LessEqual,
     GreaterEqual,
-    NormalMapX,
-    NormalMapY,
-    NormalMapZ,
+    NormalMap,
     Normalize,
     SphereMapCoordX,
     SphereMapCoordY,
@@ -403,9 +462,9 @@ impl OperationXyzChannel for Operation {
             Operation::Greater => Some((OperationXyz::Greater, None)),
             Operation::LessEqual => Some((OperationXyz::LessEqual, None)),
             Operation::GreaterEqual => Some((OperationXyz::GreaterEqual, None)),
-            Operation::NormalMapX => Some((OperationXyz::NormalMapX, None)),
-            Operation::NormalMapY => Some((OperationXyz::NormalMapY, None)),
-            Operation::NormalMapZ => Some((OperationXyz::NormalMapZ, None)),
+            Operation::NormalMapX => Some((OperationXyz::NormalMap, Some('x'))),
+            Operation::NormalMapY => Some((OperationXyz::NormalMap, Some('y'))),
+            Operation::NormalMapZ => Some((OperationXyz::NormalMap, Some('z'))),
             Operation::NormalizeX => Some((OperationXyz::Normalize, Some('x'))),
             Operation::NormalizeY => Some((OperationXyz::Normalize, Some('y'))),
             Operation::NormalizeZ => Some((OperationXyz::Normalize, Some('z'))),
@@ -437,13 +496,57 @@ impl MergeXyzArgs<Operation> for OperationXyz {
         exprs: &[OutputExpr<Operation>],
         exprs_xyz: &mut ExprCacheXyz<Self>,
     ) -> Option<Vec<usize>> {
-        let mut args = Vec::new();
+        match self {
+            OperationXyz::Normalize => {
+                if exprs[args_x[3]] == exprs[args_y[3]]
+                    && exprs[args_y[3]] == exprs[args_z[3]]
+                    && exprs[args_x[3]]
+                        == OutputExpr::Value(xc3_shader::expr::Value::Float(0.0.into()))
+                {
+                    // TODO: Check that all args are the same.
+                    let arg = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+                    Some(vec![arg])
+                } else {
+                    None
+                }
+            }
+            OperationXyz::LocalToWorldPoint => {
+                // TODO: Check that all args are the same.
+                let arg = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+                Some(vec![arg])
+            }
+            OperationXyz::LocalToWorldVector => {
+                // TODO: Check that all args are the same.
+                let arg = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+                Some(vec![arg])
+            }
+            OperationXyz::NormalMap => {
+                // TODO: Check that all args are the same.
+                let arg = merge_xyz_exprs(args_x[0], args_y[1], args_z[2], exprs, exprs_xyz)?;
+                Some(vec![arg])
+            }
+            OperationXyz::AnisotropicSpecular => {
+                // TODO: Check that all args are the same.
+                let normal = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+                let tangent = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;
+                let eye = merge_xyz_exprs(args_x[6], args_x[7], args_x[8], exprs, exprs_xyz)?;
 
-        for ((x, y), z) in args_x.iter().zip(args_y.iter()).zip(args_z.iter()) {
-            let arg = merge_xyz_exprs(*x, *y, *z, exprs, exprs_xyz)?;
-            args.push(arg);
+                let param_x = merge_xyz_exprs(args_x[9], args_y[9], args_z[9], exprs, exprs_xyz)?;
+                let param_y =
+                    merge_xyz_exprs(args_x[10], args_y[10], args_z[10], exprs, exprs_xyz)?;
+
+                Some(vec![normal, tangent, eye, param_x, param_y])
+            }
+            _ => {
+                let mut args = Vec::new();
+
+                for ((x, y), z) in args_x.iter().zip(args_y.iter()).zip(args_z.iter()) {
+                    let arg = merge_xyz_exprs(*x, *y, *z, exprs, exprs_xyz)?;
+                    args.push(arg);
+                }
+
+                Some(args)
+            }
         }
-
-        Some(args)
     }
 }

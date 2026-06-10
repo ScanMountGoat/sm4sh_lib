@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, path::Path};
 use binrw::BinResult;
 use smol_str::SmolStr;
 use strum::FromRepr;
+use xc3_shader::expr::xyz::OutputExprXyz;
 pub use xc3_shader::expr::{Attribute, OutputExpr, Parameter, Texture, Value};
 
 use crate::database::uniforms::uniform_parameter_value;
@@ -26,6 +27,14 @@ pub struct ShaderProgram {
 
     /// Unique exprs used for this program.
     pub exprs: Vec<OutputExpr<Operation>>,
+
+    /// Indices into [exprs_xyz](#structfield.exprs_xyz) for values assigned to the XYZ channels of a fragment output.
+    ///
+    /// This only contains values if the XYZ channels can be successfully merged.
+    pub output_dependencies_xyz: IndexMap<SmolStr, usize>,
+
+    /// Unique merged XYZ exprs used for this program.
+    pub exprs_xyz: Vec<OutputExprXyz<OperationXyz>>,
 
     // Used for validation.
     pub attributes: Vec<SmolStr>,
@@ -128,4 +137,51 @@ impl std::fmt::Display for Operation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, FromRepr, Default)]
+pub enum OperationXyz {
+    #[default]
+    Unk,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mix,
+    Clamp,
+    Min,
+    Max,
+    Abs,
+    Floor,
+    Power,
+    Sqrt,
+    InverseSqrt,
+    Fma,
+    Dot,
+    Sin,
+    Cos,
+    Exp2,
+    Log2,
+    Fract,
+    IntBitsToFloat,
+    FloatBitsToInt,
+    Select,
+    Negate,
+    Equal,
+    NotEqual,
+    Less,
+    Greater,
+    LessEqual,
+    GreaterEqual,
+    NormalMap,
+    Normalize,
+    SphereMapCoordX,
+    SphereMapCoordY,
+    LocalToWorldPoint,
+    LocalToWorldVector,
+    VarianceShadow,
+    BlinnPhongSpecular,
+    AnisotropicSpecular,
+    Fresnel,
+    TintColor,
 }

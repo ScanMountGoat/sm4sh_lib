@@ -1213,7 +1213,6 @@ static OP_FRESNEL: LazyLock<Graph> = LazyLock::new(|| {
     // Fresnel shading using MC.fresnelParams.x as the exponent from texas_cross.64.frag.
     let query = indoc! {"
         void main() {
-            eye_x = eye_x * eye_inv_length;
             dot_product = dot(vec4(eye_x, eye_y, eye_z, 0.0), vec4(n_x, n_y, n_z, 0.0));
             dot_product = clamp(dot_product, 0.0, 1.0);
             fresnel = -dot_product + 1.0;
