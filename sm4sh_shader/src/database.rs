@@ -3,7 +3,10 @@ use std::borrow::Cow;
 use log::error;
 use smol_str::SmolStr;
 use xc3_shader::{
-    expr::{OutputExpr, output_expr},
+    expr::{
+        ExprCache, OutputExpr, output_expr,
+        xyz::{ExprCacheXyz, MergeXyzArgs, OperationXyzChannel, OutputExprXyz, merge_xyz_exprs},
+    },
     graph::{
         BinaryOp, Expr, Graph, UnaryOp,
         glsl::{GlslGraph, merge_vertex_fragment},
@@ -14,7 +17,6 @@ mod query;
 use query::*;
 
 // Faster than the default hash implementation.
-type IndexSet<T> = indexmap::IndexSet<T, ahash::RandomState>;
 type IndexMap<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -24,6 +26,14 @@ pub struct ShaderProgram {
 
     /// Unique exprs used for this program.
     pub exprs: Vec<OutputExpr<Operation>>,
+
+    /// Indices into [exprs_xyz](#structfield.exprs_xyz) for values assigned to the XYZ channels of a fragment output.
+    ///
+    /// This only contains values if the XYZ channels can be successfully merged.
+    pub output_dependencies_xyz: IndexMap<SmolStr, usize>,
+
+    /// Unique merged XYZ exprs used for this program.
+    pub exprs_xyz: Vec<OutputExprXyz<OperationXyz>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Default)]
@@ -170,9 +180,10 @@ pub fn shader_from_glsl(vertex: GlslGraph, fragment: GlslGraph) -> ShaderProgram
     );
     let graph = graph.simplify();
 
-    let mut exprs = IndexSet::default();
-    let mut expr_to_index = IndexMap::default();
+    let mut exprs = ExprCache::default();
+
     let mut output_dependencies = IndexMap::default();
+
     for output_name in frag_attributes.output_locations.left_values() {
         for c in "xyzw".chars() {
             let dependent_lines = graph.dependencies_recursive(output_name, Some(c), None);
@@ -181,14 +192,33 @@ pub fn shader_from_glsl(vertex: GlslGraph, fragment: GlslGraph) -> ShaderProgram
             let last_node = graph.nodes.get(*last_node_index).unwrap();
             let expr = &graph.exprs[last_node.input];
 
-            let value = output_expr(expr, &graph, &mut exprs, &mut expr_to_index);
+            let value = output_expr(expr, &graph, &mut exprs);
             output_dependencies.insert(format!("{output_name}.{c}").into(), value);
+        }
+    }
+
+    let exprs = exprs.into_exprs();
+
+    // Merge XYZ channels during database creation to simplify consuming code.
+    let mut exprs_xyz = ExprCacheXyz::default();
+    let mut output_dependencies_xyz = IndexMap::default();
+
+    for output_name in frag_attributes.output_locations.left_values() {
+        if let (Some(x), Some(y), Some(z)) = (
+            output_dependencies.get(&SmolStr::from(&format!("{output_name}.x"))),
+            output_dependencies.get(&SmolStr::from(&format!("{output_name}.y"))),
+            output_dependencies.get(&SmolStr::from(&format!("{output_name}.z"))),
+        ) && let Some(xyz) = merge_xyz_exprs(*x, *y, *z, &exprs, &mut exprs_xyz)
+        {
+            output_dependencies_xyz.insert(format!("{output_name}.xyz").into(), xyz);
         }
     }
 
     ShaderProgram {
         output_dependencies,
-        exprs: exprs.into_iter().collect(),
+        exprs,
+        output_dependencies_xyz,
+        exprs_xyz: exprs_xyz.into_exprs(),
     }
 }
 
@@ -277,5 +307,141 @@ fn modify_attributes(graph: &Graph, expr: &Expr) -> Expr {
         new_expr
     } else {
         expr.clone()
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Default)]
+pub enum OperationXyz {
+    #[default]
+    Unk,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mix,
+    Clamp,
+    Min,
+    Max,
+    Abs,
+    Floor,
+    Power,
+    Sqrt,
+    InverseSqrt,
+    Fma,
+    Dot,
+    Sin,
+    Cos,
+    Exp2,
+    Log2,
+    Fract,
+    IntBitsToFloat,
+    FloatBitsToInt,
+    Select,
+    Negate,
+    Equal,
+    NotEqual,
+    Less,
+    Greater,
+    LessEqual,
+    GreaterEqual,
+    NormalMapX,
+    NormalMapY,
+    NormalMapZ,
+    Normalize,
+    SphereMapCoordX,
+    SphereMapCoordY,
+    LocalToWorldPoint,
+    LocalToWorldVector,
+    VarianceShadow,
+    BlinnPhongSpecular,
+    AnisotropicSpecular,
+    Fresnel,
+    TintColor,
+}
+
+impl std::fmt::Display for OperationXyz {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl OperationXyzChannel for Operation {
+    type OperationXyz = OperationXyz;
+
+    fn operation_xyz_channel(&self) -> Option<(Self::OperationXyz, Option<char>)> {
+        match self {
+            Operation::Unk => Some((OperationXyz::Unk, None)),
+            Operation::Add => Some((OperationXyz::Add, None)),
+            Operation::Sub => Some((OperationXyz::Sub, None)),
+            Operation::Mul => Some((OperationXyz::Mul, None)),
+            Operation::Div => Some((OperationXyz::Div, None)),
+            Operation::Mix => Some((OperationXyz::Mix, None)),
+            Operation::Clamp => Some((OperationXyz::Clamp, None)),
+            Operation::Min => Some((OperationXyz::Min, None)),
+            Operation::Max => Some((OperationXyz::Max, None)),
+            Operation::Abs => Some((OperationXyz::Abs, None)),
+            Operation::Floor => Some((OperationXyz::Floor, None)),
+            Operation::Power => Some((OperationXyz::Power, None)),
+            Operation::Sqrt => Some((OperationXyz::Sqrt, None)),
+            Operation::InverseSqrt => Some((OperationXyz::InverseSqrt, None)),
+            Operation::Fma => Some((OperationXyz::Fma, None)),
+            Operation::Dot => Some((OperationXyz::Dot, None)),
+            Operation::Sin => Some((OperationXyz::Sin, None)),
+            Operation::Cos => Some((OperationXyz::Cos, None)),
+            Operation::Exp2 => Some((OperationXyz::Exp2, None)),
+            Operation::Log2 => Some((OperationXyz::Log2, None)),
+            Operation::Fract => Some((OperationXyz::Fract, None)),
+            Operation::IntBitsToFloat => Some((OperationXyz::IntBitsToFloat, None)),
+            Operation::FloatBitsToInt => Some((OperationXyz::FloatBitsToInt, None)),
+            Operation::Select => Some((OperationXyz::Select, None)),
+            Operation::Negate => Some((OperationXyz::Negate, None)),
+            Operation::Equal => Some((OperationXyz::Equal, None)),
+            Operation::NotEqual => Some((OperationXyz::NotEqual, None)),
+            Operation::Less => Some((OperationXyz::Less, None)),
+            Operation::Greater => Some((OperationXyz::Greater, None)),
+            Operation::LessEqual => Some((OperationXyz::LessEqual, None)),
+            Operation::GreaterEqual => Some((OperationXyz::GreaterEqual, None)),
+            Operation::NormalMapX => Some((OperationXyz::NormalMapX, None)),
+            Operation::NormalMapY => Some((OperationXyz::NormalMapY, None)),
+            Operation::NormalMapZ => Some((OperationXyz::NormalMapZ, None)),
+            Operation::NormalizeX => Some((OperationXyz::Normalize, Some('x'))),
+            Operation::NormalizeY => Some((OperationXyz::Normalize, Some('y'))),
+            Operation::NormalizeZ => Some((OperationXyz::Normalize, Some('z'))),
+            Operation::SphereMapCoordX => Some((OperationXyz::SphereMapCoordX, None)),
+            Operation::SphereMapCoordY => Some((OperationXyz::SphereMapCoordY, None)),
+            Operation::LocalToWorldPointX => Some((OperationXyz::LocalToWorldPoint, Some('x'))),
+            Operation::LocalToWorldPointY => Some((OperationXyz::LocalToWorldPoint, Some('y'))),
+            Operation::LocalToWorldPointZ => Some((OperationXyz::LocalToWorldPoint, Some('z'))),
+            Operation::LocalToWorldVectorX => Some((OperationXyz::LocalToWorldVector, Some('x'))),
+            Operation::LocalToWorldVectorY => Some((OperationXyz::LocalToWorldVector, Some('y'))),
+            Operation::LocalToWorldVectorZ => Some((OperationXyz::LocalToWorldVector, Some('z'))),
+            Operation::VarianceShadow => Some((OperationXyz::VarianceShadow, None)),
+            Operation::BlinnPhongSpecular => Some((OperationXyz::BlinnPhongSpecular, None)),
+            Operation::AnisotropicSpecular => Some((OperationXyz::AnisotropicSpecular, None)),
+            Operation::Fresnel => Some((OperationXyz::Fresnel, None)),
+            Operation::TintColorX => Some((OperationXyz::TintColor, Some('x'))),
+            Operation::TintColorY => Some((OperationXyz::TintColor, Some('y'))),
+            Operation::TintColorZ => Some((OperationXyz::TintColor, Some('z'))),
+        }
+    }
+}
+
+impl MergeXyzArgs<Operation> for OperationXyz {
+    fn merge_xyz_args(
+        &self,
+        args_x: &[usize],
+        args_y: &[usize],
+        args_z: &[usize],
+        exprs: &[OutputExpr<Operation>],
+        exprs_xyz: &mut ExprCacheXyz<Self>,
+    ) -> Option<Vec<usize>> {
+        let mut args = Vec::new();
+
+        for ((x, y), z) in args_x.iter().zip(args_y.iter()).zip(args_z.iter()) {
+            let arg = merge_xyz_exprs(*x, *y, *z, exprs, exprs_xyz)?;
+            args.push(arg);
+        }
+
+        Some(args)
     }
 }
