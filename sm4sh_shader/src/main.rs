@@ -18,7 +18,7 @@ use xc3_shader::graph::glsl::{GlslGraph, glsl_dependencies};
 
 use crate::{
     annotation::annotate_shader,
-    database::{convert_expr, shader_from_glsl},
+    database::{convert_expr, convert_expr_xyz, shader_from_glsl},
 };
 
 mod annotation;
@@ -315,6 +315,12 @@ fn create_shader_database(
                     attributes: attributes.into_values().collect(),
                     samplers: samplers.into_values().collect(),
                     parameters: parameters.into_values().collect(),
+                    output_dependencies_xyz: program.output_dependencies_xyz,
+                    exprs_xyz: program
+                        .exprs_xyz
+                        .into_iter()
+                        .map(convert_expr_xyz)
+                        .collect(),
                 },
             ))
         })
@@ -348,6 +354,15 @@ pub fn shader_str(s: &crate::database::ShaderProgram) -> anyhow::Result<String> 
         writeln!(&mut output, "{k} = var{v};")?;
         writeln!(&mut output)?;
     }
+
+    for (k, v) in &s.output_dependencies_xyz {
+        let mut visited = BTreeSet::new();
+        let mut visited_xyz = BTreeSet::new();
+        write_expr_xyz_dependencies_recursive(&mut output, s, *v, &mut visited, &mut visited_xyz)?;
+        writeln!(&mut output, "{k} = var{v};")?;
+        writeln!(&mut output)?;
+    }
+
     Ok(output)
 }
 
@@ -362,16 +377,46 @@ fn write_expr_dependencies_recursive(
         let expr = &s.exprs[i];
         match expr {
             xc3_shader::expr::OutputExpr::Value(xc3_shader::expr::Value::Texture(t)) => {
-                for arg in t.texcoords.iter() {
+                for arg in &t.texcoords {
                     write_expr_dependencies_recursive(output, s, *arg, visited)?;
                 }
             }
             xc3_shader::expr::OutputExpr::Func { args, .. } => {
-                for arg in args.iter() {
+                for arg in args {
                     write_expr_dependencies_recursive(output, s, *arg, visited)?;
                 }
             }
             xc3_shader::expr::OutputExpr::Value(_) => (),
+        }
+        writeln!(output, "var{i} = {expr};")?;
+    }
+    Ok(())
+}
+
+fn write_expr_xyz_dependencies_recursive(
+    output: &mut String,
+    s: &crate::database::ShaderProgram,
+    i: usize,
+    visited: &mut BTreeSet<usize>,
+    visited_xyz: &mut BTreeSet<usize>,
+) -> anyhow::Result<()> {
+    // Write all values that this value depends on first.
+    if visited_xyz.insert(i) {
+        let expr = &s.exprs_xyz[i];
+        match expr {
+            xc3_shader::expr::xyz::OutputExprXyz::Value(
+                xc3_shader::expr::xyz::ValueXyz::Texture { texcoords, .. },
+            ) => {
+                for arg in texcoords {
+                    write_expr_dependencies_recursive(output, s, *arg, visited)?;
+                }
+            }
+            xc3_shader::expr::xyz::OutputExprXyz::Func { args, .. } => {
+                for arg in args {
+                    write_expr_xyz_dependencies_recursive(output, s, *arg, visited, visited_xyz)?;
+                }
+            }
+            xc3_shader::expr::xyz::OutputExprXyz::Value(_) => (),
         }
         writeln!(output, "var{i} = {expr};")?;
     }
