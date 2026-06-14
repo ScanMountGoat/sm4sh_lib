@@ -9,7 +9,7 @@ half = "2.4.1"
 clap = {version = "4.5.28", features = ["derive"] }
 rayon = "1.10.0"
 wgpu = "29.0.1"
-glam = "0.32.1"
+glam = "0.33.1"
 log = "0.4.22"
 simple_logger = "5.0.0"
 image_dds = { version = "0.7.2", default-features = false }
