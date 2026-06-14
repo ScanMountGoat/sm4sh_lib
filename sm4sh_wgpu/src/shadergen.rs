@@ -1,4 +1,4 @@
-use std::{fmt::Write, sync::LazyLock};
+use std::{collections::BTreeSet, fmt::Write, sync::LazyLock};
 
 use aho_corasick::AhoCorasick;
 use case::CaseExt;
@@ -11,6 +11,7 @@ use sm4sh_model::{
         Value, ValueXyz,
     },
 };
+use smol_str::{SmolStr, format_smolstr};
 
 const OUT_VAR: &str = "out_color";
 const VAR_PREFIX: &str = "VAR_";
@@ -95,13 +96,43 @@ fn alpha_test_inner(ref_value: f32, func: &str) -> String {
 
 fn generate_assignments_wgsl(program: &ShaderProgram) -> String {
     let mut wgsl = String::new();
-    for (i, expr) in program.exprs.iter().enumerate() {
-        write!(&mut wgsl, "let {VAR_PREFIX}{i} = ",).unwrap();
-        if write_expr(&mut wgsl, expr).is_none() {
-            write!(wgsl, "0.0").unwrap();
+
+    // TODO: Reindex the used exprs in a separate preprocessing step?
+    let mut used_exprs = BTreeSet::new();
+    let mut used_exprs_xyz = BTreeSet::new();
+    if let Some(xyz) = program
+        .output_dependencies_xyz
+        .get(&SmolStr::from("out_attr0.xyz"))
+    {
+        visit_exprs_xyz(
+            *xyz,
+            &program.exprs,
+            &program.exprs_xyz,
+            &mut used_exprs,
+            &mut used_exprs_xyz,
+        );
+
+        if let Some(xyz) = program
+            .output_dependencies
+            .get(&SmolStr::from("out_attr0.w"))
+        {
+            visit_exprs(*xyz, &program.exprs, &mut used_exprs);
         }
-        writeln!(&mut wgsl, ";",).unwrap();
+    } else {
+        // If XYZ merging isn't possible, there shouldn't be any used exprs.
+        used_exprs = (0..program.exprs.len()).collect();
     }
+
+    for (i, expr) in program.exprs.iter().enumerate() {
+        if used_exprs.contains(&i) {
+            write!(&mut wgsl, "let {VAR_PREFIX}{i} = ",).unwrap();
+            if write_expr(&mut wgsl, expr).is_none() {
+                write!(wgsl, "0.0").unwrap();
+            }
+            writeln!(&mut wgsl, ";",).unwrap();
+        }
+    }
+
     for (i, expr) in program.exprs_xyz.iter().enumerate() {
         write!(&mut wgsl, "let {VAR_PREFIX_XYZ}{i} = ",).unwrap();
         if write_expr_xyz(&mut wgsl, expr).is_none() {
@@ -110,6 +141,48 @@ fn generate_assignments_wgsl(program: &ShaderProgram) -> String {
         writeln!(&mut wgsl, ";",).unwrap();
     }
     wgsl
+}
+
+fn visit_exprs(i: usize, exprs: &[OutputExpr<Operation>], visited: &mut BTreeSet<usize>) {
+    if visited.insert(i) {
+        match &exprs[i] {
+            OutputExpr::Value(Value::Texture(t)) => {
+                for arg in &t.texcoords {
+                    visit_exprs(*arg, exprs, visited);
+                }
+            }
+            OutputExpr::Func { args, .. } => {
+                for arg in args {
+                    visit_exprs(*arg, exprs, visited);
+                }
+            }
+            OutputExpr::Value(_) => (),
+        }
+    }
+}
+
+fn visit_exprs_xyz(
+    xyz: usize,
+    exprs: &[OutputExpr<Operation>],
+    exprs_xyz: &[OutputExprXyz<OperationXyz>],
+    visited: &mut BTreeSet<usize>,
+    visited_xyz: &mut BTreeSet<usize>,
+) {
+    if visited_xyz.insert(xyz) {
+        match &exprs_xyz[xyz] {
+            OutputExprXyz::Value(ValueXyz::Texture { texcoords, .. }) => {
+                for arg in texcoords {
+                    visit_exprs(*arg, exprs, visited);
+                }
+            }
+            OutputExprXyz::Func { args, .. } => {
+                for arg in args {
+                    visit_exprs_xyz(*arg, exprs, exprs_xyz, visited, visited_xyz);
+                }
+            }
+            OutputExprXyz::Value(_) => (),
+        }
+    }
 }
 
 fn write_expr(wgsl: &mut String, expr: &OutputExpr<Operation>) -> Option<()> {
@@ -437,16 +510,33 @@ fn write_channel(wgsl: &mut String, c: Option<char>) {
 
 fn generate_outputs_wgsl(program: &ShaderProgram) -> String {
     let mut wgsl = String::new();
-    // TODO: Use the xyz assignments if present.
     // TODO: Discard the scalar expressions that aren't actually used?
-    for (name, i) in program.output_dependencies.iter() {
-        match name.as_str() {
-            "out_attr0.x" => writeln!(&mut wgsl, "{OUT_VAR}.x = {VAR_PREFIX}{i};").unwrap(),
-            "out_attr0.y" => writeln!(&mut wgsl, "{OUT_VAR}.y = {VAR_PREFIX}{i};").unwrap(),
-            "out_attr0.z" => writeln!(&mut wgsl, "{OUT_VAR}.z = {VAR_PREFIX}{i};").unwrap(),
-            "out_attr0.w" => writeln!(&mut wgsl, "{OUT_VAR}.w = {VAR_PREFIX}{i};").unwrap(),
-            _ => error!("Unrecognized output {name}"),
+
+    // Assume there is only one fragment output.
+    // Most shaders can merge XYZ channels for easier to read code.
+    if let Some(xyz) = program
+        .output_dependencies_xyz
+        .get(&SmolStr::from("out_attr0.xyz"))
+    {
+        for c in "xyz".chars() {
+            writeln!(&mut wgsl, "{OUT_VAR}.{c} = {VAR_PREFIX_XYZ}{xyz}.{c};").unwrap()
         }
+    } else {
+        for c in "xyz".chars() {
+            if let Some(i) = program
+                .output_dependencies
+                .get(&format_smolstr!("out_attr0.{c}"))
+            {
+                writeln!(&mut wgsl, "{OUT_VAR}.{c} = {VAR_PREFIX}{i}.{c};").unwrap()
+            }
+        }
+    }
+    // Alpha code is always handled separately as scalar expressions.
+    if let Some(i) = program
+        .output_dependencies
+        .get(&SmolStr::from("out_attr0.w"))
+    {
+        writeln!(&mut wgsl, "{OUT_VAR}.w = {VAR_PREFIX}{i};").unwrap()
     }
 
     wgsl

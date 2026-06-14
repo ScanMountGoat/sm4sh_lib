@@ -291,7 +291,7 @@ impl From<Option<xc3_shader::expr::xyz::ChannelXyz>> for ChannelXyz {
             Some(xc3_shader::expr::xyz::ChannelXyz::X) => Self::X,
             Some(xc3_shader::expr::xyz::ChannelXyz::Y) => Self::Y,
             Some(xc3_shader::expr::xyz::ChannelXyz::Z) => Self::Z,
-            Some(xc3_shader::expr::xyz::ChannelXyz::W) => Self::Z,
+            Some(xc3_shader::expr::xyz::ChannelXyz::W) => Self::W,
             None => Self::None,
         }
     }

@@ -106,6 +106,7 @@ impl xc3_shader::expr::Operation for Operation {
 
         op_normal_map(graph, expr)
             // .or_else(|| op_mix(graph, expr))
+            .or_else(|| op_effect_light(graph, expr))
             .or_else(|| op_blinn_phong_spec(graph, expr))
             .or_else(|| op_blinn_phong_spec_anisotropic(graph, expr))
             .or_else(|| op_fresnel(graph, expr))
@@ -521,6 +522,16 @@ impl MergeXyzArgs<Operation> for OperationXyz {
                 let arg = merge_xyz_exprs(args_x[0], args_y[1], args_z[2], exprs, exprs_xyz)?;
                 Some(vec![arg])
             }
+            OperationXyz::BlinnPhongSpecular => {
+                // TODO: Check that all args are the same.
+                let normal = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+                let light_dir = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;
+                let eye = merge_xyz_exprs(args_x[6], args_x[7], args_x[8], exprs, exprs_xyz)?;
+
+                let exponent = merge_xyz_exprs(args_x[9], args_y[9], args_z[9], exprs, exprs_xyz)?;
+
+                Some(vec![normal, light_dir, eye, exponent])
+            }
             OperationXyz::AnisotropicSpecular => {
                 // TODO: Check that all args are the same.
                 let normal = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
@@ -541,6 +552,14 @@ impl MergeXyzArgs<Operation> for OperationXyz {
                 let param = merge_xyz_exprs(args_x[6], args_y[6], args_z[6], exprs, exprs_xyz)?;
 
                 Some(vec![normal, eye, param])
+            }
+            OperationXyz::TintColor => {
+                // TODO: Check that all args are the same.
+                let rgb = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+
+                let param = merge_xyz_exprs(args_x[3], args_y[3], args_z[3], exprs, exprs_xyz)?;
+
+                Some(vec![rgb, param])
             }
             _ => {
                 let mut args = Vec::new();

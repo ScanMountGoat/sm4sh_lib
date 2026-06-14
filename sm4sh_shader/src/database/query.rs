@@ -1339,3 +1339,27 @@ pub fn op_tint_color<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation,
 
     Some((op, vec![x, y, z, amount]))
 }
+
+static OP_EFFECT_LIGHT: LazyLock<Graph> = LazyLock::new(|| {
+    // Add enough code to remove unsupported effect light integer indexing code.
+    // TODO: Is this some sort of point lighting?
+    let query = indoc! {"
+        void main() {
+            cond = cond >= 0.0 ? 1.0 : 0.0;
+            unk0 = unk0 * cond;
+            unk0 = unk0 * unk_clamp;
+
+            unk_dot = dot(vec4(a_x, a_y, a_z, 0.0), vec4(b_x, b_y, b_z, 0.0));
+            unk_dot = clamp(unk_dot, 0.0, 1.0);
+
+            result = fma(unk0, unk_dot, unk1);
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_effect_light<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+    // TODO: create an operation enum variant for effect lighting.
+    let _result = query_nodes(expr, graph, &OP_EFFECT_LIGHT)?;
+    Some((Operation::Unk, vec![]))
+}
