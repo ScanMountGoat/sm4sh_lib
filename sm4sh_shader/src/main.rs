@@ -405,9 +405,9 @@ fn write_expr_xyz_dependencies_recursive(
         let expr = &s.exprs_xyz[i];
         match expr {
             xc3_shader::expr::xyz::OutputExprXyz::Value(
-                xc3_shader::expr::xyz::ValueXyz::Texture { texcoords, .. },
+                xc3_shader::expr::xyz::ValueXyz::Texture(t),
             ) => {
-                for arg in texcoords {
+                for arg in &t.texcoords {
                     write_expr_dependencies_recursive(output, s, *arg, visited)?;
                 }
             }

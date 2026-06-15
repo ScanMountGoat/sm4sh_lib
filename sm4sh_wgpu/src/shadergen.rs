@@ -170,8 +170,8 @@ fn visit_exprs_xyz(
 ) {
     if visited_xyz.insert(xyz) {
         match &exprs_xyz[xyz] {
-            OutputExprXyz::Value(ValueXyz::Texture { texcoords, .. }) => {
-                for arg in texcoords {
+            OutputExprXyz::Value(ValueXyz::Texture(t)) => {
+                for arg in &t.texcoords {
                     visit_exprs(*arg, exprs, visited);
                 }
             }
@@ -544,12 +544,17 @@ fn generate_outputs_wgsl(program: &ShaderProgram) -> String {
 
 fn write_expr_xyz(wgsl: &mut String, value: &OutputExprXyz<OperationXyz>) -> Option<()> {
     match value {
-        OutputExprXyz::Func { op, args } => write_func_xyz(wgsl, op, args),
+        OutputExprXyz::Func { op, args, channel } => write_func_xyz(wgsl, op, args, *channel),
         OutputExprXyz::Value(v) => write_value_xyz(wgsl, v),
     }
 }
 
-fn write_func_xyz(wgsl: &mut String, op: &OperationXyz, args: &[usize]) -> Option<()> {
+fn write_func_xyz(
+    wgsl: &mut String,
+    op: &OperationXyz,
+    args: &[usize],
+    channel: Option<ChannelXyz>,
+) -> Option<()> {
     let arg0 = args.first();
     let arg1 = args.get(1);
     let arg2 = args.get(2);
@@ -563,10 +568,10 @@ fn write_func_xyz(wgsl: &mut String, op: &OperationXyz, args: &[usize]) -> Optio
     let a = VAR_PREFIX_XYZ;
     match op {
         OperationXyz::Unk => return None,
-        OperationXyz::Add => write!(wgsl, "{a}{} + {a}{}", arg0?, arg1?).unwrap(),
-        OperationXyz::Sub => write!(wgsl, "{a}{} - {a}{}", arg0?, arg1?).unwrap(),
-        OperationXyz::Mul => write!(wgsl, "{a}{} * {a}{}", arg0?, arg1?).unwrap(),
-        OperationXyz::Div => write!(wgsl, "{a}{} / {a}{}", arg0?, arg1?).unwrap(),
+        OperationXyz::Add => write!(wgsl, "({a}{} + {a}{})", arg0?, arg1?).unwrap(),
+        OperationXyz::Sub => write!(wgsl, "({a}{} - {a}{})", arg0?, arg1?).unwrap(),
+        OperationXyz::Mul => write!(wgsl, "({a}{} * {a}{})", arg0?, arg1?).unwrap(),
+        OperationXyz::Div => write!(wgsl, "({a}{} / {a}{})", arg0?, arg1?).unwrap(),
         OperationXyz::Mix => write!(wgsl, "mix({a}{}, {a}{}, {a}{})", arg0?, arg1?, arg2?).unwrap(),
         OperationXyz::Clamp => {
             write!(wgsl, "clamp({a}{}, {a}{}, {a}{})", arg0?, arg1?, arg2?).unwrap()
@@ -578,7 +583,7 @@ fn write_func_xyz(wgsl: &mut String, op: &OperationXyz, args: &[usize]) -> Optio
         OperationXyz::Power => write!(wgsl, "pow({a}{}, {a}{})", arg0?, arg1?).unwrap(),
         OperationXyz::Sqrt => write!(wgsl, "sqrt({a}{})", arg0?).unwrap(),
         OperationXyz::InverseSqrt => write!(wgsl, "inverseSqrt({a}{})", arg0?).unwrap(),
-        OperationXyz::Fma => write!(wgsl, "{a}{} * {a}{} + {a}{}", arg0?, arg1?, arg2?).unwrap(),
+        OperationXyz::Fma => write!(wgsl, "({a}{} * {a}{} + {a}{})", arg0?, arg1?, arg2?).unwrap(),
         OperationXyz::Dot => write!(
             wgsl,
             "vec3(dot(vec4({a}{}.x, {a}{}.x, {a}{}.x, {a}{}.x), vec4({a}{}.x, {a}{}.x, {a}{}.x, {a}{}.x)))",
@@ -593,12 +598,12 @@ fn write_func_xyz(wgsl: &mut String, op: &OperationXyz, args: &[usize]) -> Optio
             write!(wgsl, "mix({a}{}, {a}{}, vec3<f32>({a}{}))", arg2?, arg1?, arg0?).unwrap()
         }
         OperationXyz::Negate => write!(wgsl, "-({a}{})", arg0?).unwrap(),
-        OperationXyz::Equal => write!(wgsl, "{a}{} == {a}{}", arg0?, arg1?).unwrap(),
-        OperationXyz::NotEqual => write!(wgsl, "{a}{} != {a}{}", arg0?, arg1?).unwrap(),
-        OperationXyz::Less => write!(wgsl, "{a}{} < {a}{}", arg0?, arg1?).unwrap(),
-        OperationXyz::Greater => write!(wgsl, "{a}{} > {a}{}", arg0?, arg1?).unwrap(),
-        OperationXyz::LessEqual => write!(wgsl, "{a}{} <= {a}{}", arg0?, arg1?).unwrap(),
-        OperationXyz::GreaterEqual => write!(wgsl, "{a}{} >= {a}{}", arg0?, arg1?).unwrap(),
+        OperationXyz::Equal => write!(wgsl, "({a}{} == {a}{})", arg0?, arg1?).unwrap(),
+        OperationXyz::NotEqual => write!(wgsl, "({a}{} != {a}{})", arg0?, arg1?).unwrap(),
+        OperationXyz::Less => write!(wgsl, "({a}{} < {a}{})", arg0?, arg1?).unwrap(),
+        OperationXyz::Greater => write!(wgsl, "({a}{} > {a}{})", arg0?, arg1?).unwrap(),
+        OperationXyz::LessEqual => write!(wgsl, "({a}{} <= {a}{})", arg0?, arg1?).unwrap(),
+        OperationXyz::GreaterEqual => write!(wgsl, "({a}{} >= {a}{})", arg0?, arg1?).unwrap(),
         OperationXyz::Fract => write!(wgsl, "fract({a}{})", arg0?).unwrap(),
         OperationXyz::IntBitsToFloat => write!(wgsl, "bitcast<f32>({a}{})", arg0?).unwrap(),
         OperationXyz::FloatBitsToInt => write!(wgsl, "bitcast<i32>({a}{})", arg0?).unwrap(),
@@ -637,50 +642,40 @@ fn write_func_xyz(wgsl: &mut String, op: &OperationXyz, args: &[usize]) -> Optio
             write!(wgsl, "tint_color({a}{}, {a}{}.x)", arg0?, arg1?).unwrap()
         }
     }
+    write_channel_xyz(wgsl, channel);
     Some(())
 }
 
 // TODO: share code with scalar?
 fn write_value_xyz(wgsl: &mut String, value: &ValueXyz) -> Option<()> {
     match value {
-        ValueXyz::Texture {
-            name,
-            channel,
-            texcoords,
-        } => {
-            write_texture_inner(wgsl, name, texcoords)?;
-            write_channel_xyz(wgsl, *channel);
+        ValueXyz::Texture(t) => {
+            write_texture_inner(wgsl, &t.name, &t.texcoords)?;
+            write_channel_xyz(wgsl, t.channel);
             Some(())
         }
-        ValueXyz::Attribute { name, channel } => {
+        ValueXyz::Attribute(a) => {
             // Some "attributes" are the simplified result of queries like the eye vector.
-            if name.starts_with("a_")
+            if a.name.starts_with("a_")
                 || matches!(
-                    name.as_str(),
+                    a.name.as_str(),
                     "eye" | "light_position" | "light_map_position" | "bitangent_sign"
                 )
             {
-                write!(wgsl, "{}", name).unwrap();
-                write_channel_xyz(wgsl, *channel);
+                write!(wgsl, "{}", a.name).unwrap();
+                write_channel_xyz(wgsl, a.channel);
                 Some(())
             } else {
-                // TODO: Better formatting for error reporting.
-                error!("Unrecognized attribute {name}.{channel:?}");
+                error!("Unrecognized attribute {a}");
                 None
             }
         }
-        ValueXyz::Parameter {
-            name,
-            field,
-            index,
-            channel,
-        } => {
-            if write_parameter_inner(wgsl, name, field, *index).is_none() {
-                // TODO: Better formatting for error reporting.
-                error!("Unrecognized uniform {name}.{field}[{index:?}].{channel:?}");
+        ValueXyz::Parameter(p) => {
+            if write_parameter_inner(wgsl, &p.name, &p.field, p.index).is_none() {
+                error!("Unrecognized parameter {p}");
                 None
             } else {
-                write_channel_xyz(wgsl, *channel);
+                write_channel_xyz(wgsl, p.channel);
                 Some(())
             }
         }

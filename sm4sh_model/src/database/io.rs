@@ -5,7 +5,7 @@ use log::error;
 use ordered_float::OrderedFloat;
 use smol_str::{SmolStr, ToSmolStr};
 use varint_rs::{VarintReader, VarintWriter};
-use xc3_shader::expr::xyz::{OutputExprXyz, ValueXyz};
+use xc3_shader::expr::xyz::{AttributeXyz, OutputExprXyz, ParameterXyz, TextureXyz, ValueXyz};
 
 use crate::database::OperationXyz;
 
@@ -213,6 +213,8 @@ enum OutputExprXyzIndexed {
         #[br(parse_with = parse_vec)]
         #[bw(write_with = write_vec)]
         args: Vec<VarInt>,
+
+        channel: ChannelXyz,
     },
 }
 
@@ -430,7 +432,7 @@ impl ShaderDatabaseIndexed {
                         exprs,
                         expr_indices,
                     )),
-                    OutputExprXyz::Func { op, args } => OutputExprXyzIndexed::Func {
+                    OutputExprXyz::Func { op, args, channel } => OutputExprXyzIndexed::Func {
                         op: *op,
                         args: args
                             .iter()
@@ -444,6 +446,7 @@ impl ShaderDatabaseIndexed {
                                 )
                             })
                             .collect(),
+                        channel: (*channel).into(),
                     },
                 };
 
@@ -653,7 +656,7 @@ impl ShaderDatabaseIndexed {
                     OutputExprXyzIndexed::Value(v) => OutputExprXyz::Value(
                         self.value_xyz_from_indexed(&self.values_xyz[v.0], exprs, expr_to_index),
                     ),
-                    OutputExprXyzIndexed::Func { op, args } => OutputExprXyz::Func {
+                    OutputExprXyzIndexed::Func { op, args, channel } => OutputExprXyz::Func {
                         op: *op,
                         args: args
                             .iter()
@@ -667,6 +670,7 @@ impl ShaderDatabaseIndexed {
                                 )
                             })
                             .collect(),
+                        channel: (*channel).into(),
                     },
                 };
                 let index = exprs_xyz.insert_full(expr).0;
@@ -683,34 +687,24 @@ impl ShaderDatabaseIndexed {
         expr_indices: &mut IndexMap<usize, VarInt>,
     ) -> ValueXyzIndexed {
         match v {
-            ValueXyz::Texture {
-                name,
-                channel,
-                texcoords,
-            } => ValueXyzIndexed::Texture(TextureXyzIndexed {
-                name: add_string(&mut self.texture_names, name),
-                channel: channel.into(),
-                texcoords: texcoords
+            ValueXyz::Texture(t) => ValueXyzIndexed::Texture(TextureXyzIndexed {
+                name: add_string(&mut self.texture_names, t.name),
+                channel: t.channel.into(),
+                texcoords: t
+                    .texcoords
                     .iter()
                     .map(|t| self.add_output_expr(*t, exprs, expr_indices))
                     .collect(),
             }),
-            ValueXyz::Attribute { name, channel } => {
-                ValueXyzIndexed::Attribute(AttributeXyzIndexed {
-                    name: add_string(&mut self.attribute_names, name),
-                    channel: channel.into(),
-                })
-            }
-            ValueXyz::Parameter {
-                name,
-                field,
-                index,
-                channel,
-            } => ValueXyzIndexed::Parameter(ParameterXyzIndexed {
-                name: add_string(&mut self.buffer_names, name),
-                field: add_string(&mut self.buffer_field_names, field),
-                index: OptVarInt(index),
-                channel: channel.into(),
+            ValueXyz::Attribute(a) => ValueXyzIndexed::Attribute(AttributeXyzIndexed {
+                name: add_string(&mut self.attribute_names, a.name),
+                channel: a.channel.into(),
+            }),
+            ValueXyz::Parameter(p) => ValueXyzIndexed::Parameter(ParameterXyzIndexed {
+                name: add_string(&mut self.buffer_names, p.name),
+                field: add_string(&mut self.buffer_field_names, p.field),
+                index: OptVarInt(p.index),
+                channel: p.channel.into(),
             }),
             ValueXyz::Float(f) => ValueXyzIndexed::Float(f),
         }
@@ -724,13 +718,13 @@ impl ShaderDatabaseIndexed {
     ) -> ValueXyz {
         match v {
             ValueXyzIndexed::Float(f) => ValueXyz::Float(*f),
-            ValueXyzIndexed::Parameter(p) => ValueXyz::Parameter {
+            ValueXyzIndexed::Parameter(p) => ValueXyz::Parameter(ParameterXyz {
                 name: self.buffer_names[p.name.0].clone(),
                 field: self.buffer_field_names[p.field.0].clone(),
                 index: p.index.0,
                 channel: p.channel.into(),
-            },
-            ValueXyzIndexed::Texture(t) => ValueXyz::Texture {
+            }),
+            ValueXyzIndexed::Texture(t) => ValueXyz::Texture(TextureXyz {
                 name: self.texture_names[t.name.0].clone(),
                 channel: t.channel.into(),
                 texcoords: t
@@ -738,11 +732,11 @@ impl ShaderDatabaseIndexed {
                     .iter()
                     .map(|coord| self.output_expr_from_indexed(coord.0, exprs, expr_to_index))
                     .collect(),
-            },
-            ValueXyzIndexed::Attribute(a) => ValueXyz::Attribute {
+            }),
+            ValueXyzIndexed::Attribute(a) => ValueXyz::Attribute(AttributeXyz {
                 name: self.attribute_names[a.name.0].clone(),
                 channel: a.channel.into(),
-            },
+            }),
         }
     }
 }

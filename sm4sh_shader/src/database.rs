@@ -240,9 +240,10 @@ pub fn convert_expr_xyz(
 ) -> OutputExprXyz<sm4sh_model::database::OperationXyz> {
     match e {
         OutputExprXyz::Value(value) => OutputExprXyz::Value(value),
-        OutputExprXyz::Func { op, args } => OutputExprXyz::Func {
+        OutputExprXyz::Func { op, args, channel } => OutputExprXyz::Func {
             op: op.into(),
             args,
+            channel,
         },
     }
 }
