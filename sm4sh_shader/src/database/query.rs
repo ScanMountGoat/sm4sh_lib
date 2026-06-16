@@ -833,10 +833,10 @@ static OP_DOT4: LazyLock<Graph> = LazyLock::new(|| {
     Graph::parse_glsl(query).unwrap().simplify()
 });
 
-pub fn op_dot<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+pub fn op_dot4<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     query_nodes(expr, graph, &OP_DOT4).and_then(|result| {
         Some((
-            Operation::Dot,
+            Operation::Dot4,
             vec![
                 *result.get("ax")?,
                 *result.get("ay")?,
@@ -846,6 +846,31 @@ pub fn op_dot<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'
                 *result.get("by")?,
                 *result.get("bz")?,
                 *result.get("bw")?,
+            ],
+        ))
+    })
+}
+
+static OP_DOT3: LazyLock<Graph> = LazyLock::new(|| {
+    let query = indoc! {"
+        void main() {
+            result = dot(vec4(ax, ay, az, 0.0), vec4(bx, by, bz, 0.0));
+        }
+    "};
+    Graph::parse_glsl(query).unwrap().simplify()
+});
+
+pub fn op_dot3<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+    query_nodes(expr, graph, &OP_DOT3).and_then(|result| {
+        Some((
+            Operation::Dot3,
+            vec![
+                *result.get("ax")?,
+                *result.get("ay")?,
+                *result.get("az")?,
+                *result.get("bx")?,
+                *result.get("by")?,
+                *result.get("bz")?,
             ],
         ))
     })
@@ -895,24 +920,12 @@ static OP_NORMALIZE_XYZ: LazyLock<Graph> = LazyLock::new(|| {
     Graph::parse_glsl(query).unwrap().simplify()
 });
 
-static OP_NORMALIZE_XYZW: LazyLock<Graph> = LazyLock::new(|| {
-    let query = indoc! {"
-        void main() {
-            length = dot(vec4(x, y, z, w), vec4(x, y, z, w));
-            inverse_length = inversesqrt(length);
-            result = value * inverse_length;
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
-});
-
 pub fn op_normalize<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
-    let result = query_nodes(expr, graph, &OP_NORMALIZE_XYZW)?;
+    let result = query_nodes(expr, graph, &OP_NORMALIZE_XYZ)?;
     let value = result.get("value")?;
     let x = result.get("x")?;
     let y = result.get("y")?;
     let z = result.get("z")?;
-    let w = result.get("w")?;
 
     let op = if value == x {
         Operation::NormalizeX
@@ -924,41 +937,43 @@ pub fn op_normalize<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, 
         return None;
     };
 
-    Some((op, vec![x, y, z, w]))
+    Some((op, vec![x, y, z]))
 }
 
-static OP_REFLECT_X: LazyLock<Graph> = LazyLock::new(|| {
-    // reflect(I, N) = I - 2.0 * dot(N, I) * N
-    // -2.0 * dot(-I, N) - I = 2 * dot(N, I) - I = I -
+static OP_NEG_REFLECT: LazyLock<Graph> = LazyLock::new(|| {
+    // -reflect(I, N) = -(I - 2.0 * dot(N, I) * N)
+    // -2.0 * dot(-I, N) * N - I = 2 * dot(N, I) * N - I = -(I - 2 * dot(I, N) * N)
     let query = indoc! {"
         void main() {
             dot_product = dot(vec4(-I_x, -I_y, -I_z, -0.0), vec4(N_x, N_y, N_z, -0.0));
             two_dot_product = dot_product + dot_product;
-            result = fma(-two_dot_product, N_x, -I_x);
+            result = fma(-two_dot_product, N_value, -I_value);
         }
     "};
     Graph::parse_glsl(query).unwrap().simplify()
 });
 
-pub fn op_reflect<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
-    let result = query_nodes(expr, graph, &OP_REFLECT_X)?;
-    let value = result.get("value")?;
-    let x = result.get("x")?;
-    let y = result.get("y")?;
-    let z = result.get("z")?;
-    let w = result.get("w")?;
+pub fn op_neg_reflect<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
+    let result = query_nodes(expr, graph, &OP_NEG_REFLECT)?;
+    let n = result.get("N_value")?;
+    let n_x = result.get("N_x")?;
+    let n_y = result.get("N_y")?;
+    let n_z = result.get("N_z")?;
+    let i_x = result.get("I_x")?;
+    let i_y = result.get("I_y")?;
+    let i_z = result.get("I_z")?;
 
-    let op = if value == x {
-        Operation::NormalizeX
-    } else if value == y {
-        Operation::NormalizeY
-    } else if value == z {
-        Operation::NormalizeZ
+    let op = if n == n_x {
+        Operation::NegReflectX
+    } else if n == n_y {
+        Operation::NegReflectY
+    } else if n == n_z {
+        Operation::NegReflectZ
     } else {
         return None;
     };
 
-    Some((op, vec![x, y, z, w]))
+    Some((op, vec![i_x, i_y, i_z, n_x, n_y, n_z]))
 }
 
 pub fn binary_op<'a>(

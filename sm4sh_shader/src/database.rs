@@ -54,7 +54,8 @@ pub enum Operation {
     Sqrt,
     InverseSqrt,
     Fma,
-    Dot,
+    Dot3,
+    Dot4,
     Sin,
     Cos,
     Exp2,
@@ -91,6 +92,9 @@ pub enum Operation {
     TintColorX,
     TintColorY,
     TintColorZ,
+    NegReflectX,
+    NegReflectY,
+    NegReflectZ,
 }
 
 impl std::fmt::Display for Operation {
@@ -116,9 +120,11 @@ impl xc3_shader::expr::Operation for Operation {
             .or_else(|| op_local_to_world_vector(graph, expr))
             .or_else(|| op_tint_color(graph, expr))
             .or_else(|| op_normalize(graph, expr))
+            .or_else(|| op_neg_reflect(graph, expr))
             .or_else(|| op_pow(graph, expr))
             .or_else(|| op_sqrt(graph, expr))
-            .or_else(|| op_dot(graph, expr))
+            .or_else(|| op_dot3(graph, expr))
+            .or_else(|| op_dot4(graph, expr))
             .or_else(|| op_div(graph, expr))
             .or_else(|| ternary(graph, expr))
             .or_else(|| binary_op(graph, expr, BinaryOp::Add, Operation::Add))
@@ -266,7 +272,8 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::Sqrt => Self::Sqrt,
             Operation::InverseSqrt => Self::InverseSqrt,
             Operation::Fma => Self::Fma,
-            Operation::Dot => Self::Dot,
+            Operation::Dot3 => Self::Dot3,
+            Operation::Dot4 => Self::Dot4,
             Operation::Sin => Self::Sin,
             Operation::Cos => Self::Cos,
             Operation::Exp2 => Self::Exp2,
@@ -303,6 +310,9 @@ impl From<Operation> for sm4sh_model::database::Operation {
             Operation::TintColorX => Self::TintColorX,
             Operation::TintColorY => Self::TintColorY,
             Operation::TintColorZ => Self::TintColorZ,
+            Operation::NegReflectX => Self::NegReflectX,
+            Operation::NegReflectY => Self::NegReflectY,
+            Operation::NegReflectZ => Self::NegReflectZ,
         }
     }
 }
@@ -350,6 +360,7 @@ impl From<OperationXyz> for sm4sh_model::database::OperationXyz {
             OperationXyz::AnisotropicSpecular => Self::AnisotropicSpecular,
             OperationXyz::Fresnel => Self::Fresnel,
             OperationXyz::TintColor => Self::TintColor,
+            OperationXyz::NegReflect => Self::NegReflect,
         }
     }
 }
@@ -416,6 +427,7 @@ pub enum OperationXyz {
     AnisotropicSpecular,
     Fresnel,
     TintColor,
+    NegReflect,
 }
 
 impl std::fmt::Display for OperationXyz {
@@ -444,7 +456,8 @@ impl OperationXyzChannel for Operation {
             Operation::Sqrt => Some((OperationXyz::Sqrt, None)),
             Operation::InverseSqrt => Some((OperationXyz::InverseSqrt, None)),
             Operation::Fma => Some((OperationXyz::Fma, None)),
-            Operation::Dot => Some((OperationXyz::Dot, None)),
+            Operation::Dot3 => Some((OperationXyz::Dot, None)),
+            Operation::Dot4 => None, // TODO: support dot4?
             Operation::Sin => Some((OperationXyz::Sin, None)),
             Operation::Cos => Some((OperationXyz::Cos, None)),
             Operation::Exp2 => Some((OperationXyz::Exp2, None)),
@@ -481,6 +494,9 @@ impl OperationXyzChannel for Operation {
             Operation::TintColorX => Some((OperationXyz::TintColor, Some('x'))),
             Operation::TintColorY => Some((OperationXyz::TintColor, Some('y'))),
             Operation::TintColorZ => Some((OperationXyz::TintColor, Some('z'))),
+            Operation::NegReflectX => Some((OperationXyz::NegReflect, Some('x'))),
+            Operation::NegReflectY => Some((OperationXyz::NegReflect, Some('y'))),
+            Operation::NegReflectZ => Some((OperationXyz::NegReflect, Some('z'))),
         }
     }
 }
@@ -496,17 +512,16 @@ impl MergeXyzArgs<Operation> for OperationXyz {
     ) -> Option<Vec<usize>> {
         match self {
             OperationXyz::Normalize => {
-                if exprs[args_x[3]] == exprs[args_y[3]]
-                    && exprs[args_y[3]] == exprs[args_z[3]]
-                    && exprs[args_x[3]]
-                        == OutputExpr::Value(xc3_shader::expr::Value::Float(0.0.into()))
-                {
-                    // TODO: Check that all args are the same.
-                    let arg = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
-                    Some(vec![arg])
-                } else {
-                    None
-                }
+                // TODO: Check that all args are the same.
+                let arg = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+                Some(vec![arg])
+            }
+            OperationXyz::Dot => {
+                // TODO: Check that all args are the same.
+                let a = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+                let b = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;
+
+                Some(vec![a, b])
             }
             OperationXyz::LocalToWorldPoint => {
                 // TODO: Check that all args are the same.
@@ -561,6 +576,13 @@ impl MergeXyzArgs<Operation> for OperationXyz {
                 let param = merge_xyz_exprs(args_x[3], args_y[3], args_z[3], exprs, exprs_xyz)?;
 
                 Some(vec![rgb, param])
+            }
+            OperationXyz::NegReflect => {
+                // TODO: Check that all args are the same.
+                let eye = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
+                let normal = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;
+
+                Some(vec![eye, normal])
             }
             _ => {
                 let mut args = Vec::new();

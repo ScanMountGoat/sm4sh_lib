@@ -96,7 +96,8 @@ pub enum Operation {
     Sqrt,
     InverseSqrt,
     Fma,
-    Dot,
+    Dot3,
+    Dot4,
     Sin,
     Cos,
     Exp2,
@@ -133,6 +134,9 @@ pub enum Operation {
     TintColorX,
     TintColorY,
     TintColorZ,
+    NegReflectX,
+    NegReflectY,
+    NegReflectZ,
 }
 
 impl std::fmt::Display for Operation {
@@ -184,4 +188,5 @@ pub enum OperationXyz {
     AnisotropicSpecular,
     Fresnel,
     TintColor,
+    NegReflect,
 }

@@ -403,7 +403,11 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
         Operation::Sqrt => write!(wgsl, "sqrt({a}{})", arg0?).unwrap(),
         Operation::InverseSqrt => write!(wgsl, "inverseSqrt({a}{})", arg0?).unwrap(),
         Operation::Fma => write!(wgsl, "{a}{} * {a}{} + {a}{}", arg0?, arg1?, arg2?).unwrap(),
-        Operation::Dot => write!(wgsl,
+        Operation::Dot3 => write!(wgsl,
+            "dot(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{}))",
+            arg0?, arg1?, arg2?, arg3?, arg4?, arg5?
+        ).unwrap(),
+        Operation::Dot4 => write!(wgsl,
             "dot(vec4({a}{}, {a}{}, {a}{}, {a}{}), vec4({a}{}, {a}{}, {a}{}, {a}{}))",
             arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, arg7?
         ).unwrap(),
@@ -437,17 +441,17 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
             "apply_normal_map(vec3({a}{}, {a}{}, {a}{}), a_Tangent.xyz, a_Binormal.xyz, a_Normal.xyz).z",
             arg0?, arg1?, arg2?
         ).unwrap(),
-        Operation::NormalizeX => write!(wgsl,
-            "normalize(vec4({a}{}, {a}{}, {a}{}, {a}{})).x",
-            arg0?, arg1?, arg2?, arg3?
+        Operation::NormalizeX => write!(wgsl, 
+            "normalize(vec3({a}{}, {a}{}, {a}{})).x", 
+            arg0?, arg1?, arg2?
         ).unwrap(),
         Operation::NormalizeY => write!(wgsl,
-            "normalize(vec4({a}{}, {a}{}, {a}{}, {a}{})).y",
-            arg0?, arg1?, arg2?, arg3?
+            "normalize(vec3({a}{}, {a}{}, {a}{})).y", 
+            arg0?, arg1?, arg2?
         ).unwrap(),
         Operation::NormalizeZ => write!(wgsl,
-            "normalize(vec4({a}{}, {a}{}, {a}{}, {a}{})).z",
-            arg0?, arg1?, arg2?, arg3?
+            "normalize(vec3({a}{}, {a}{}, {a}{})).z", 
+            arg0?, arg1?, arg2?
         ).unwrap(),
         Operation::SphereMapCoordX => write!(wgsl,
             "sphere_map_coords(a_Position.xyz, a_Normal.xyz, {a}{}).x",
@@ -491,6 +495,18 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
         Operation::TintColorZ => write!(wgsl,
             "tint_color(vec3({a}{}, {a}{}, {a}{}), {a}{}).z",
             arg0?, arg1?, arg2?, arg3?,
+        ).unwrap(),
+        Operation::NegReflectX => write!(wgsl,
+            "-reflect(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{})).x",
+            arg0?, arg1?, arg2?, arg3?, arg4?, arg5?
+        ).unwrap(),
+        Operation::NegReflectY => write!(wgsl,
+            "-reflect(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{})).y",
+            arg0?, arg1?, arg2?, arg3?, arg4?, arg5?
+        ).unwrap(),
+        Operation::NegReflectZ => write!(wgsl,
+            "-reflect(vec3({a}{}, {a}{}, {a}{}), vec3({a}{}, {a}{}, {a}{})).z",
+            arg0?, arg1?, arg2?, arg3?, arg4?, arg5?
         ).unwrap(),
     }
     Some(())
@@ -640,6 +656,9 @@ fn write_func_xyz(
         }
         OperationXyz::TintColor => {
             write!(wgsl, "tint_color({a}{}, {a}{}.x)", arg0?, arg1?).unwrap()
+        }
+        OperationXyz::NegReflect => {
+            write!(wgsl, "-reflect({a}{}, {a}{})", arg0?, arg1?).unwrap()
         }
     }
     write_channel_xyz(wgsl, channel);
