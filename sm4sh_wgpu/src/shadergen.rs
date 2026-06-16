@@ -441,7 +441,7 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
             "apply_normal_map(vec3({a}{}, {a}{}, {a}{}), a_Tangent.xyz, a_Binormal.xyz, a_Normal.xyz).z",
             arg0?, arg1?, arg2?
         ).unwrap(),
-        Operation::NormalizeX => write!(wgsl, 
+        Operation::NormalizeX => write!(wgsl,
             "normalize(vec3({a}{}, {a}{}, {a}{})).x", 
             arg0?, arg1?, arg2?
         ).unwrap(),
@@ -543,7 +543,7 @@ fn generate_outputs_wgsl(program: &ShaderProgram) -> String {
                 .output_dependencies
                 .get(&format_smolstr!("out_attr0.{c}"))
             {
-                writeln!(&mut wgsl, "{OUT_VAR}.{c} = {VAR_PREFIX}{i}.{c};").unwrap()
+                writeln!(&mut wgsl, "{OUT_VAR}.{c} = {VAR_PREFIX}{i};").unwrap()
             }
         }
     }
@@ -652,7 +652,7 @@ fn write_func_xyz(
         )
         .unwrap(),
         OperationXyz::Fresnel => {
-            write!(wgsl, "fresnel({a}{}, {a}{}, {a}{}.x)", arg0?, arg1?, arg2?).unwrap()
+            write!(wgsl, "vec3(fresnel({a}{}, {a}{}, {a}{}.x))", arg0?, arg1?, arg2?).unwrap()
         }
         OperationXyz::TintColor => {
             write!(wgsl, "tint_color({a}{}, {a}{}.x)", arg0?, arg1?).unwrap()
