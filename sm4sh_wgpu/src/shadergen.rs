@@ -600,19 +600,17 @@ fn write_func_xyz(
         OperationXyz::Sqrt => write!(wgsl, "sqrt({a}{})", arg0?).unwrap(),
         OperationXyz::InverseSqrt => write!(wgsl, "inverseSqrt({a}{})", arg0?).unwrap(),
         OperationXyz::Fma => write!(wgsl, "({a}{} * {a}{} + {a}{})", arg0?, arg1?, arg2?).unwrap(),
-        OperationXyz::Dot => write!(
-            wgsl,
-            "vec3(dot(vec4({a}{}.x, {a}{}.x, {a}{}.x, {a}{}.x), vec4({a}{}.x, {a}{}.x, {a}{}.x, {a}{}.x)))",
-            arg0?, arg1?, arg2?, arg3?, arg4?, arg5?, arg6?, arg7?
-        )
-        .unwrap(),
+        OperationXyz::Dot => write!(wgsl, "vec3(dot({a}{}, {a}{}))", arg0?, arg1?).unwrap(),
         OperationXyz::Sin => write!(wgsl, "sin({a}{})", arg0?).unwrap(),
         OperationXyz::Cos => write!(wgsl, "cos({a}{})", arg0?).unwrap(),
         OperationXyz::Exp2 => write!(wgsl, "exp2({a}{})", arg0?).unwrap(),
         OperationXyz::Log2 => write!(wgsl, "log2({a}{})", arg0?).unwrap(),
-        OperationXyz::Select => {
-            write!(wgsl, "mix({a}{}, {a}{}, vec3<f32>({a}{}))", arg2?, arg1?, arg0?).unwrap()
-        }
+        OperationXyz::Select => write!(
+            wgsl,
+            "mix({a}{}, {a}{}, vec3<f32>({a}{}))",
+            arg2?, arg1?, arg0?
+        )
+        .unwrap(),
         OperationXyz::Negate => write!(wgsl, "-({a}{})", arg0?).unwrap(),
         OperationXyz::Equal => write!(wgsl, "({a}{} == {a}{})", arg0?, arg1?).unwrap(),
         OperationXyz::NotEqual => write!(wgsl, "({a}{} != {a}{})", arg0?, arg1?).unwrap(),
@@ -651,15 +649,16 @@ fn write_func_xyz(
             arg0?, arg1?, arg2?, arg3?, arg4?
         )
         .unwrap(),
-        OperationXyz::Fresnel => {
-            write!(wgsl, "vec3(fresnel({a}{}, {a}{}, {a}{}.x))", arg0?, arg1?, arg2?).unwrap()
-        }
+        OperationXyz::Fresnel => write!(
+            wgsl,
+            "vec3(fresnel({a}{}, {a}{}, {a}{}.x))",
+            arg0?, arg1?, arg2?
+        )
+        .unwrap(),
         OperationXyz::TintColor => {
             write!(wgsl, "tint_color({a}{}, {a}{}.x)", arg0?, arg1?).unwrap()
         }
-        OperationXyz::NegReflect => {
-            write!(wgsl, "-reflect({a}{}, {a}{})", arg0?, arg1?).unwrap()
-        }
+        OperationXyz::NegReflect => write!(wgsl, "-reflect({a}{}, {a}{})", arg0?, arg1?).unwrap(),
     }
     write_channel_xyz(wgsl, channel);
     Some(())

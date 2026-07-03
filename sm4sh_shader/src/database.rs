@@ -37,79 +37,18 @@ pub struct ShaderProgram {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Default)]
-pub enum Operation {
-    #[default]
-    Unk,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mix,
-    Clamp,
-    Min,
-    Max,
-    Abs,
-    Floor,
-    Power,
-    Sqrt,
-    InverseSqrt,
-    Fma,
-    Dot3,
-    Dot4,
-    Sin,
-    Cos,
-    Exp2,
-    Log2,
-    Fract,
-    IntBitsToFloat,
-    FloatBitsToInt,
-    Select,
-    Negate,
-    Equal,
-    NotEqual,
-    Less,
-    Greater,
-    LessEqual,
-    GreaterEqual,
-    NormalMapX,
-    NormalMapY,
-    NormalMapZ,
-    NormalizeX,
-    NormalizeY,
-    NormalizeZ,
-    SphereMapCoordX,
-    SphereMapCoordY,
-    LocalToWorldPointX,
-    LocalToWorldPointY,
-    LocalToWorldPointZ,
-    LocalToWorldVectorX,
-    LocalToWorldVectorY,
-    LocalToWorldVectorZ,
-    VarianceShadow,
-    BlinnPhongSpecular,
-    AnisotropicSpecular,
-    Fresnel,
-    TintColorX,
-    TintColorY,
-    TintColorZ,
-    NegReflectX,
-    NegReflectY,
-    NegReflectZ,
-}
+pub struct Operation(sm4sh_model::database::Operation);
 
 impl std::fmt::Display for Operation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        write!(f, "{:?}", self.0)
     }
 }
 
 impl xc3_shader::expr::Operation for Operation {
     fn query_operation_args<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Self, Vec<&'a Expr>)> {
-        // TODO: Figure out why op_mix doesn't work with simplification.
-        // TODO: detect reflect to simplify cube maps
-
+        use sm4sh_model::database::Operation as Op;
         op_normal_map(graph, expr)
-            // .or_else(|| op_mix(graph, expr))
             .or_else(|| op_effect_light(graph, expr))
             .or_else(|| op_blinn_phong_spec(graph, expr))
             .or_else(|| op_blinn_phong_spec_anisotropic(graph, expr))
@@ -127,30 +66,30 @@ impl xc3_shader::expr::Operation for Operation {
             .or_else(|| op_dot4(graph, expr))
             .or_else(|| op_div(graph, expr))
             .or_else(|| ternary(graph, expr))
-            .or_else(|| binary_op(graph, expr, BinaryOp::Add, Operation::Add))
-            .or_else(|| binary_op(graph, expr, BinaryOp::Sub, Operation::Sub))
-            .or_else(|| binary_op(graph, expr, BinaryOp::Mul, Operation::Mul))
-            .or_else(|| unary_op(graph, expr, UnaryOp::Negate, Operation::Negate))
-            .or_else(|| op_func(graph, expr, "clamp", Operation::Clamp))
-            .or_else(|| op_func(graph, expr, "min", Operation::Min))
-            .or_else(|| op_func(graph, expr, "max", Operation::Max))
-            .or_else(|| op_func(graph, expr, "inversesqrt", Operation::InverseSqrt))
-            .or_else(|| op_func(graph, expr, "abs", Operation::Abs))
-            .or_else(|| op_func(graph, expr, "floor", Operation::Floor))
-            .or_else(|| op_func(graph, expr, "fma", Operation::Fma))
-            .or_else(|| op_func(graph, expr, "sin", Operation::Sin))
-            .or_else(|| op_func(graph, expr, "cos", Operation::Cos))
-            .or_else(|| op_func(graph, expr, "log2", Operation::Log2))
-            .or_else(|| op_func(graph, expr, "exp2", Operation::Exp2))
-            .or_else(|| op_func(graph, expr, "fract", Operation::Fract))
-            .or_else(|| op_func(graph, expr, "intBitsToFloat", Operation::IntBitsToFloat))
-            .or_else(|| op_func(graph, expr, "floatBitsToInt", Operation::FloatBitsToInt))
-            .or_else(|| binary_op(graph, expr, BinaryOp::Equal, Operation::Equal))
-            .or_else(|| binary_op(graph, expr, BinaryOp::NotEqual, Operation::NotEqual))
-            .or_else(|| binary_op(graph, expr, BinaryOp::Greater, Operation::Greater))
-            .or_else(|| binary_op(graph, expr, BinaryOp::GreaterEqual, Operation::GreaterEqual))
-            .or_else(|| binary_op(graph, expr, BinaryOp::Less, Operation::Less))
-            .or_else(|| binary_op(graph, expr, BinaryOp::LessEqual, Operation::LessEqual))
+            .or_else(|| binary_op(graph, expr, BinaryOp::Add, Op::Add.into()))
+            .or_else(|| binary_op(graph, expr, BinaryOp::Sub, Op::Sub.into()))
+            .or_else(|| binary_op(graph, expr, BinaryOp::Mul, Op::Mul.into()))
+            .or_else(|| unary_op(graph, expr, UnaryOp::Negate, Op::Negate.into()))
+            .or_else(|| op_func(graph, expr, "clamp", Op::Clamp.into()))
+            .or_else(|| op_func(graph, expr, "min", Op::Min.into()))
+            .or_else(|| op_func(graph, expr, "max", Op::Max.into()))
+            .or_else(|| op_func(graph, expr, "inversesqrt", Op::InverseSqrt.into()))
+            .or_else(|| op_func(graph, expr, "abs", Op::Abs.into()))
+            .or_else(|| op_func(graph, expr, "floor", Op::Floor.into()))
+            .or_else(|| op_func(graph, expr, "fma", Op::Fma.into()))
+            .or_else(|| op_func(graph, expr, "sin", Op::Sin.into()))
+            .or_else(|| op_func(graph, expr, "cos", Op::Cos.into()))
+            .or_else(|| op_func(graph, expr, "log2", Op::Log2.into()))
+            .or_else(|| op_func(graph, expr, "exp2", Op::Exp2.into()))
+            .or_else(|| op_func(graph, expr, "fract", Op::Fract.into()))
+            .or_else(|| op_func(graph, expr, "intBitsToFloat", Op::IntBitsToFloat.into()))
+            .or_else(|| op_func(graph, expr, "floatBitsToInt", Op::FloatBitsToInt.into()))
+            .or_else(|| binary_op(graph, expr, BinaryOp::Equal, Op::Equal.into()))
+            .or_else(|| binary_op(graph, expr, BinaryOp::NotEqual, Op::NotEqual.into()))
+            .or_else(|| binary_op(graph, expr, BinaryOp::Greater, Op::Greater.into()))
+            .or_else(|| binary_op(graph, expr, BinaryOp::GreaterEqual, Op::GreaterEqual.into()))
+            .or_else(|| binary_op(graph, expr, BinaryOp::Less, Op::Less.into()))
+            .or_else(|| binary_op(graph, expr, BinaryOp::LessEqual, Op::LessEqual.into()))
             .or_else(|| {
                 error!("Unsupported expression {expr:?}");
                 None
@@ -256,112 +195,25 @@ pub fn convert_expr_xyz(
 
 impl From<Operation> for sm4sh_model::database::Operation {
     fn from(value: Operation) -> Self {
-        match value {
-            Operation::Unk => Self::Unk,
-            Operation::Add => Self::Add,
-            Operation::Sub => Self::Sub,
-            Operation::Mul => Self::Mul,
-            Operation::Div => Self::Div,
-            Operation::Mix => Self::Mix,
-            Operation::Clamp => Self::Clamp,
-            Operation::Min => Self::Min,
-            Operation::Max => Self::Max,
-            Operation::Abs => Self::Abs,
-            Operation::Floor => Self::Floor,
-            Operation::Power => Self::Power,
-            Operation::Sqrt => Self::Sqrt,
-            Operation::InverseSqrt => Self::InverseSqrt,
-            Operation::Fma => Self::Fma,
-            Operation::Dot3 => Self::Dot3,
-            Operation::Dot4 => Self::Dot4,
-            Operation::Sin => Self::Sin,
-            Operation::Cos => Self::Cos,
-            Operation::Exp2 => Self::Exp2,
-            Operation::Log2 => Self::Log2,
-            Operation::Fract => Self::Fract,
-            Operation::FloatBitsToInt => Self::FloatBitsToInt,
-            Operation::IntBitsToFloat => Self::IntBitsToFloat,
-            Operation::Select => Self::Select,
-            Operation::Negate => Self::Negate,
-            Operation::Equal => Self::Equal,
-            Operation::NotEqual => Self::NotEqual,
-            Operation::Less => Self::Less,
-            Operation::Greater => Self::Greater,
-            Operation::LessEqual => Self::LessEqual,
-            Operation::GreaterEqual => Self::GreaterEqual,
-            Operation::NormalMapX => Self::NormalMapX,
-            Operation::NormalMapY => Self::NormalMapY,
-            Operation::NormalMapZ => Self::NormalMapZ,
-            Operation::NormalizeX => Self::NormalizeX,
-            Operation::NormalizeY => Self::NormalizeY,
-            Operation::NormalizeZ => Self::NormalizeZ,
-            Operation::SphereMapCoordX => Self::SphereMapCoordX,
-            Operation::SphereMapCoordY => Self::SphereMapCoordY,
-            Operation::LocalToWorldPointX => Self::LocalToWorldPointX,
-            Operation::LocalToWorldPointY => Self::LocalToWorldPointY,
-            Operation::LocalToWorldPointZ => Self::LocalToWorldPointZ,
-            Operation::LocalToWorldVectorX => Self::LocalToWorldVectorX,
-            Operation::LocalToWorldVectorY => Self::LocalToWorldVectorY,
-            Operation::LocalToWorldVectorZ => Self::LocalToWorldVectorZ,
-            Operation::VarianceShadow => Self::VarianceShadow,
-            Operation::BlinnPhongSpecular => Self::BlinnPhongSpecular,
-            Operation::AnisotropicSpecular => Self::AnisotropicSpecular,
-            Operation::Fresnel => Self::Fresnel,
-            Operation::TintColorX => Self::TintColorX,
-            Operation::TintColorY => Self::TintColorY,
-            Operation::TintColorZ => Self::TintColorZ,
-            Operation::NegReflectX => Self::NegReflectX,
-            Operation::NegReflectY => Self::NegReflectY,
-            Operation::NegReflectZ => Self::NegReflectZ,
-        }
+        value.0
+    }
+}
+
+impl From<sm4sh_model::database::Operation> for Operation {
+    fn from(value: sm4sh_model::database::Operation) -> Self {
+        Self(value)
     }
 }
 
 impl From<OperationXyz> for sm4sh_model::database::OperationXyz {
     fn from(value: OperationXyz) -> Self {
-        match value {
-            OperationXyz::Unk => Self::Unk,
-            OperationXyz::Add => Self::Add,
-            OperationXyz::Sub => Self::Sub,
-            OperationXyz::Mul => Self::Mul,
-            OperationXyz::Div => Self::Div,
-            OperationXyz::Mix => Self::Mix,
-            OperationXyz::Clamp => Self::Clamp,
-            OperationXyz::Min => Self::Min,
-            OperationXyz::Max => Self::Max,
-            OperationXyz::Abs => Self::Abs,
-            OperationXyz::Floor => Self::Floor,
-            OperationXyz::Power => Self::Power,
-            OperationXyz::Sqrt => Self::Sqrt,
-            OperationXyz::InverseSqrt => Self::InverseSqrt,
-            OperationXyz::Fma => Self::Fma,
-            OperationXyz::Dot => Self::Dot,
-            OperationXyz::Sin => Self::Sin,
-            OperationXyz::Cos => Self::Cos,
-            OperationXyz::Exp2 => Self::Exp2,
-            OperationXyz::Log2 => Self::Log2,
-            OperationXyz::Fract => Self::Fract,
-            OperationXyz::IntBitsToFloat => Self::IntBitsToFloat,
-            OperationXyz::FloatBitsToInt => Self::FloatBitsToInt,
-            OperationXyz::Select => Self::Select,
-            OperationXyz::Negate => Self::Negate,
-            OperationXyz::Equal => Self::Equal,
-            OperationXyz::NotEqual => Self::NotEqual,
-            OperationXyz::Less => Self::Less,
-            OperationXyz::Greater => Self::Greater,
-            OperationXyz::LessEqual => Self::LessEqual,
-            OperationXyz::GreaterEqual => Self::GreaterEqual,
-            OperationXyz::NormalMap => Self::NormalMap,
-            OperationXyz::Normalize => Self::Normalize,
-            OperationXyz::LocalToWorldPoint => Self::LocalToWorldPoint,
-            OperationXyz::LocalToWorldVector => Self::LocalToWorldVector,
-            OperationXyz::VarianceShadow => Self::VarianceShadow,
-            OperationXyz::BlinnPhongSpecular => Self::BlinnPhongSpecular,
-            OperationXyz::AnisotropicSpecular => Self::AnisotropicSpecular,
-            OperationXyz::Fresnel => Self::Fresnel,
-            OperationXyz::TintColor => Self::TintColor,
-            OperationXyz::NegReflect => Self::NegReflect,
-        }
+        value.0
+    }
+}
+
+impl From<sm4sh_model::database::OperationXyz> for OperationXyz {
+    fn from(value: sm4sh_model::database::OperationXyz) -> Self {
+        Self(value)
     }
 }
 
@@ -385,54 +237,11 @@ fn modify_attributes(graph: &Graph, expr: &Expr) -> Expr {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Default)]
-pub enum OperationXyz {
-    #[default]
-    Unk,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mix,
-    Clamp,
-    Min,
-    Max,
-    Abs,
-    Floor,
-    Power,
-    Sqrt,
-    InverseSqrt,
-    Fma,
-    Dot,
-    Sin,
-    Cos,
-    Exp2,
-    Log2,
-    Fract,
-    IntBitsToFloat,
-    FloatBitsToInt,
-    Select,
-    Negate,
-    Equal,
-    NotEqual,
-    Less,
-    Greater,
-    LessEqual,
-    GreaterEqual,
-    NormalMap,
-    Normalize,
-    LocalToWorldPoint,
-    LocalToWorldVector,
-    VarianceShadow,
-    BlinnPhongSpecular,
-    AnisotropicSpecular,
-    Fresnel,
-    TintColor,
-    NegReflect,
-}
+pub struct OperationXyz(sm4sh_model::database::OperationXyz);
 
 impl std::fmt::Display for OperationXyz {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        write!(f, "{:?}", self.0)
     }
 }
 
@@ -440,63 +249,66 @@ impl OperationXyzChannel for Operation {
     type OperationXyz = OperationXyz;
 
     fn operation_xyz_channel(&self) -> Option<(Self::OperationXyz, Option<char>)> {
-        match self {
-            Operation::Unk => Some((OperationXyz::Unk, None)),
-            Operation::Add => Some((OperationXyz::Add, None)),
-            Operation::Sub => Some((OperationXyz::Sub, None)),
-            Operation::Mul => Some((OperationXyz::Mul, None)),
-            Operation::Div => Some((OperationXyz::Div, None)),
-            Operation::Mix => Some((OperationXyz::Mix, None)),
-            Operation::Clamp => Some((OperationXyz::Clamp, None)),
-            Operation::Min => Some((OperationXyz::Min, None)),
-            Operation::Max => Some((OperationXyz::Max, None)),
-            Operation::Abs => Some((OperationXyz::Abs, None)),
-            Operation::Floor => Some((OperationXyz::Floor, None)),
-            Operation::Power => Some((OperationXyz::Power, None)),
-            Operation::Sqrt => Some((OperationXyz::Sqrt, None)),
-            Operation::InverseSqrt => Some((OperationXyz::InverseSqrt, None)),
-            Operation::Fma => Some((OperationXyz::Fma, None)),
-            Operation::Dot3 => Some((OperationXyz::Dot, None)),
-            Operation::Dot4 => None, // TODO: support dot4?
-            Operation::Sin => Some((OperationXyz::Sin, None)),
-            Operation::Cos => Some((OperationXyz::Cos, None)),
-            Operation::Exp2 => Some((OperationXyz::Exp2, None)),
-            Operation::Log2 => Some((OperationXyz::Log2, None)),
-            Operation::Fract => Some((OperationXyz::Fract, None)),
-            Operation::IntBitsToFloat => Some((OperationXyz::IntBitsToFloat, None)),
-            Operation::FloatBitsToInt => Some((OperationXyz::FloatBitsToInt, None)),
-            Operation::Select => Some((OperationXyz::Select, None)),
-            Operation::Negate => Some((OperationXyz::Negate, None)),
-            Operation::Equal => Some((OperationXyz::Equal, None)),
-            Operation::NotEqual => Some((OperationXyz::NotEqual, None)),
-            Operation::Less => Some((OperationXyz::Less, None)),
-            Operation::Greater => Some((OperationXyz::Greater, None)),
-            Operation::LessEqual => Some((OperationXyz::LessEqual, None)),
-            Operation::GreaterEqual => Some((OperationXyz::GreaterEqual, None)),
-            Operation::NormalMapX => Some((OperationXyz::NormalMap, Some('x'))),
-            Operation::NormalMapY => Some((OperationXyz::NormalMap, Some('y'))),
-            Operation::NormalMapZ => Some((OperationXyz::NormalMap, Some('z'))),
-            Operation::NormalizeX => Some((OperationXyz::Normalize, Some('x'))),
-            Operation::NormalizeY => Some((OperationXyz::Normalize, Some('y'))),
-            Operation::NormalizeZ => Some((OperationXyz::Normalize, Some('z'))),
-            Operation::SphereMapCoordX => None,
-            Operation::SphereMapCoordY => None,
-            Operation::LocalToWorldPointX => Some((OperationXyz::LocalToWorldPoint, Some('x'))),
-            Operation::LocalToWorldPointY => Some((OperationXyz::LocalToWorldPoint, Some('y'))),
-            Operation::LocalToWorldPointZ => Some((OperationXyz::LocalToWorldPoint, Some('z'))),
-            Operation::LocalToWorldVectorX => Some((OperationXyz::LocalToWorldVector, Some('x'))),
-            Operation::LocalToWorldVectorY => Some((OperationXyz::LocalToWorldVector, Some('y'))),
-            Operation::LocalToWorldVectorZ => Some((OperationXyz::LocalToWorldVector, Some('z'))),
-            Operation::VarianceShadow => Some((OperationXyz::VarianceShadow, None)),
-            Operation::BlinnPhongSpecular => Some((OperationXyz::BlinnPhongSpecular, None)),
-            Operation::AnisotropicSpecular => Some((OperationXyz::AnisotropicSpecular, None)),
-            Operation::Fresnel => Some((OperationXyz::Fresnel, None)),
-            Operation::TintColorX => Some((OperationXyz::TintColor, Some('x'))),
-            Operation::TintColorY => Some((OperationXyz::TintColor, Some('y'))),
-            Operation::TintColorZ => Some((OperationXyz::TintColor, Some('z'))),
-            Operation::NegReflectX => Some((OperationXyz::NegReflect, Some('x'))),
-            Operation::NegReflectY => Some((OperationXyz::NegReflect, Some('y'))),
-            Operation::NegReflectZ => Some((OperationXyz::NegReflect, Some('z'))),
+        use sm4sh_model::database::Operation as Op;
+        use sm4sh_model::database::OperationXyz as OpXyz;
+
+        match self.0 {
+            Op::Unk => Some((OpXyz::Unk.into(), None)),
+            Op::Add => Some((OpXyz::Add.into(), None)),
+            Op::Sub => Some((OpXyz::Sub.into(), None)),
+            Op::Mul => Some((OpXyz::Mul.into(), None)),
+            Op::Div => Some((OpXyz::Div.into(), None)),
+            Op::Mix => Some((OpXyz::Mix.into(), None)),
+            Op::Clamp => Some((OpXyz::Clamp.into(), None)),
+            Op::Min => Some((OpXyz::Min.into(), None)),
+            Op::Max => Some((OpXyz::Max.into(), None)),
+            Op::Abs => Some((OpXyz::Abs.into(), None)),
+            Op::Floor => Some((OpXyz::Floor.into(), None)),
+            Op::Power => Some((OpXyz::Power.into(), None)),
+            Op::Sqrt => Some((OpXyz::Sqrt.into(), None)),
+            Op::InverseSqrt => Some((OpXyz::InverseSqrt.into(), None)),
+            Op::Fma => Some((OpXyz::Fma.into(), None)),
+            Op::Dot3 => Some((OpXyz::Dot.into(), None)),
+            Op::Dot4 => None, // TODO: support dot4?
+            Op::Sin => Some((OpXyz::Sin.into(), None)),
+            Op::Cos => Some((OpXyz::Cos.into(), None)),
+            Op::Exp2 => Some((OpXyz::Exp2.into(), None)),
+            Op::Log2 => Some((OpXyz::Log2.into(), None)),
+            Op::Fract => Some((OpXyz::Fract.into(), None)),
+            Op::IntBitsToFloat => Some((OpXyz::IntBitsToFloat.into(), None)),
+            Op::FloatBitsToInt => Some((OpXyz::FloatBitsToInt.into(), None)),
+            Op::Select => Some((OpXyz::Select.into(), None)),
+            Op::Negate => Some((OpXyz::Negate.into(), None)),
+            Op::Equal => Some((OpXyz::Equal.into(), None)),
+            Op::NotEqual => Some((OpXyz::NotEqual.into(), None)),
+            Op::Less => Some((OpXyz::Less.into(), None)),
+            Op::Greater => Some((OpXyz::Greater.into(), None)),
+            Op::LessEqual => Some((OpXyz::LessEqual.into(), None)),
+            Op::GreaterEqual => Some((OpXyz::GreaterEqual.into(), None)),
+            Op::NormalMapX => Some((OpXyz::NormalMap.into(), Some('x'))),
+            Op::NormalMapY => Some((OpXyz::NormalMap.into(), Some('y'))),
+            Op::NormalMapZ => Some((OpXyz::NormalMap.into(), Some('z'))),
+            Op::NormalizeX => Some((OpXyz::Normalize.into(), Some('x'))),
+            Op::NormalizeY => Some((OpXyz::Normalize.into(), Some('y'))),
+            Op::NormalizeZ => Some((OpXyz::Normalize.into(), Some('z'))),
+            Op::SphereMapCoordX => None,
+            Op::SphereMapCoordY => None,
+            Op::LocalToWorldPointX => Some((OpXyz::LocalToWorldPoint.into(), Some('x'))),
+            Op::LocalToWorldPointY => Some((OpXyz::LocalToWorldPoint.into(), Some('y'))),
+            Op::LocalToWorldPointZ => Some((OpXyz::LocalToWorldPoint.into(), Some('z'))),
+            Op::LocalToWorldVectorX => Some((OpXyz::LocalToWorldVector.into(), Some('x'))),
+            Op::LocalToWorldVectorY => Some((OpXyz::LocalToWorldVector.into(), Some('y'))),
+            Op::LocalToWorldVectorZ => Some((OpXyz::LocalToWorldVector.into(), Some('z'))),
+            Op::VarianceShadow => Some((OpXyz::VarianceShadow.into(), None)),
+            Op::BlinnPhongSpecular => Some((OpXyz::BlinnPhongSpecular.into(), None)),
+            Op::AnisotropicSpecular => Some((OpXyz::AnisotropicSpecular.into(), None)),
+            Op::Fresnel => Some((OpXyz::Fresnel.into(), None)),
+            Op::TintColorX => Some((OpXyz::TintColor.into(), Some('x'))),
+            Op::TintColorY => Some((OpXyz::TintColor.into(), Some('y'))),
+            Op::TintColorZ => Some((OpXyz::TintColor.into(), Some('z'))),
+            Op::NegReflectX => Some((OpXyz::NegReflect.into(), Some('x'))),
+            Op::NegReflectY => Some((OpXyz::NegReflect.into(), Some('y'))),
+            Op::NegReflectZ => Some((OpXyz::NegReflect.into(), Some('z'))),
         }
     }
 }
@@ -510,35 +322,36 @@ impl MergeXyzArgs<Operation> for OperationXyz {
         exprs: &[OutputExpr<Operation>],
         exprs_xyz: &mut ExprCacheXyz<Self>,
     ) -> Option<Vec<usize>> {
-        match self {
-            OperationXyz::Normalize => {
+        use sm4sh_model::database::OperationXyz as OpXyz;
+        match self.0 {
+            OpXyz::Normalize => {
                 // TODO: Check that all args are the same.
                 let arg = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
                 Some(vec![arg])
             }
-            OperationXyz::Dot => {
+            OpXyz::Dot => {
                 // TODO: Check that all args are the same.
                 let a = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
                 let b = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;
 
                 Some(vec![a, b])
             }
-            OperationXyz::LocalToWorldPoint => {
+            OpXyz::LocalToWorldPoint => {
                 // TODO: Check that all args are the same.
                 let arg = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
                 Some(vec![arg])
             }
-            OperationXyz::LocalToWorldVector => {
+            OpXyz::LocalToWorldVector => {
                 // TODO: Check that all args are the same.
                 let arg = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
                 Some(vec![arg])
             }
-            OperationXyz::NormalMap => {
+            OpXyz::NormalMap => {
                 // TODO: Check that all args are the same.
                 let arg = merge_xyz_exprs(args_x[0], args_y[1], args_z[2], exprs, exprs_xyz)?;
                 Some(vec![arg])
             }
-            OperationXyz::BlinnPhongSpecular => {
+            OpXyz::BlinnPhongSpecular => {
                 // TODO: Check that all args are the same.
                 let normal = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
                 let light_dir = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;
@@ -548,7 +361,7 @@ impl MergeXyzArgs<Operation> for OperationXyz {
 
                 Some(vec![normal, light_dir, eye, exponent])
             }
-            OperationXyz::AnisotropicSpecular => {
+            OpXyz::AnisotropicSpecular => {
                 // TODO: Check that all args are the same.
                 let normal = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
                 let tangent = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;
@@ -560,7 +373,7 @@ impl MergeXyzArgs<Operation> for OperationXyz {
 
                 Some(vec![normal, tangent, eye, param_x, param_y])
             }
-            OperationXyz::Fresnel => {
+            OpXyz::Fresnel => {
                 // TODO: Check that all args are the same.
                 let normal = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
                 let eye = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;
@@ -569,7 +382,7 @@ impl MergeXyzArgs<Operation> for OperationXyz {
 
                 Some(vec![normal, eye, param])
             }
-            OperationXyz::TintColor => {
+            OpXyz::TintColor => {
                 // TODO: Check that all args are the same.
                 let rgb = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
 
@@ -577,7 +390,7 @@ impl MergeXyzArgs<Operation> for OperationXyz {
 
                 Some(vec![rgb, param])
             }
-            OperationXyz::NegReflect => {
+            OpXyz::NegReflect => {
                 // TODO: Check that all args are the same.
                 let eye = merge_xyz_exprs(args_x[0], args_x[1], args_x[2], exprs, exprs_xyz)?;
                 let normal = merge_xyz_exprs(args_x[3], args_x[4], args_x[5], exprs, exprs_xyz)?;

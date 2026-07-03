@@ -5,6 +5,8 @@ use xc3_shader::graph::{BinaryOp, Expr, Graph, UnaryOp, query::query_nodes};
 
 use crate::database::Operation;
 
+use sm4sh_model::database::Operation as Op;
+
 pub fn op_func<'a>(
     graph: &'a Graph,
     expr: &'a Expr,
@@ -80,10 +82,10 @@ static OP_NORMAL_MAP_Z: LazyLock<Graph> = LazyLock::new(|| {
 
 pub fn op_normal_map<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let (op, result) = query_nodes(expr, graph, &OP_NORMAL_MAP_X)
-        .map(|r| (Operation::NormalMapX, r))
-        .or_else(|| query_nodes(expr, graph, &OP_NORMAL_MAP_Y).map(|r| (Operation::NormalMapY, r)))
+        .map(|r| (Op::NormalMapX.into(), r))
+        .or_else(|| query_nodes(expr, graph, &OP_NORMAL_MAP_Y).map(|r| (Op::NormalMapY.into(), r)))
         .or_else(|| {
-            query_nodes(expr, graph, &OP_NORMAL_MAP_Z).map(|r| (Operation::NormalMapZ, r))
+            query_nodes(expr, graph, &OP_NORMAL_MAP_Z).map(|r| (Op::NormalMapZ.into(), r))
         })?;
 
     Some((
@@ -587,10 +589,10 @@ pub fn op_sphere_map_coords<'a>(
 ) -> Option<(Operation, Vec<&'a Expr>)> {
     // The sphere map coordinates can easily be calculated in consuming code.
     query_nodes(expr, graph, &SPHERE_MAP_COORD_X)
-        .and_then(|r| Some((Operation::SphereMapCoordX, vec![r.get("param").copied()?])))
+        .and_then(|r| Some((Op::SphereMapCoordX.into(), vec![r.get("param").copied()?])))
         .or_else(|| {
             query_nodes(expr, graph, &SPHERE_MAP_COORD_Y)
-                .and_then(|r| Some((Operation::SphereMapCoordY, vec![r.get("param").copied()?])))
+                .and_then(|r| Some((Op::SphereMapCoordY.into(), vec![r.get("param").copied()?])))
         })
 }
 
@@ -632,7 +634,7 @@ pub fn op_local_to_world_point<'a>(
     query_nodes(expr, graph, &LOCAL_TO_WORLD_POINT_X)
         .and_then(|r| {
             Some((
-                Operation::LocalToWorldPointX,
+                Op::LocalToWorldPointX.into(),
                 vec![
                     r.get("attribute_x").copied()?,
                     r.get("attribute_y").copied()?,
@@ -643,7 +645,7 @@ pub fn op_local_to_world_point<'a>(
         .or_else(|| {
             query_nodes(expr, graph, &LOCAL_TO_WORLD_POINT_Y).and_then(|r| {
                 Some((
-                    Operation::LocalToWorldPointY,
+                    Op::LocalToWorldPointY.into(),
                     vec![
                         r.get("attribute_x").copied()?,
                         r.get("attribute_y").copied()?,
@@ -655,7 +657,7 @@ pub fn op_local_to_world_point<'a>(
         .or_else(|| {
             query_nodes(expr, graph, &LOCAL_TO_WORLD_POINT_Z).and_then(|r| {
                 Some((
-                    Operation::LocalToWorldPointZ,
+                    Op::LocalToWorldPointZ.into(),
                     vec![
                         r.get("attribute_x").copied()?,
                         r.get("attribute_y").copied()?,
@@ -703,7 +705,7 @@ pub fn op_local_to_world_vector<'a>(
     query_nodes(expr, graph, &LOCAL_TO_WORLD_VECTOR_X)
         .and_then(|r| {
             Some((
-                Operation::LocalToWorldVectorX,
+                Op::LocalToWorldVectorX.into(),
                 vec![
                     r.get("attribute_x").copied()?,
                     r.get("attribute_y").copied()?,
@@ -714,7 +716,7 @@ pub fn op_local_to_world_vector<'a>(
         .or_else(|| {
             query_nodes(expr, graph, &LOCAL_TO_WORLD_VECTOR_Y).and_then(|r| {
                 Some((
-                    Operation::LocalToWorldVectorY,
+                    Op::LocalToWorldVectorY.into(),
                     vec![
                         r.get("attribute_x").copied()?,
                         r.get("attribute_y").copied()?,
@@ -726,7 +728,7 @@ pub fn op_local_to_world_vector<'a>(
         .or_else(|| {
             query_nodes(expr, graph, &LOCAL_TO_WORLD_VECTOR_Z).and_then(|r| {
                 Some((
-                    Operation::LocalToWorldVectorZ,
+                    Op::LocalToWorldVectorZ.into(),
                     vec![
                         r.get("attribute_x").copied()?,
                         r.get("attribute_y").copied()?,
@@ -735,39 +737,6 @@ pub fn op_local_to_world_vector<'a>(
                 ))
             })
         })
-}
-
-static OP_MIX: LazyLock<Graph> = LazyLock::new(|| {
-    let query = indoc! {"
-        void main() {
-            neg_a = 0.0 - a;
-            b_minus_a = neg_a + b;
-            result = fma(b_minus_a, ratio, a);
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
-});
-
-static OP_MIX2: LazyLock<Graph> = LazyLock::new(|| {
-    // Alternative form used for some shaders.
-    let query = indoc! {"
-        void main() {
-            neg_ratio = 0.0 - ratio;
-            a_inv_ratio = fma(a, neg_ratio, a);
-            result = fma(b, ratio, a_inv_ratio);
-        }
-    "};
-    Graph::parse_glsl(query).unwrap().simplify()
-});
-
-pub fn op_mix<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
-    // TODO: This is matching things it shouldn't but only when simplified?
-    let result =
-        query_nodes(expr, graph, &OP_MIX).or_else(|| query_nodes(expr, graph, &OP_MIX2))?;
-    Some((
-        Operation::Mix,
-        vec![result.get("a")?, result.get("b")?, result.get("ratio")?],
-    ))
 }
 
 static OP_POW: LazyLock<Graph> = LazyLock::new(|| {
@@ -798,7 +767,7 @@ static OP_POW2: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_pow<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let result =
         query_nodes(expr, graph, &OP_POW).or_else(|| query_nodes(expr, graph, &OP_POW2))?;
-    Some((Operation::Power, vec![result.get("a")?, result.get("b")?]))
+    Some((Op::Power.into(), vec![result.get("a")?, result.get("b")?]))
 }
 
 static OP_SQRT: LazyLock<Graph> = LazyLock::new(|| {
@@ -821,7 +790,7 @@ static OP_SQRT2: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_sqrt<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let result =
         query_nodes(expr, graph, &OP_SQRT).or_else(|| query_nodes(expr, graph, &OP_SQRT2))?;
-    Some((Operation::Sqrt, vec![result.get("result")?]))
+    Some((Op::Sqrt.into(), vec![result.get("result")?]))
 }
 
 static OP_DOT4: LazyLock<Graph> = LazyLock::new(|| {
@@ -836,7 +805,7 @@ static OP_DOT4: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_dot4<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     query_nodes(expr, graph, &OP_DOT4).and_then(|result| {
         Some((
-            Operation::Dot4,
+            Op::Dot4.into(),
             vec![
                 *result.get("ax")?,
                 *result.get("ay")?,
@@ -861,25 +830,25 @@ static OP_DOT3: LazyLock<Graph> = LazyLock::new(|| {
 });
 
 pub fn op_dot3<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
-    query_nodes(expr, graph, &OP_DOT3).and_then(|result| {
-        Some((
-            Operation::Dot3,
-            vec![
-                *result.get("ax")?,
-                *result.get("ay")?,
-                *result.get("az")?,
-                *result.get("bx")?,
-                *result.get("by")?,
-                *result.get("bz")?,
-            ],
-        ))
-    })
+    let result = query_nodes(expr, graph, &OP_DOT3)?;
+
+    Some((
+        Op::Dot3.into(),
+        vec![
+            result.get("ax")?,
+            result.get("ay")?,
+            result.get("az")?,
+            result.get("bx")?,
+            result.get("by")?,
+            result.get("bz")?,
+        ],
+    ))
 }
 
 pub fn ternary<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     if let Expr::Ternary(cond, a, b) = expr {
         Some((
-            Operation::Select,
+            Op::Select.into(),
             vec![&graph.exprs[*cond], &graph.exprs[*a], &graph.exprs[*b]],
         ))
     } else {
@@ -906,7 +875,7 @@ static OP_DIV2: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_div<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let result =
         query_nodes(expr, graph, &OP_DIV).or_else(|| query_nodes(expr, graph, &OP_DIV2))?;
-    Some((Operation::Div, vec![result.get("a")?, result.get("b")?]))
+    Some((Op::Div.into(), vec![result.get("a")?, result.get("b")?]))
 }
 
 static OP_NORMALIZE_XYZ: LazyLock<Graph> = LazyLock::new(|| {
@@ -928,11 +897,11 @@ pub fn op_normalize<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, 
     let z = result.get("z")?;
 
     let op = if value == x {
-        Operation::NormalizeX
+        Op::NormalizeX.into()
     } else if value == y {
-        Operation::NormalizeY
+        Op::NormalizeY.into()
     } else if value == z {
-        Operation::NormalizeZ
+        Op::NormalizeZ.into()
     } else {
         return None;
     };
@@ -964,11 +933,11 @@ pub fn op_neg_reflect<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation
     let i_z = result.get("I_z")?;
 
     let op = if n == n_x {
-        Operation::NegReflectX
+        Op::NegReflectX.into()
     } else if n == n_y {
-        Operation::NegReflectY
+        Op::NegReflectY.into()
     } else if n == n_z {
-        Operation::NegReflectZ
+        Op::NegReflectZ.into()
     } else {
         return None;
     };
@@ -1095,7 +1064,7 @@ pub fn op_variance_shadow<'a>(
 ) -> Option<(Operation, Vec<&'a Expr>)> {
     let result = query_nodes(expr, graph, &OP_VARIANCE_SHADOW)?;
     Some((
-        Operation::VarianceShadow,
+        Op::VarianceShadow.into(),
         vec![
             result.get("m1")?,
             result.get("m2")?,
@@ -1136,7 +1105,7 @@ pub fn op_blinn_phong_spec<'a>(
 ) -> Option<(Operation, Vec<&'a Expr>)> {
     let result = query_nodes(expr, graph, &OP_BLINN_PHONG_SPEC)?;
     Some((
-        Operation::BlinnPhongSpecular,
+        Op::BlinnPhongSpecular.into(),
         vec![
             result.get("n_x")?,
             result.get("n_y")?,
@@ -1207,7 +1176,7 @@ pub fn op_blinn_phong_spec_anisotropic<'a>(
     let result = query_nodes(expr, graph, &OP_BLINN_PHONG_SPEC_ANISOTROPIC)?;
 
     Some((
-        Operation::AnisotropicSpecular,
+        Op::AnisotropicSpecular.into(),
         vec![
             result.get("normal_x")?,
             result.get("normal_y")?,
@@ -1243,7 +1212,7 @@ static OP_FRESNEL: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_fresnel<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     let result = query_nodes(expr, graph, &OP_FRESNEL)?;
     Some((
-        Operation::Fresnel,
+        Op::Fresnel.into(),
         vec![
             result.get("n_x")?,
             result.get("n_y")?,
@@ -1343,11 +1312,11 @@ pub fn op_tint_color<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation,
     let amount = result.get("amount")?;
 
     let op = if color == x {
-        Operation::TintColorX
+        Op::TintColorX.into()
     } else if color == y {
-        Operation::TintColorY
+        Op::TintColorY.into()
     } else if color == z {
-        Operation::TintColorZ
+        Op::TintColorZ.into()
     } else {
         return None;
     };
@@ -1376,5 +1345,5 @@ static OP_EFFECT_LIGHT: LazyLock<Graph> = LazyLock::new(|| {
 pub fn op_effect_light<'a>(graph: &'a Graph, expr: &'a Expr) -> Option<(Operation, Vec<&'a Expr>)> {
     // TODO: create an operation enum variant for effect lighting.
     let _result = query_nodes(expr, graph, &OP_EFFECT_LIGHT)?;
-    Some((Operation::Unk, vec![]))
+    Some((Op::Unk.into(), vec![]))
 }
