@@ -74,7 +74,7 @@ impl State {
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
+                ..Default::default()
             })
             .await?;
         info!("{:?}", adapter.get_info());
@@ -96,6 +96,7 @@ impl State {
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: Vec::new(),
             desired_maximum_frame_latency: 2,
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
         surface.configure(&device, &config);
 
@@ -185,7 +186,7 @@ impl State {
             .render_model(&mut encoder, &output_view, &self.model, &self.camera);
 
         self.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
+        self.queue.present(output);
     }
 
     // Make this a reusable library that only requires glam?

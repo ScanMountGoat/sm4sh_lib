@@ -220,7 +220,7 @@ fn screenshot_path(root_folder: &Path, path: &Path) -> PathBuf {
 fn save_screenshot(output_buffer: &wgpu::Buffer, output_path: PathBuf) {
     // Save the output texture.
     let buffer_slice = output_buffer.slice(..);
-    let data = buffer_slice.get_mapped_range();
+    let data = buffer_slice.get_mapped_range().unwrap();
     rayon::spawn(move || {
         let mut buffer = image::RgbaImage::from_raw(WIDTH, HEIGHT, data.to_owned()).unwrap();
         // Force opaque to match sm4sh_viewer.
