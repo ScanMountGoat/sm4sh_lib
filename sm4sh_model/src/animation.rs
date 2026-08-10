@@ -373,6 +373,10 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> BinResult<TransformData> 
 
     let translation = if node.flags.position() {
         match node.flags.position_type() {
+            PositionType::Unk0 => {
+                // TODO: investigate position data for omo files.
+                Some(TranslationData::Frame)
+            }
             PositionType::Frame => Some(TranslationData::Frame),
             PositionType::Interpolate => Some(TranslationData::Interpolate {
                 min: data.read_be::<[f32; 3]>()?.into(),
@@ -389,6 +393,18 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> BinResult<TransformData> 
 
     let rotation = if node.flags.rotation() {
         match node.flags.rotation_type() {
+            RotationType::Unk0 => {
+                // TODO: investigate rotation data for omo files.
+                Some(RotationData::Frame)
+            }
+            RotationType::Unk3 => {
+                // TODO: investigate rotation data for omo files.
+                Some(RotationData::Frame)
+            }
+            RotationType::Unk4 => {
+                // TODO: investigate rotation data for omo files.
+                Some(RotationData::Frame)
+            }
             RotationType::Interpolate => Some(RotationData::Interpolate {
                 min: data.read_be::<[f32; 3]>()?.into(),
                 max: data.read_be::<[f32; 3]>()?.into(),
@@ -400,6 +416,14 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> BinResult<TransformData> 
             RotationType::Constant => {
                 let v: [f32; 3] = data.read_be()?;
                 Some(RotationData::Constant(v.into()))
+            }
+            RotationType::Unk8 => {
+                // TODO: investigate rotation data for omo files.
+                Some(RotationData::Frame)
+            }
+            RotationType::Unk9 => {
+                // TODO: investigate rotation data for omo files.
+                Some(RotationData::Frame)
             }
             RotationType::Frame => {
                 // TODO: what does "frame" mean?

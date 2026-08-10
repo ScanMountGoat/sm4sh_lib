@@ -12,7 +12,7 @@ use crate::{parse_ptr32_count, xc3_write_binwrite_impl};
 #[xc3(magic(b"OMO "))]
 pub struct Omo {
     pub version: (u16, u16),
-    pub flags: u32,
+    pub flags: u32, // TODO: is this related to omo node flags?
     pub unk1: u16,
     pub node_count: u16,
     pub frame_count: u16,
@@ -80,18 +80,25 @@ pub enum ScaleType {
     Interpolate = 0x08,
 }
 
+// TODO: Is this also 8 bits?
 #[bitsize(4)]
 #[derive(TryFromBits, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum RotationType {
+    Unk0 = 0x0,
+    Unk3 = 0x3,
+    Unk4 = 0x4,
     Interpolate = 0x5,
     FConst = 0x6,
     Constant = 0x7,
+    Unk8 = 0x8,
+    Unk9 = 0x9,  // TODO: also keys?
     Frame = 0xA, // TODO: "keys"?
 }
 
 #[bitsize(8)]
 #[derive(TryFromBits, Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PositionType {
+    Unk0 = 0x00,
     Frame = 0x04, // TODO: "keys"?
     Interpolate = 0x08,
     Constant = 0x20,

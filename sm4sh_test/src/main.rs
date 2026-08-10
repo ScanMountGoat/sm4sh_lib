@@ -52,6 +52,9 @@ struct Cli {
     nsh: bool,
 
     #[arg(long)]
+    omo: bool,
+
+    #[arg(long)]
     nud_model: bool,
 
     /// Process all file types.
@@ -108,6 +111,11 @@ fn main() {
     if cli.nsh || cli.all {
         println!("Checking Nsh files...");
         check_all(root, &["*.nsh"], check_nsh);
+    }
+
+    if cli.omo || cli.all {
+        println!("Checking Omo files...");
+        check_all(root, &["*.omo"], check_omo);
     }
 
     if cli.nud_model || cli.all {
