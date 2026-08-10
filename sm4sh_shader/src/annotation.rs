@@ -460,7 +460,7 @@ fn write_uniform_blocks(
         writeln!(
             annotated,
             "layout(binding = {}, std140) uniform _{} {{",
-            block.offset, &block.name
+            block.offset, block.name
         )?;
 
         let mut block_vars: Vec<_> = vars
@@ -473,7 +473,7 @@ fn write_uniform_blocks(
             [v0, v1] if v1.name == format!("{}[0]", v0.name) => {
                 // Assume a buffer with a single array field fills the buffer.
                 // TODO: Calculate the appropriate position based on offsets.
-                let ty = data_type(*v0);
+                let ty = data_type(v0);
 
                 // TODO: Why is the block size only for a single entry?
                 // Assume a 64k buffer size for now to match in game buffer sizes in RenderDoc.
@@ -496,7 +496,7 @@ fn write_uniform_blocks(
                 }
             }
         }
-        writeln!(annotated, "}} {};", &block.name)?;
+        writeln!(annotated, "}} {};", block.name)?;
         writeln!(annotated)?;
     }
     Ok(())

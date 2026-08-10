@@ -33,7 +33,7 @@ fn calculate_camera_data(width: u32, height: u32, translation: Vec3, rotation: V
         * Mat4::from_rotation_x(rotation.x)
         * Mat4::from_rotation_y(rotation.y);
 
-    let projection = Mat4::perspective_rh(FOV_Y, aspect, Z_NEAR, Z_FAR);
+    let projection = glam::camera::rh::proj::directx::perspective(FOV_Y, aspect, Z_NEAR, Z_FAR);
 
     let view_projection = projection * view;
 

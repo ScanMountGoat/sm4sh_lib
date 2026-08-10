@@ -576,9 +576,6 @@ fn write_func_xyz(
     let arg2 = args.get(2);
     let arg3 = args.get(3);
     let arg4 = args.get(4);
-    let arg5 = args.get(5);
-    let arg6 = args.get(6);
-    let arg7 = args.get(7);
 
     // TODO: Will these operations all work with xyz inputs?
     let a = VAR_PREFIX_XYZ;
