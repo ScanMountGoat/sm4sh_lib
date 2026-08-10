@@ -13,18 +13,29 @@ use sm4sh_lib::{
 
 use crate::VbnSkeleton;
 
-/// Load animations from a `path` like `"main.pac"`.
+/// Load animations from a `path` like `"main.pac"` or `"entry.omo"`.
 pub fn load_animations<P: AsRef<Path>>(path: P) -> BinResult<Vec<(String, Animation)>> {
-    let mut animations = Vec::new();
-    let pac = Pack::from_file(path)?;
-    for item in pac.items {
-        if item.name.ends_with(".omo") {
-            let omo = Omo::from_bytes(&item.data)?;
-            let animation = Animation::from_omo(&omo)?;
-            animations.push((item.name, animation));
-        }
-    }
-    Ok(animations)
+    let path = path.as_ref();
+    Pack::from_file(path)
+        .and_then(|pac| {
+            let mut animations = Vec::new();
+            for item in pac.items {
+                if item.name.ends_with(".omo") {
+                    let omo = Omo::from_bytes(&item.data)?;
+                    let animation = Animation::from_omo(&omo)?;
+                    animations.push((item.name, animation));
+                }
+            }
+            Ok(animations)
+        })
+        .or_else(|_| {
+            Omo::from_file(path).and_then(|omo| {
+                Ok(vec![(
+                    path.file_name().unwrap().to_string_lossy().to_string(),
+                    Animation::from_omo(&omo)?,
+                )])
+            })
+        })
 }
 
 #[derive(Debug, PartialEq, Clone)]
