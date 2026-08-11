@@ -385,7 +385,7 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> BinResult<TransformData> 
     let translation = if node.flags.position() {
         match node.flags.position_type() {
             PositionType::Unk0 => {
-                // TODO: investigate position data for omo files.
+                // TODO: no data?
                 Some(TranslationData::Frame)
             }
             PositionType::Frame => Some(TranslationData::Frame),
@@ -413,7 +413,7 @@ fn omo_node_data(node: &OmoNode, inter_data: &[u8]) -> BinResult<TransformData> 
                 Some(RotationData::Frame)
             }
             RotationType::Unk4 => {
-                // TODO: investigate rotation data for omo files.
+                // TODO: no data?
                 Some(RotationData::Frame)
             }
             RotationType::Interpolate => Some(RotationData::Interpolate {

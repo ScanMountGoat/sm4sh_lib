@@ -11,9 +11,9 @@ use crate::{parse_ptr32_count, xc3_write_binwrite_impl};
 #[br(magic(b"OMO "))]
 #[xc3(magic(b"OMO "))]
 pub struct Omo {
-    pub version: (u16, u16),
-    pub flags: u32, // TODO: is this related to omo node flags?
-    pub unk1: u16,
+    pub version: (u16, u16), // 1, 3
+    pub flags: u32,
+    pub unk1: u16, // 0, 1, 2, 3
     pub node_count: u16,
     pub frame_count: u16,
     pub frame_size: u16,
