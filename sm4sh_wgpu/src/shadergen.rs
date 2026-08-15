@@ -5,13 +5,13 @@ use case::CaseExt;
 use indoc::formatdoc;
 use log::error;
 use sm4sh_model::{
-    AlphaFunc,
     database::{
         ChannelXyz, Operation, OperationXyz, OutputExpr, OutputExprXyz, Parameter, ShaderProgram,
         Value, ValueXyz,
     },
+    AlphaFunc,
 };
-use smol_str::{SmolStr, format_smolstr};
+use smol_str::{format_smolstr, SmolStr};
 
 const OUT_VAR: &str = "out_color";
 const VAR_PREFIX: &str = "VAR_";
@@ -415,10 +415,7 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
         Operation::Cos => write!(wgsl, "cos({a}{})", arg0?).unwrap(),
         Operation::Exp2 => write!(wgsl, "exp2({a}{})", arg0?).unwrap(),
         Operation::Log2 => write!(wgsl, "log2({a}{})", arg0?).unwrap(),
-        Operation::Select => write!(wgsl,
-            "mix({a}{}, {a}{}, f32({a}{}))",
-            arg2?, arg1?, arg0?
-        ).unwrap(),
+        Operation::Select => write!(wgsl, "select({a}{}, {a}{}, {a}{})", arg2?, arg1?, arg0?).unwrap(),
         Operation::Negate => write!(wgsl, "-({a}{})", arg0?).unwrap(),
         Operation::Equal => write!(wgsl, "{a}{} == {a}{}", arg0?, arg1?).unwrap(),
         Operation::NotEqual => write!(wgsl, "{a}{} != {a}{}", arg0?, arg1?).unwrap(),
