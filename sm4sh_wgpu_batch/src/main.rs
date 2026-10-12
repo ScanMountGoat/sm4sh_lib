@@ -5,11 +5,11 @@ use std::{
 
 use clap::Parser;
 use futures::executor::block_on;
-use glam::{Mat4, Vec3, Vec4, vec3};
+use glam::{Mat4, Vec3, Vec4};
 use log::error;
 use rayon::prelude::*;
 use sm4sh_model::database::ShaderDatabase;
-use sm4sh_wgpu::{CameraData, Renderer, SharedData};
+use sm4sh_wgpu::{CameraData, Renderer, SharedData, camera::frame_bounding_sphere_translation};
 use tracing::trace_span;
 use wgpu::{
     DeviceDescriptor, Extent3d, PowerPreference, RequestAdapterOptions, TextureDescriptor,
@@ -149,7 +149,8 @@ fn main() -> anyhow::Result<()> {
                     let renderer = renderer.lock().unwrap();
 
                     // Initialize the camera to frame the model.
-                    let camera = frame_bounds(model.bounding_sphere);
+                    let aspect = WIDTH as f32 / HEIGHT as f32;
+                    let camera = frame_bounds(model.bounding_sphere, FOV_Y, aspect);
                     renderer.update_camera(&queue, &camera);
 
                     // Render to a buffer to save as PNG.
@@ -229,11 +230,7 @@ fn save_screenshot(output_buffer: &wgpu::Buffer, output_path: PathBuf) {
     });
 }
 
-fn frame_bounds(bounding_sphere: Vec4) -> CameraData {
-    // Find the base of the triangle based on vertical FOV and bounding sphere "height".
-    // The aspect ratio is 1.0, so FOV_X is also FOV_Y.
-    let distance = bounding_sphere.w / FOV_Y.tan() * 2.0;
-    let translation = vec3(bounding_sphere.x, -bounding_sphere.y, -distance);
-    let rotation = Vec3::ZERO;
-    calculate_camera_data(WIDTH, HEIGHT, translation, rotation)
+fn frame_bounds(bounding_sphere: Vec4, fov_y: f32, aspect: f32) -> CameraData {
+    let translation = frame_bounding_sphere_translation(bounding_sphere, fov_y, aspect);
+    calculate_camera_data(WIDTH, HEIGHT, translation, Vec3::ZERO)
 }

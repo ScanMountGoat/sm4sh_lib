@@ -3,14 +3,16 @@ use std::{sync::Arc, time::Instant};
 use anyhow::Context;
 use clap::Parser;
 use futures::executor::block_on;
-use glam::{Vec3, Vec4, vec3};
+use glam::{Vec3, Vec4};
 use log::info;
 use sm4sh_model::{
     NudModel,
     animation::{Animation, load_animations},
     database::ShaderDatabase,
 };
-use sm4sh_wgpu::{CameraData, Model, Renderer, SharedData, load_model};
+use sm4sh_wgpu::{
+    CameraData, Model, Renderer, SharedData, camera::frame_bounding_sphere_translation, load_model,
+};
 use winit::{
     application::ApplicationHandler, dpi::PhysicalPosition, event::*, event_loop::EventLoop,
     keyboard::NamedKey, window::Window,
@@ -296,10 +298,8 @@ fn frame_bounds(
     size: winit::dpi::PhysicalSize<u32>,
     bounding_sphere: Vec4,
 ) -> (Vec3, Vec3, CameraData) {
-    // Find the base of the triangle based on vertical FOV and bounding sphere "height".
-    // The aspect ratio is 1.0, so FOV_X is also FOV_Y.
-    let distance = bounding_sphere.w / FOV_Y.tan() * 2.0;
-    let translation = vec3(bounding_sphere.x, -bounding_sphere.y, -distance);
+    let aspect = size.width as f32 / size.height as f32;
+    let translation = frame_bounding_sphere_translation(bounding_sphere, FOV_Y, aspect);
     let rotation = Vec3::ZERO;
     let camera = calculate_camera_data(size, translation, rotation);
     (translation, rotation, camera)

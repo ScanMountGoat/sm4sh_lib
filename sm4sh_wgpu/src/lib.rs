@@ -5,6 +5,7 @@ use glam::{Mat4, Vec4, vec2, vec4};
 use sm4sh_model::{database::ShaderDatabase, texture::global_textures};
 use wgpu::util::DeviceExt;
 
+pub mod camera;
 mod material;
 mod model;
 mod pipeline;
