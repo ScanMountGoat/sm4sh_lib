@@ -146,17 +146,27 @@ fn generate_assignments_wgsl(program: &ShaderProgram) -> String {
 fn visit_exprs(i: usize, exprs: &[OutputExpr<Operation>], visited: &mut BTreeSet<usize>) {
     if visited.insert(i) {
         match &exprs[i] {
-            OutputExpr::Value(Value::Texture(t)) => {
-                for arg in &t.texcoords {
-                    visit_exprs(*arg, exprs, visited);
+            OutputExpr::Value(v) => match v {
+                Value::Texture(t) => {
+                    for arg in &t.texcoords {
+                        visit_exprs(*arg, exprs, visited);
+                    }
                 }
-            }
+                Value::Parameter(p) => {
+                    if let Some(i) = p.index {
+                        visit_exprs(i, exprs, visited);
+                    }
+                    if let Some(i) = p.index2 {
+                        visit_exprs(i, exprs, visited);
+                    }
+                }
+                _ => (),
+            },
             OutputExpr::Func { args, .. } => {
                 for arg in args {
                     visit_exprs(*arg, exprs, visited);
                 }
             }
-            OutputExpr::Value(_) => (),
         }
     }
 }
@@ -170,17 +180,27 @@ fn visit_exprs_xyz(
 ) {
     if visited_xyz.insert(xyz) {
         match &exprs_xyz[xyz] {
-            OutputExprXyz::Value(ValueXyz::Texture(t)) => {
-                for arg in &t.texcoords {
-                    visit_exprs(*arg, exprs, visited);
+            OutputExprXyz::Value(v) => match v {
+                ValueXyz::Texture(t) => {
+                    for arg in &t.texcoords {
+                        visit_exprs(*arg, exprs, visited);
+                    }
                 }
-            }
+                ValueXyz::Parameter(p) => {
+                    if let Some(i) = p.index {
+                        visit_exprs(i, exprs, visited);
+                    }
+                    if let Some(i) = p.index2 {
+                        visit_exprs(i, exprs, visited);
+                    }
+                }
+                _ => (),
+            },
             OutputExprXyz::Func { args, .. } => {
                 for arg in args {
                     visit_exprs_xyz(*arg, exprs, exprs_xyz, visited, visited_xyz);
                 }
             }
-            OutputExprXyz::Value(_) => (),
         }
     }
 }
@@ -198,8 +218,16 @@ fn write_value(wgsl: &mut String, value: &Value) -> Option<()> {
             write!(wgsl, "{i:?}").unwrap();
             Some(())
         }
+        Value::Uint(u) => {
+            write!(wgsl, "{u:?}").unwrap();
+            Some(())
+        }
         Value::Float(f) => {
             write!(wgsl, "{f:?}").unwrap();
+            Some(())
+        }
+        Value::Bool(b) => {
+            write!(wgsl, "{b:?}").unwrap();
             Some(())
         }
         Value::Parameter(p) => write_parameter(wgsl, p),
@@ -313,7 +341,7 @@ fn write_attribute(wgsl: &mut String, a: &sm4sh_model::database::Attribute) -> O
 }
 
 fn write_parameter(wgsl: &mut String, p: &Parameter) -> Option<()> {
-    if write_parameter_inner(wgsl, &p.name, &p.field, p.index).is_none() {
+    if write_parameter_inner(wgsl, &p.name, &p.field, p.index, p.index2).is_none() {
         error!("Unrecognized uniform {p}");
         None
     } else {
@@ -327,25 +355,27 @@ fn write_parameter_inner(
     name: &str,
     field: &str,
     index: Option<usize>,
+    index2: Option<usize>,
 ) -> Option<()> {
     // TODO: just convert case instead of matching names?
     match name {
-        "MC" => write_parameter_inner2(wgsl, "uniforms", field, index),
-        "MC_EFFECT" => write_parameter_inner2(wgsl, "effect_uniforms", field, index),
-        "FB0" => write_parameter_inner2(wgsl, "fb0", field, index),
-        "FB1" => write_parameter_inner2(wgsl, "fb1", field, index),
-        "FB3" => write_parameter_inner2(wgsl, "fb3", field, index),
+        "MC" => write_parameter_inner2(wgsl, "uniforms", field, index, index2),
+        "MC_EFFECT" => write_parameter_inner2(wgsl, "effect_uniforms", field, index, index2),
+        "FB0" => write_parameter_inner2(wgsl, "fb0", field, index, index2),
+        "FB1" => write_parameter_inner2(wgsl, "fb1", field, index, index2),
+        "FB3" => write_parameter_inner2(wgsl, "fb3", field, index, index2),
         // TODO: fix shader handling for effect_light_entry
-        // "FB4" => write_parameter_inner(wgsl, "fb4", field, index),
-        "FB5" => write_parameter_inner2(wgsl, "fb5", field, index),
+        // "FB4" => write_parameter_inner(wgsl, "fb4", field, index, index2),
+        "FB5" => write_parameter_inner2(wgsl, "fb5", field, index, index2),
         "PerDraw" => match field {
             "LocalToWorldMatrix" => {
                 write!(wgsl, "local_to_world_matrix").unwrap();
                 write_index(wgsl, index);
+                write_index(wgsl, index2);
             }
-            "LocalToViewMatrix" => write_parameter_inner2(wgsl, "camera", "view", index),
+            "LocalToViewMatrix" => write_parameter_inner2(wgsl, "camera", "view", index, index2),
             "LocalToProjectionMatrix" => {
-                write_parameter_inner2(wgsl, "camera", "view_projection", index)
+                write_parameter_inner2(wgsl, "camera", "view_projection", index, index2)
             }
             _ => {
                 return None;
@@ -353,10 +383,12 @@ fn write_parameter_inner(
         },
         "PerView" => match field {
             "WorldToProjectionMatrix" => {
-                write_parameter_inner2(wgsl, "camera", "view_projection", index)
+                write_parameter_inner2(wgsl, "camera", "view_projection", index, index2)
             }
-            "WorldToViewMatrix" => write_parameter_inner2(wgsl, "camera", "view", index),
-            "ViewToProjectionMatrix" => write_parameter_inner2(wgsl, "camera", "projection", index),
+            "WorldToViewMatrix" => write_parameter_inner2(wgsl, "camera", "view", index, index2),
+            "ViewToProjectionMatrix" => {
+                write_parameter_inner2(wgsl, "camera", "projection", index, index2)
+            }
             _ => {
                 return None;
             }
@@ -368,9 +400,16 @@ fn write_parameter_inner(
     Some(())
 }
 
-fn write_parameter_inner2(wgsl: &mut String, buffer_name: &str, field: &str, index: Option<usize>) {
+fn write_parameter_inner2(
+    wgsl: &mut String,
+    buffer_name: &str,
+    field: &str,
+    index: Option<usize>,
+    index2: Option<usize>,
+) {
     write!(wgsl, "{buffer_name}.{}", field.to_snake()).unwrap();
     write_index(wgsl, index);
+    write_index(wgsl, index2);
 }
 
 fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
@@ -511,7 +550,7 @@ fn write_func(wgsl: &mut String, op: &Operation, args: &[usize]) -> Option<()> {
 
 fn write_index(wgsl: &mut String, i: Option<usize>) {
     if let Some(i) = i {
-        write!(wgsl, "[{i}]").unwrap();
+        write!(wgsl, "[{VAR_PREFIX}{i}]").unwrap();
     }
 }
 
@@ -680,7 +719,7 @@ fn write_value_xyz(wgsl: &mut String, value: &ValueXyz) -> Option<()> {
             }
         }
         ValueXyz::Parameter(p) => {
-            if write_parameter_inner(wgsl, &p.name, &p.field, p.index).is_none() {
+            if write_parameter_inner(wgsl, &p.name, &p.field, p.index, p.index2).is_none() {
                 error!("Unrecognized parameter {p}");
                 None
             } else {

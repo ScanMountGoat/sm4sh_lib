@@ -334,6 +334,7 @@ fn uniform_block_var_index(
                                                 i
                                             }),
                                     ),
+                                    // TODO: rework this to properly store index1 vs index2
                                     format_smolstr!("{}[{new_index}]", v.name),
                                 )
                             }
@@ -344,6 +345,7 @@ fn uniform_block_var_index(
                             name: SmolStr::from(&block.name),
                             field: Some(field),
                             index,
+                            index2: None,
                             channel: Some(new_channel),
                         })
                     } else {
@@ -352,6 +354,7 @@ fn uniform_block_var_index(
                             name: SmolStr::from(&block.name),
                             field: Some(SmolStr::from(&v.name)),
                             index,
+                            index2: None,
                             channel: None,
                         })
                     }

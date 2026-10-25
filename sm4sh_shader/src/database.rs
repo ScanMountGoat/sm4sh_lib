@@ -97,10 +97,19 @@ impl xc3_shader::expr::Operation for Operation {
     }
 
     fn preprocess_expr<'a>(graph: &'a Graph, expr: &'a Expr) -> Cow<'a, Expr> {
-        if let Some(new_expr) =
-            latte_texture_cube_coords(graph, expr).or_else(|| fragment_tangent(graph, expr))
+        // Remove attribute transforms so queries can detect attribute channels.
+        // TODO: keep track of what space each attribute is in like model, view, etc.
+        // TODO: replace with functions that transform to a specific space like world to view?
+        if let Some(new_expr) = latte_texture_cube_coords(graph, expr)
+            .or_else(|| fragment_tangent(graph, expr))
+            .or_else(|| eye_vector(graph, expr))
+            .or_else(|| light_position(graph, expr))
+            .or_else(|| light_map_position(graph, expr))
+            .or_else(|| local_to_world_binormal(graph, expr))
         {
             Cow::Owned(new_expr)
+        } else if let Some(new_expr) = local_to_world_normal(graph, expr) {
+            Cow::Borrowed(new_expr)
         } else {
             Cow::Borrowed(expr)
         }
@@ -116,14 +125,7 @@ pub fn shader_from_glsl(vertex: GlslGraph, fragment: GlslGraph) -> ShaderProgram
     // This effectively moves all shader logic to the fragment shader.
     // This simplifies generating shader code or material nodes in 3D applications.
     let frag_attributes = fragment.attributes.clone();
-    let graph = merge_vertex_fragment(
-        GlslGraph {
-            graph: vertex.graph.simplify(),
-            attributes: vertex.attributes,
-        },
-        fragment,
-        modify_attributes,
-    );
+    let graph = merge_vertex_fragment(&vertex, &fragment);
     let graph = graph.simplify();
 
     let mut exprs = ExprCache::default();
@@ -214,25 +216,6 @@ impl From<OperationXyz> for sm4sh_model::database::OperationXyz {
 impl From<sm4sh_model::database::OperationXyz> for OperationXyz {
     fn from(value: sm4sh_model::database::OperationXyz) -> Self {
         Self(value)
-    }
-}
-
-fn modify_attributes(graph: &Graph, expr: &Expr) -> Expr {
-    // Remove attribute transforms so queries can detect attribute channels.
-    // TODO: keep track of what space each attribute is in like model, view, etc.
-    // TODO: replace with functions that transform to a specific space like world to view?
-    if let Some(new_expr) = local_to_world_normal(graph, expr)
-        .cloned()
-        .or_else(|| local_to_world_binormal(graph, expr))
-    {
-        new_expr
-    } else if let Some(new_expr) = eye_vector(graph, expr)
-        .or_else(|| light_position(graph, expr))
-        .or_else(|| light_map_position(graph, expr))
-    {
-        new_expr
-    } else {
-        expr.clone()
     }
 }
 

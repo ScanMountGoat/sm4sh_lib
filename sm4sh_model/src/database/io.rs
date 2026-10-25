@@ -171,6 +171,12 @@ enum ValueIndexed {
 
     #[brw(magic(4u8))]
     Int(i32),
+
+    #[brw(magic(5u8))]
+    Uint(u32),
+
+    #[brw(magic(6u8))]
+    Bool(u8),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, BinRead, BinWrite)]
@@ -178,6 +184,7 @@ struct ParameterIndexed {
     name: VarInt,
     field: VarInt,
     index: OptVarInt,
+    index2: OptVarInt,
     channel: Channel,
 }
 
@@ -242,6 +249,7 @@ struct ParameterXyzIndexed {
     name: VarInt,
     field: VarInt,
     index: OptVarInt,
+    index2: OptVarInt,
     channel: ChannelXyz,
 }
 
@@ -579,8 +587,12 @@ impl ShaderDatabaseIndexed {
     ) -> Value {
         match v {
             ValueIndexed::Int(i) => Value::Int(*i),
+            ValueIndexed::Uint(u) => Value::Uint(*u),
             ValueIndexed::Float(f) => Value::Float(*f),
-            ValueIndexed::Parameter(p) => Value::Parameter(self.parameter_from_indexed(p)),
+            ValueIndexed::Bool(b) => Value::Bool(*b != 0),
+            ValueIndexed::Parameter(p) => {
+                Value::Parameter(self.parameter_from_indexed(p, exprs, expr_to_index))
+            }
             ValueIndexed::Texture(t) => Value::Texture(Texture {
                 name: self.texture_names[t.name.0].clone(),
                 channel: t.channel.into(),
@@ -605,8 +617,12 @@ impl ShaderDatabaseIndexed {
     ) -> ValueIndexed {
         match v {
             Value::Int(i) => ValueIndexed::Int(i),
+            Value::Uint(u) => ValueIndexed::Uint(u),
             Value::Float(c) => ValueIndexed::Float(c),
-            Value::Parameter(p) => ValueIndexed::Parameter(self.parameter_indexed(p)),
+            Value::Bool(b) => ValueIndexed::Bool(b as u8),
+            Value::Parameter(p) => {
+                ValueIndexed::Parameter(self.parameter_indexed(p, exprs, expr_indices))
+            }
             Value::Texture(t) => ValueIndexed::Texture(TextureIndexed {
                 name: add_string(&mut self.texture_names, t.name),
                 channel: t.channel.into(),
@@ -623,20 +639,44 @@ impl ShaderDatabaseIndexed {
         }
     }
 
-    fn parameter_from_indexed(&self, p: &ParameterIndexed) -> Parameter {
+    fn parameter_from_indexed(
+        &self,
+        p: &ParameterIndexed,
+        exprs: &mut IndexSet<OutputExpr<Operation>>,
+        expr_to_index: &mut IndexMap<usize, usize>,
+    ) -> Parameter {
         Parameter {
             name: self.buffer_names[p.name.0].clone(),
             field: self.buffer_field_names[p.field.0].clone(),
-            index: p.index.0,
+            index: p
+                .index
+                .0
+                .map(|i| self.output_expr_from_indexed(i, exprs, expr_to_index)),
+            index2: p
+                .index2
+                .0
+                .map(|i| self.output_expr_from_indexed(i, exprs, expr_to_index)),
             channel: p.channel.into(),
         }
     }
 
-    fn parameter_indexed(&mut self, p: Parameter) -> ParameterIndexed {
+    fn parameter_indexed(
+        &mut self,
+        p: Parameter,
+        exprs: &[OutputExpr<Operation>],
+        expr_indices: &mut IndexMap<usize, VarInt>,
+    ) -> ParameterIndexed {
         ParameterIndexed {
             name: add_string(&mut self.buffer_names, p.name),
             field: add_string(&mut self.buffer_field_names, p.field),
-            index: OptVarInt(p.index),
+            index: OptVarInt(
+                p.index
+                    .map(|i| self.add_output_expr(i, exprs, expr_indices).0),
+            ),
+            index2: OptVarInt(
+                p.index2
+                    .map(|i| self.add_output_expr(i, exprs, expr_indices).0),
+            ),
             channel: p.channel.into(),
         }
     }
@@ -703,7 +743,14 @@ impl ShaderDatabaseIndexed {
             ValueXyz::Parameter(p) => ValueXyzIndexed::Parameter(ParameterXyzIndexed {
                 name: add_string(&mut self.buffer_names, p.name),
                 field: add_string(&mut self.buffer_field_names, p.field),
-                index: OptVarInt(p.index),
+                index: OptVarInt(
+                    p.index
+                        .map(|i| self.add_output_expr(i, exprs, expr_indices).0),
+                ),
+                index2: OptVarInt(
+                    p.index2
+                        .map(|i| self.add_output_expr(i, exprs, expr_indices).0),
+                ),
                 channel: p.channel.into(),
             }),
             ValueXyz::Float(f) => ValueXyzIndexed::Float(f),
@@ -721,7 +768,14 @@ impl ShaderDatabaseIndexed {
             ValueXyzIndexed::Parameter(p) => ValueXyz::Parameter(ParameterXyz {
                 name: self.buffer_names[p.name.0].clone(),
                 field: self.buffer_field_names[p.field.0].clone(),
-                index: p.index.0,
+                index: p
+                    .index
+                    .0
+                    .map(|i| self.output_expr_from_indexed(i, exprs, expr_to_index)),
+                index2: p
+                    .index2
+                    .0
+                    .map(|i| self.output_expr_from_indexed(i, exprs, expr_to_index)),
                 channel: p.channel.into(),
             }),
             ValueXyzIndexed::Texture(t) => ValueXyz::Texture(TextureXyz {
