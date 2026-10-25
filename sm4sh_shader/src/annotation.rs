@@ -288,7 +288,6 @@ fn uniform_block_var_index(
 
         let block = &blocks[block_index];
 
-        // TODO: Don't assume vec4 for all uniforms when converting indices to offsets.
         // TODO: Are uniform var offsets in terms of floats?
         // TODO: group uniforms into blocks to make this easier.
         if let Some(index_expr) = index.and_then(|i| graph.exprs.get(i).cloned()) {
@@ -299,53 +298,35 @@ fn uniform_block_var_index(
                         let (new_index, new_channel) =
                             uniform_array_indices_channel(*i as usize, channel, v)?;
 
-                        let (index, field) = match &new_index[..] {
-                            [] => (None, SmolStr::from(&v.name)),
+                        let (index, index2, field) = match &new_index[..] {
+                            [] => (None, None, SmolStr::from(&v.name)),
                             [new_index] => {
                                 // The new index expr might not be part of the graph yet.
                                 let new_index_expr = Expr::Int(*new_index as i32);
                                 (
-                                    Some(
-                                        graph
-                                            .exprs
-                                            .iter()
-                                            .position(|e| e == &new_index_expr)
-                                            .unwrap_or_else(|| {
-                                                let i = graph.exprs.len();
-                                                graph.exprs.push(new_index_expr);
-                                                i
-                                            }),
-                                    ),
+                                    Some(insert_expr_index(graph, new_index_expr)),
+                                    None,
                                     SmolStr::from(&v.name),
                                 )
                             }
                             [new_index, column_index] => {
                                 // The new index expr might not be part of the graph yet.
+                                let new_index_expr = Expr::Int(*new_index as i32);
                                 let column_index_expr = Expr::Int(*column_index as i32);
                                 (
-                                    Some(
-                                        graph
-                                            .exprs
-                                            .iter()
-                                            .position(|e| e == &column_index_expr)
-                                            .unwrap_or_else(|| {
-                                                let i = graph.exprs.len();
-                                                graph.exprs.push(column_index_expr);
-                                                i
-                                            }),
-                                    ),
-                                    // TODO: rework this to properly store index1 vs index2
-                                    format_smolstr!("{}[{new_index}]", v.name),
+                                    Some(insert_expr_index(graph, new_index_expr)),
+                                    Some(insert_expr_index(graph, column_index_expr)),
+                                    SmolStr::from(&v.name),
                                 )
                             }
-                            _ => (None, SmolStr::from(&v.name)),
+                            _ => (None, None, SmolStr::from(&v.name)),
                         };
 
                         Some(Expr::Parameter {
                             name: SmolStr::from(&block.name),
                             field: Some(field),
                             index,
-                            index2: None,
+                            index2,
                             channel: Some(new_channel),
                         })
                     } else {
@@ -368,6 +349,18 @@ fn uniform_block_var_index(
     } else {
         None
     }
+}
+
+fn insert_expr_index(graph: &mut Graph, expr: Expr) -> usize {
+    graph
+        .exprs
+        .iter()
+        .position(|e| e == &expr)
+        .unwrap_or_else(|| {
+            let i = graph.exprs.len();
+            graph.exprs.push(expr);
+            i
+        })
 }
 
 fn uniform_array_indices_channel(
